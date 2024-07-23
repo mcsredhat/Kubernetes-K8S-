@@ -1,0 +1,2065 @@
+
+Pods are the smallest deployable units in Kubernetes and run the application containers.
+ReplicaSets ensure a specified number of identical Pods are running.
+Deployments manage ReplicaSets and provide features like rolling updates and rollbacks.
+These components work together to provide a scalable, self-healing system for managing containerized applications in Kubernetes.
+### Podman Commands
+
+1. **Run Nginx Container**:
+   ---
+   podman run -d docker.io/library/nginx:latest
+   ```
+   - **podman run**: Command to run a container.
+   - **-d**: Run the container in detached mode (in the background).
+   - **docker.io/library/nginx:latest**: Specifies the image to use, here the Nginx image from Docker Hub.
+
+2. **Login to Red Hat Registry**:
+   ---
+   podman login registry.access.redhat.com
+   ```
+   - **podman login**: Command to log into a container registry.
+   - **registry.access.redhat.com**: The URL of the Red Hat container registry.
+   - **username, password**: Enter your Red Hat credentials when prompted.
+
+3. **List Running Containers**:
+   ---
+   podman ps
+   ```
+   - **podman ps**: Lists all running containers.
+
+4. **Run Busybox Container**:
+   ---
+   podman run busybox
+   ```
+   - **podman run**: Command to run a container.
+   - **busybox**: Runs the BusyBox container, which is a minimal Linux container image.
+
+5. **List All Containers**:
+   ---
+   podman ps -a
+   ```
+   - **podman ps -a**: Lists all containers, including stopped ones.
+
+6. **Remove a Container**:
+   ---
+   podman container rm -f c69763389866
+   ```
+   - **podman container rm**: Command to remove a container.
+   - **-f**: Forces the removal.
+   - **c69763389866**: The ID of the container to be removed.
+
+7. **Run Interactive Busybox**:
+   ---
+   podman run -it busybox:latest
+   ```
+   - **podman run**: Command to run a container.
+   - **-it**: Runs the container in interactive mode with a terminal.
+   - **busybox:latest**: The latest BusyBox image.
+
+8. **Detach from Container**:
+   ---
+   ctrl +P , ctrl +Q
+   ```
+   - **ctrl +P , ctrl +Q**: Detaches from the container without stopping it.
+
+9. **Attach to a Container**:
+   ---
+   podman attach strange_albattani
+   ```
+   - **podman attach**: Reattaches to a running container.
+   - **strange_albattani**: The name of the container.
+
+10. **Exit from Container**:
+    ---
+    exit
+    ```
+    - **exit**: Exits from the container's shell.
+
+11. **List Images**:
+    ---
+    podman image list
+    podman images
+    ```
+    - **podman image list / podman images**: Lists all container images.
+
+12. **Inspect an Image**:
+    ---
+    podman inspect nginx:latest
+    podman image inspect nginx:latest
+    ```
+    - **podman inspect / podman image inspect**: Shows detailed information about the image.
+
+13. **Login to Red Hat Registry**:
+    ---
+    podman login registry.redhat.io
+    skopeo login registry.redhat.io
+    docker login https://registry.redhat.io
+    ```
+    - **podman login / skopeo login / docker login**: Commands to log into the Red Hat container registry.
+
+14. **Pull Redis Image**:
+    ---
+    podman pull docker.io/library/redis:latest
+    ```
+    - **podman pull**: Command to pull an image from a registry.
+    - **docker.io/library/redis:latest**: The Redis image from Docker Hub.
+
+15. **Remove an Image**:
+    ---
+    podman image rm docker.io/library/redis:latest
+    ```
+    - **podman image rm**: Command to remove an image.
+    - **--force**: Forces the removal.
+
+### Installing Minikube on RHEL9
+
+#### Install Kubectl
+
+1. **Create Kubernetes Repository**:
+   ---
+   vim /etc/yum.repos.d/kubernetes.repo
+   ```
+   - **vim**: Opens the Vim text editor.
+   - **/etc/yum.repos.d/kubernetes.repo**: Path to the repository configuration file.
+
+2. **Edit Repository Configuration**:
+   Add the following content to the file:
+   ```
+[kubernetes]           # Section header indicating the configuration for Kubernetes.
+name=Kubernetes      # The name of the repository, which is 'Kubernetes'.
+baseurl=https://packages.cloud.google.com/yum/repos/kubernetes-el7-x86_64  # The base URL of the repository where packages are located.
+enabled=1   # Indicates that this repository is enabled. '1' means enabled, '0' means disabled.
+gpgcheck=1   # Enables GPG signature checking for the packages in this repository. '1' means enabled.
+repo_gpgcheck=1    # Enables GPG signature checking for the repository metadata. '1' means enabled.
+gpgkey=https://packages.cloud.google.com/yum/doc/yum-key.gpg https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg  # URLs to the GPG keys used for verifying the packages and metadata.
+exclude=kubelet kubeadm kubectl # Specifies packages to be excluded from updates or installations. In this case, 'kubelet', 'kubeadm', and 'kubectl'.
+
+[kubernetes]
+name=Kubernetes
+baseurl=https://packages.cloud.google.com/yum/repos/kubernetes-el7-x86_64
+enabled=1
+gpgcheck=1
+repo_gpgcheck=1
+gpgkey=https://packages.cloud.google.com/yum/doc/yum-key.gpg https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg
+exclude=kubelet kubeadm kubectl
+
+
+3. **Download Kubectl**:
+   ---
+   sudo curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+   ```
+   - **sudo**: Runs the command with superuser privileges.
+   - **curl -LO**: Downloads a file.
+   - **$(curl -L -s https://dl.k8s.io/release/stable.txt)**: Fetches the latest stable release version.
+   - **/bin/linux/amd64/kubectl**: The path to the kubectl binary for Linux AMD64.
+
+4. **Install Kubectl**:
+   ---
+   sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+   ```
+   - **install -o root -g root -m 0755**: Installs the file with owner root, group root, and permissions 0755.
+   - **kubectl /usr/local/bin/kubectl**: The source file and the target location.
+
+5. **Verify Installation**:
+   ---
+   kubectl version -o yaml
+   ```
+   - **kubectl version --output=yaml**: Displays the kubectl version in YAML format.
+
+#### Install Minikube
+
+1. **Download Minikube**:
+   ---
+   curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
+   ```
+   - **curl -LO**: Downloads a file.
+   - **minikube-linux-amd64**: The Minikube binary for Linux AMD64.
+
+2. **Install Minikube**:
+   ---
+   sudo chmod +x minikube-linux-amd64
+   sudo mv minikube-linux-amd64 /usr/local/bin/minikube
+   ```
+   - **chmod +x**: Makes the file executable.
+   - **mv**: Moves the file to the target location.
+
+3. **Start Minikube with Podman Driver**:
+   ---
+   minikube start --driver=podman --force
+   ```
+   - **minikube start**: Starts Minikube.
+   - **--driver=podman**: Specifies the Podman driver.
+   - **--force**: Forces the start.
+
+4. **Check Minikube Status**:
+   ---
+   minikube status
+   ```
+   - **minikube status**: Displays the status of the Minikube cluster.
+
+5. **Get Kubernetes Info**:
+   ---
+   kubectl get all
+   kubectl cluster-info
+   ```
+   - **kubectl get all**: Lists all resources in the default namespace.
+   - **kubectl cluster-info**: Displays cluster information.
+
+6. **Open Minikube Dashboard**:
+   ---
+   minikube dashboard
+   ```
+   - **minikube dashboard**: Opens the Minikube dashboard in the default web browser.
+
+7. **Enable Minikube Addons**:
+   ---
+   minikube addons enable metrics-server
+   ```
+   - **minikube addons enable metrics-server**: Enables the metrics-server addon.
+
+8. **SSH into Minikube**:
+   ---
+   minikube ssh
+   docker@minikube:~$ crictl ps
+   docker@minikube:~$ crictl ps -a
+   docker@minikube:~$ crictl inspect 8972e28ee7305
+   docker@minikube:~$ crictl logs b5a4fba566937
+   docker@minikube:~$ crictl exec -it b5a4fba566937 sh
+   docker@minikube:~$ crictl stop b5a4fba566937
+   ```
+   - **minikube ssh**: Opens an SSH session to the Minikube VM.
+   - **crictl ps**: Lists running containers.
+   - **crictl ps -a**: Lists all containers, including stopped ones.
+   - **crictl inspect <container_id>**: Inspects a container.
+   - **crictl logs <container_id>**: Retrieves logs for a container.
+   - **crictl exec -it <container_id> sh**: Opens an interactive shell in the container.
+   - **crictl stop <container_id>**: Stops a container.
+
+### Customizing Container Images
+
+1. **Disable Kubernetes Repository**:
+   ---
+   sudo sed -i 's/enabled=1/enabled=0/' /etc/yum.repos.d/kubernetes.repo
+   ```
+   - **sudo**: Run the command with superuser privileges.
+   - **sed -i 's/enabled=1/enabled=0/' /etc/yum.repos.d/kubernetes.repo**: Edit the file to disable the Kubernetes repository.
+
+2. **Install Git**:
+   ---
+   yum install git -y
+   ```
+   - **yum install git -y**: Install Git without prompting for confirmation.
+
+3. **Clone Repository**:
+   ---
+   git clone https://github.com/sandervanvugt/kubernetes
+   ```
+   - **git clone**: Clone the specified Git repository.
+
+4. **Navigate to Directory**:
+   ---
+   cd kubernets/sandtest
+   ```
+   - **cd kubernets/sandtest**: Change directory to the cloned repository's `sandtest` directory.
+
+5. **List Directory Contents**:
+   ---
+   ls
+   ```
+   - **ls**: List the contents of the current directory.
+
+6. **Edit Dockerfile**:
+   ---
+   vi Dockerfile
+   ```
+   - **vi Dockerfile**: Open the Dockerfile in the Vi text editor for editing.
+
+7. **Build Custom Image**:
+   ---
+   podman build -t processes .
+   ```
+   - **podman build -t processes .**: Build a container image from the Dockerfile in the current directory and tag it as `processes`.
+
+8. **List Images**:
+   ---
+   podman images
+   ```
+   - **podman images**: List all container images.
+
+9. **Run Custom Image**:
+   ---
+   podman run processes:latest
+   ```
+   - **podman run processes:latest**: Run a container from the `processes` image.
+
+### Working with Nginx Image
+
+1. **Pull Nginx Image**:
+   ---
+   podman pull docker.io/library/nginx:latest
+   ```
+   - **podman pull docker.io/library/nginx:latest**: Pull the latest Nginx image from Docker Hub.
+
+2. **List Images**:
+   ---
+   podman images
+   ```
+   - **podman images**: List all container images.
+
+3. **List All Containers**:
+   ---
+   podman ps -a
+   ```
+   - **podman ps -a**: List all containers, including stopped ones.
+
+4. **Inspect Nginx Image**:
+   ---
+   podman inspect docker.io/library/nginx
+   ```
+   - **podman inspect docker.io/library/nginx**: Display detailed information about the Nginx image.
+
+5. **Run Interactive Nginx Container**:
+   ---
+   podman run -it docker.io/library/nginx:latest sh
+   ```
+   - **podman run -it docker.io/library/nginx:latest sh**: Run an interactive shell in the Nginx container.
+
+6. **List All Containers**:
+   ---
+   podman ps -a
+   ```
+   - **podman ps -a**: List all containers, including stopped ones.
+
+7. **Stop a Container**:
+   ---
+   podman stop "name of the image"
+   ```
+   - **podman stop "name of the image"**: Stop the container by name.
+
+8. **Remove Nginx Image**:
+   ---
+   podman image rm --force docker.io/library/nginx:latest
+   ```
+   - **podman image rm --force docker.io/library/nginx:latest**: Forcefully remove the Nginx image.
+
+### Deploying Application with Kubernetes
+
+1. **Get Kubernetes Resources**:
+   ---
+   kubectl get all
+   ```
+   - **kubectl get all**: List all resources in the default namespace.
+
+2. **Create Deployment**:
+   ---
+   kubectl create deploy myapp --image=nginx --replicas=3
+   ```
+   - **kubectl create deploy myapp --image=nginx --replicas=3**: Create a deployment named `myapp` with three replicas using the Nginx image.
+
+3. **Get Kubernetes Resources**:
+   ---
+   kubectl get all
+   ```
+   - **kubectl get all**: List all resources in the default namespace.
+
+### Using kubectl Help
+
+1. **Get kubectl Help**:
+   ---
+   kubectl -h
+   ```
+   - **kubectl -h**: Display help for kubectl command.
+
+2. **Get Help for `get` Command**:
+   ---
+   kubectl get -h
+   ```
+   - **kubectl get -h**: Display help for the `get` command.
+
+3. **Browse kubectl Help**:
+   ---
+   kubectl -h | less
+   kubectl create -h | less
+   kubectl create deploy -h | less
+   ```
+   - **kubectl -h | less**: Display help for kubectl and browse with `less`.
+   - **kubectl create -h | less**: Display help for the `create` command and browse with `less`.
+   - **kubectl create deploy -h | less**: Display help for the `create deploy` command and browse with `less`.
+
+### Enabling kubectl Autocompletion
+
+1. **Enable Autocompletion**:
+   ---
+   source <(kubectl completion bash)
+   ```
+   - **source <(kubectl completion bash)**: Enable autocompletion for kubectl in the Bash shell.
+
+### Working with YAML in Kubernetes
+
+1. **Create Deployment YAML**:
+   ---
+   kubectl create deploy myapp --image=nginx --replicas=3 --dry-run=client -o yaml > myapp.yaml
+   ```
+   - **kubectl create deploy myapp --image=nginx --replicas=3 --dry-run=client -o yaml > myapp.yaml**: Generate a YAML configuration for the deployment without creating it, and save it to `myapp.yaml`.
+
+vi myapp.yaml
+apiVersion: apps/v1                              # Specifies the API version and the group for the resource. 'apps/v1' is used for Deployments.
+kind: Deployment                                 # Defines the kind of resource, which is a 'Deployment'.
+metadata:                                        # Provides metadata about the resource.
+  creationTimestamp: null                        # Indicates the creation timestamp of the resource, set to 'null' initially (usually managed by Kubernetes).
+  labels:                                        # Specifies key-value pairs used to organize and select resources.
+    app: myapp                                   # Adds a label with the key 'app' and value 'myapp'.
+  name: myapp                                    # Sets the name of the Deployment to 'myapp'.
+spec:                                            # Defines the desired state of the Deployment.
+  replicas: 3                                    # Specifies that 3 replicas (pods) should be created.
+  selector:                                      # Defines how to identify the pods managed by this Deployment.
+    matchLabels:                                 # Specifies the label selector for the pods.
+      app: myapp                                 # Pods with the label 'app: myapp' will be managed by this Deployment.
+  strategy: {}                                   # Defines the strategy used to replace old pods with new ones. An empty strategy uses the default rolling update strategy.
+  template:                                      # Describes the pod template, which is used to create the pods.
+    metadata:                                    # Provides metadata for the pods.
+      creationTimestamp: null                    # Indicates the creation timestamp of the pods, set to 'null' initially (usually managed by Kubernetes).
+      labels:                                    # Specifies labels for the pods.
+to complete the Deployment, you'll need to add the container specification inside the template section. Here is the complete example:
+apiVersion: apps/v1                              # Specifies the API version and the group for the resource. 'apps/v1' is used for Deployments.
+kind: Deployment                                 # Defines the kind of resource, which is a 'Deployment'.
+metadata:                                        # Provides metadata about the resource.
+  name: myapp                                    # Sets the name of the Deployment to 'myapp'.
+  labels:                                        # Specifies key-value pairs used to organize and select resources.
+    app: myapp                                   # Adds a label with the key 'app' and value 'myapp'.
+spec:                                            # Defines the desired state of the Deployment.
+  replicas: 3                                    # Specifies that 3 replicas (pods) should be created.
+  selector:                                      # Defines how to identify the pods managed by this Deployment.
+    matchLabels:                                 # Specifies the label selector for the pods.
+      app: myapp                                 # Pods with the label 'app: myapp' will be managed by this Deployment.
+  strategy: {}                                   # Defines the strategy used to replace old pods with new ones. An empty strategy uses the default rolling update strategy.
+  template:                                      # Describes the pod template, which is used to create the pods.
+    metadata:                                    # Provides metadata for the pods.
+      labels:                                    # Specifies labels for the pods.
+        app: myapp                               # Adds a label with the key 'app' and value 'myapp'.
+    spec:                                        # Defines the desired state of the pods.
+      containers:                                # Specifies the list of containers in each pod.
+        - name: myapp-container                  # Sets the name of the container.
+          image: myapp-image                     # Specifies the container image to use.
+          ports:                                 # Defines the list of ports to expose from the container.
+            - containerPort: 80                  # Exposes port 80 from the container.
+
+2. **Explain YAML Fields**:
+   ---
+   kubectl explain deploy.spec | less
+   ```
+   - **kubectl explain deploy.spec | less**: Display detailed information about the `spec` field in the deployment YAML and browse with `less`.
+
+3. **Delete Deployment**:
+   ---
+   kubectl delete deployments myapp
+   ```
+   - **kubectl delete deployments myapp**: Delete the `myapp` deployment.
+
+4. **Create Deployment from YAML**:
+   ---
+   kubectl create -f myapp.yaml
+   ```
+   - **kubectl create -f myapp.yaml**: Create resources defined in `myapp.yaml`.
+
+5. **Get Kubernetes Resources**:
+   ---
+   kubectl get all
+   ```
+   - **kubectl get all**: List all resources in the default namespace.
+
+6. **View Deployment YAML**:
+   ---
+   kubectl get deployments.apps myapp -o yaml | less
+   ```
+   - **kubectl get deployments.apps myapp -o yaml | less**: Display the YAML configuration for the `myapp` deployment and browse with `less`.
+
+### K8S API Overview
+
+1. **List API Resources**:
+   ---
+   kubectl api-resources | less
+   ```
+   - **kubectl api-resources | less**: List all available API resources and browse with `less`.
+
+2. **List API Versions**:
+   ---
+   kubectl api-versions | less
+   ```
+   - **kubectl api-versions | less**: List all available API versions and browse with `less`. 
+
+### Exploring Options for Running Applications
+
+1. **Display Help for `kubectl run` Command**:
+   ---
+   kubectl run -h | less
+   ```
+   - **kubectl run -h**: Show help for the `kubectl run` command.
+   - **| less**: Pipe the output to `less` for easier reading and navigation.
+
+2. **Run a Busybox Pod Interactively**:
+   ---
+   kubectl run -i -t busybox --image=busybox --restart=Never
+   ```
+   - **kubectl run -i -t busybox**: Run a Pod named `busybox` interactively with a TTY.
+   - **--image=busybox**: Use the `busybox` image.
+   - **--restart=Never**: Do not restart the Pod (useful for debugging).
+
+3. **Get List of Pods**:
+   ---
+   kubectl get pods
+   ```
+   - **kubectl get pods**: List all Pods in the current namespace.
+
+4. **Describe a Specific Pod**:
+   ---
+   kubectl describe pods busybox2 | less
+   ```
+   - **kubectl describe pods busybox2**: Show detailed information about the Pod named `busybox2`.
+   - **| less**: Pipe the output to `less` for easier reading and navigation.
+
+5. **Get Pod Details in YAML Format**:
+   ---
+   kubectl get pods busybox2 -o yaml | less
+   ```
+   - **kubectl get pods busybox2 -o yaml**: Output the details of Pod `busybox2` in YAML format.
+   - **| less**: Pipe the output to `less` for easier reading and navigation.
+
+6. **Delete a Pod**:
+   ---
+   kubectl delete pod busybox2
+   ```
+   - **kubectl delete pod busybox2**: Delete the Pod named `busybox2`.
+
+### Running Applications in Deployments
+
+1. **Display Help for `kubectl create deployment` Command**:
+   ---
+   kubectl create deployment -h | less
+   ```
+   - **kubectl create deployment -h**: Show help for the `kubectl create deployment` command.
+   - **| less**: Pipe the output to `less` for easier reading and navigation.
+
+2. **Create a Deployment**:
+   ---
+   kubectl create deployment my-dep --image=busybox
+   ```
+   - **kubectl create deployment my-dep**: Create a Deployment named `my-dep`.
+   - **--image=busybox**: Use the `busybox` image.
+
+3. **Get All Resources**:
+   ---
+   kubectl get all
+   ```
+   - **kubectl get all**: List all resources in the current namespace.
+
+4. **Describe a Specific Pod in the Deployment**:
+   ---
+   kubectl describe pod my-dep-65f5fcc5dd-6nfks | less
+   ```
+   - **kubectl describe pod my-dep-65f5fcc5dd-6nfks**: Show detailed information about a specific Pod in the `my-dep` Deployment.
+   - **| less**: Pipe the output to `less` for easier reading and navigation.
+
+5. **Delete a Deployment**:
+   ---
+   kubectl delete deployments.apps my-dep
+   ```
+   - **kubectl delete deployments.apps my-dep**: Delete the Deployment named `my-dep`.
+
+6. **Create a Deployment with a Sleep Command**:
+   ---
+   kubectl create deployment my-dep --image=busybox -- sleep 3600
+   ```
+   - **kubectl create deployment my-dep**: Create a Deployment named `my-dep`.
+   - **--image=busybox -- sleep 3600**: Use the `busybox` image and run the `sleep 3600` command in the container.
+
+### Organizing Applications with Namespaces
+
+1. **Display Help for `kubectl create namespace` Command**:
+   ---
+   kubectl create namespace -h | less
+   ```
+   - **kubectl create namespace -h**: Show help for the `kubectl create namespace` command.
+   - **| less**: Pipe the output to `less` for easier reading and navigation.
+
+2. **Create a Namespace**:
+   ---
+   kubectl create namespace secret
+   ```
+   - **kubectl create namespace secret**: Create a namespace named `secret`.
+
+3. **Create a Deployment in a Namespace**:
+   ---
+   kubectl create deploy secret --image=nginx -n secret
+   ```
+   - **kubectl create deploy secret --image=nginx -n secret**: Create a Deployment named `secret` using the `nginx` image in the `secret` namespace.
+
+4. **Get Pods in a Namespace**:
+   ---
+   kubectl get pods -n secret
+   ```
+   - **kubectl get pods -n secret**: List all Pods in the `secret` namespace.
+
+5. **Get Pods in All Namespaces**:
+   ---
+   kubectl get pods -A
+   ```
+   - **kubectl get pods -A**: List all Pods in all namespaces.
+
+6. **Set Current Namespace to `secret`**:
+   ---
+   kubectl config set-context --current --namespace secret
+   ```
+   - **kubectl config set-context --current --namespace secret**: Set the current context's namespace to `secret`.
+
+7. **Set Current Namespace to `default`**:
+   ---
+   kubectl config set-context --current --namespace default
+   ```
+   - **kubectl config set-context --current --namespace default**: Set the current context's namespace to `default`.
+
+8. **View Kubernetes Config**:
+   ---
+   kubectl config view
+   ```
+   - **kubectl config view**: Display the current Kubernetes configuration.
+
+### Scaling Applications
+
+1. **Create a Deployment with Replicas**:
+   ---
+   kubectl create deployment mynewapp --image=nginx --replicas=3
+   ```
+   - **kubectl create deployment mynewapp --image=nginx --replicas=3**: Create a Deployment named `mynewapp` with 3 replicas using the `nginx` image.
+
+2. **Get All Resources**:
+   ---
+   kubectl get all
+   ```
+   - **kubectl get all**: List all resources in the current namespace.
+
+3. **Edit Deployment to Change Replicas**:
+   ---
+   kubectl edit deployments.apps mynewapp
+   ```
+   - **kubectl edit deployments.apps mynewapp**: Edit the `mynewapp` Deployment to change the number of replicas (e.g., to 2).
+
+4. **Get All Resources**:
+   ---
+   kubectl get all
+   ```
+   - **kubectl get all**: List all resources in the current namespace.
+
+5. **Scale Deployment to Zero Replicas**:
+   ---
+   kubectl scale deployment mynewapp --replicas=0
+   ```
+   - **kubectl scale deployment mynewapp --replicas=0**: Scale the `mynewapp` Deployment down to 0 replicas.
+
+6. **Get All Resources**:
+   ---
+   kubectl get all
+   ```
+   - **kubectl get all**: List all resources in the current namespace.
+ 
+### Managing Application Update and Rollback
+
+1. **Create a Deployment with a Specific Image Version**:
+   ---
+   kubectl create deploy rollingnginx --image=nginx:1.15
+   ```
+   - **kubectl create deploy rollingnginx**: Create a Deployment named `rollingnginx`.
+   - **--image=nginx:1.15**: Use the `nginx:1.15` image for the Deployment.
+
+2. **Get List of Deployments**:
+   ---
+   kubectl get deploy
+   ```
+   - **kubectl get deploy**: List all Deployments in the current namespace.
+
+3. **Check Rollout History of a Deployment**:
+   ---
+   kubectl rollout history deployment rollingnginx
+   ```
+   - **kubectl rollout history deployment rollingnginx**: Show the rollout history of the `rollingnginx` Deployment.
+
+4. **Edit Deployment to Update the Image**:
+   ---
+   kubectl edit deployments.apps rollingnginx
+   ```
+   - **kubectl edit deployments.apps rollingnginx**: Open the editor to update the `rollingnginx` Deployment, such as changing the image to `nginx:latest`.
+
+5. **Check Rollout History Again**:
+   ---
+   kubectl rollout history deployment rollingnginx
+   ```
+   - **kubectl rollout history deployment rollingnginx**: Show the updated rollout history of the `rollingnginx` Deployment.
+
+6. **Show Specific Rollout Revision Details**:
+   ---
+   kubectl rollout history deployment rollingnginx --revision=2
+   ```
+   - **kubectl rollout history deployment rollingnginx --revision=2**: Show the details of revision 2 of the `rollingnginx` Deployment.
+
+7. **Show Initial Rollout Revision Details**:
+   ---
+   kubectl rollout history deployment rollingnginx --revision=1
+   ```
+   - **kubectl rollout history deployment rollingnginx --revision=1**: Show the details of revision 1 of the `rollingnginx` Deployment.
+
+8. **Rollback Deployment to a Specific Revision**:
+   ---
+   kubectl rollout undo deployment rollingnginx --to-revision=1
+   ```
+   - **kubectl rollout undo deployment rollingnginx --to-revision=1**: Rollback the `rollingnginx` Deployment to revision 1.
+
+9. **Get All Resources**:
+   ---
+   kubectl get all
+   ```
+   - **kubectl get all**: List all resources in the current namespace.
+
+### Using Labels
+
+1. **Get All Resources with Labels**:
+   ---
+   kubectl get all --show-labels
+   ```
+   - **kubectl get all --show-labels**: List all resources and their labels in the current namespace.
+
+2. **Get Resources by Label Selector**:
+   ---
+   kubectl get all --selector app=rollingnginx
+   ```
+   - **kubectl get all --selector app=rollingnginx**: List all resources with the label `app=rollingnginx`.
+
+3. **Add a Label to a Deployment**:
+   ---
+   kubectl label deploy rollingnginx type=static
+   ```
+   - **kubectl label deploy rollingnginx type=static**: Add the label `type=static` to the `rollingnginx` Deployment.
+
+4. **Get All Resources with Labels**:
+   ---
+   kubectl get all --show-labels
+   ```
+   - **kubectl get all --show-labels**: List all resources and their labels in the current namespace.
+
+5. **Edit Deployment to Update Labels**:
+   ---
+   kubectl edit deployments.apps rollingnginx
+   ```
+   - **kubectl edit deployments.apps rollingnginx**: Open the editor to update the labels or other configurations of the `rollingnginx` Deployment.
+
+6. **Get Pods with Labels**:
+   ---
+   kubectl get pods --show-labels
+   ```
+   - **kubectl get pods --show-labels**: List all Pods and their labels in the current namespace.
+
+7. **Remove a Label from a Pod**:
+   ---
+   kubectl label pod rollingnginx-778b8f54f8-z8nbk app-
+   ```
+   - **kubectl label pod rollingnginx-778b8f54f8-z8nbk app-**: Remove the label `app` from the specified Pod.
+
+8. **Create a Namespace**:
+   ---
+   kubectl create namespace secret
+   ```
+   - **kubectl create namespace secret**: Create a namespace named `secret`.
+
+9. **Create a Deployment in a Specific Namespace**:
+   ---
+   kubectl create deployment secretweb --image=nginx --namespace=secret --replicas=3
+   ```
+   - **kubectl create deployment secretweb**: Create a Deployment named `secretweb`.
+   - **--image=nginx**: Use the `nginx` image.
+   - **--namespace=secret**: Create the Deployment in the `secret` namespace.
+   - **--replicas=3**: Set the number of replicas to 3.
+
+10. **Add a Label to a Deployment in a Namespace**:
+    ---
+    kubectl label --namespace secret deployments.apps secretweb type=secret
+    ```
+    - **kubectl label --namespace secret deployments.apps secretweb type=secret**: Add the label `type=secret` to the `secretweb` Deployment in the `secret` namespace.
+
+11. **Get All Resources with Labels in a Namespace**:
+    ---
+    kubectl get all --namespace secret --show-labels
+    ```
+    - **kubectl get all --namespace secret --show-labels**: List all resources and their labels in the `secret` namespace.
+
+######Using Services to provide access to application####
+1:Using Services
+differnet service types are available 
+ClusterIP : the default type, provides internal access only.
+NodePort: allocates a specific node port which needs to be opened on the firewall.
+LoadBalancer: currently only implemnted in public cloud.
+ExternalName : a relatively new object that work on DNS name, redirection is happening at a DNS level.
+Service without elector: use for direct connections base IP/PORT without an endpoint.useful for connection to database, or between namespace.
+
+# Create a deployment named 'nginxsvc' with 3 replicas of the nginx image.
+kubectl create deployment nginxsvc --image=nginx --replicas=3
+
+# Get detailed information about all resources with the label 'app=nginxsvc'.
+kubectl get all -o wide --selector app=nginxsvc
+
+# Expose the 'nginxsvc' deployment as a service on port 80.
+kubectl expose deployment nginxsvc --port=80
+
+# Get detailed information about all resources with the label 'app=nginxsvc' after exposing the service.
+kubectl get all -o wide --selector app=nginxsvc
+
+# Attempt to curl the ClusterIP of the 'nginxsvc' service from the local machine (this won't work externally).
+curl 10.100.219.119 # not working
+
+# SSH into the Minikube VM.
+minikube ssh
+
+# Curl the ClusterIP of the 'nginxsvc' service from within the Minikube VM (this will work).
+curl 10.100.219.119 # will work here
+
+# Exit the Minikube SSH session.
+exit
+
+# Edit the 'nginxsvc' service to change its type to NodePort for external access.
+kubectl edit svc nginxsvc # edit type: NodePort
+
+# Get the list of services to see the updated 'nginxsvc' service with NodePort.
+kubectl get svc
+
+# Curl the NodePort of the 'nginxsvc' service using the Minikube IP.
+curl $(minikube ip):30290
+
+######Exploring Kubernetes Application Auto-registration with DNS####
+
+# Run a busybox pod interactively with a shell.
+kubectl run -it busybox --image=busybox -- sh
+
+# Get detailed information about pods in the 'kube-system' namespace.
+kubectl get pods -n kube-system -o wide
+
+# Get detailed information about services in the 'kube-system' namespace.
+kubectl get svc -n kube-system 
+
+######Working with Ingress##########
+what is Ingress? Ingress is a Kubernetes API resource that exposes HTTP and HTTPS routes to services that are running inside a cluster. I repeat, HTTP and HTTPS, that makes the use of Ingress a little bit limited. Using Ingress, however, does provide a couple of benefits. Services get externally reachable URLs automatically in a Kubernetes integrated way. Ingress can do load balancing between different services but also between the different pods. Ingress can also take care of TLS/SSL termination.Ingress needs an Ingress controller to do the work. That means that you are not just going to put some code into a YAML file and run it.
+
+# List all available Minikube addons.
+minikube addons list
+
+# Enable the Ingress addon in Minikube.
+minikube addons enable ingress
+
+# If enabling the addon fails, stop and start Minikube.
+minikube stop
+minikube start
+
+# Re-enable the Ingress addon in Minikube.
+minikube addons enable ingress
+
+# Get the list of all namespaces.
+kubectl get ns
+
+# Get all resources in the 'ingress-nginx' namespace.
+kubectl get all -n ingress-nginx 
+
+# Describe the 'ingress-nginx-controller' pod for detailed information.
+kubectl describe pods -n ingress-nginx ingress-nginx-controller-768f948f8f-n897m | less
+
+# Create an Ingress resource to route traffic to the 'nginxsvc' service on port 80.
+kubectl create ingress nginxsvc-ingress --rule="/=nginxsvc:80"
+
+# Get the Minikube IP address.
+minikube ip 
+
+# Edit the /etc/hosts file to map the Minikube IP to a hostname.
+vi /etc/hosts # edit minikube ip 
+
+# Get the list of Ingress resources.
+kubectl get ingress
+
+# Curl the hostname mapped to the Minikube IP to access the Ingress resource.
+curl nginxsvc.info
+
+##############Using Port Forwarding to Access Applications#############
+ how to use port forwarding to access applications. So how does it work? services and ingress are used to provide access to applications. That's a default way, the default way that you want to use to expose applications to your users. Port forwarding is an alternative way, which can be used to analyze or troubleshoot applications.is to a port at the loopback address of the kubectl client. You can use --address= something to expose a NIC IP address. So use
+
+
+# Port forward from the local port 8888 to the 'nginxsvc' service on port 80.
+kubectl port-forward svc/nginxsvc 8888:80
+
+# Suspend the current process and put it in the background.
+press ctrl +z , then type bg
+
+# Curl the local port 8888 to access the 'nginxsvc' service.
+curl localhost:8888
+
+# Create a new deployment named 'nginxlab' with the nginx image.
+kubectl create deployment nginxlab --image=nginx
+
+# Expose the 'nginxlab' deployment as a service on port 80.
+kubectl expose deployment nginxlab --port=80
+
+# Get the list of all services.
+kubectl get svc
+
+# Edit the 'nginxlab' service to change its type to NodePort for external access.
+kubectl edit svc nginxlab # modify the port type to "type: NodePort "
+
+# Get the list of services and filter for 'nginxlab' to see the updated service.
+kubectl get svc | grep nginxlab
+
+# Curl the NodePort of the 'nginxlab' service using the Minikube IP.
+curl $(minikube ip):31007
+
+########Understanding Ephemeral Container Storage###############
+containers, as you know, are started from an image, and this image is a read-only. And after starting a container, the image is copied to a directory on the host that runs the container. Within that directory, an environment is created to store files that are modified within a container. So it is possible to apply modifications. But the thing is that this directory is ephemeral, which means short-living, and it will be removed when a container is removed.
+
+
+# Explain the 'volumes' field in the Pod spec to understand how to configure volumes.
+kubectl explain pod.spec.volumes | less
+
+# Create a new Pod with multiple volumes defined in the 'morevolumes.yaml' file.
+kubectl create -f morevolumes.yaml
+
+# Get the list of pods to verify the creation of the new Pod.
+kubectl get pods
+
+# Describe the 'morevol' Pod for detailed information.
+kubectl describe pod morevol 
+
+# Get the list of pods again to check the status.
+kubectl get pods
+
+# Execute a command inside the 'centos1' container of the 'morevol' Pod to create a test file.
+kubectl exec -it morevol -c centos1 -- touch /centos1/testfile
+
+# Execute a command inside the 'centos2' container of the 'morevol' Pod to list files.
+kubectl exec -it morevol -c centos2 -- ls /centos2
+
+
+#############Decoupling Storage from the Applications####################
+Overview:
+Decoupling storage from applications in Kubernetes involves separating the persistent storage needs of applications from the applications themselves. This approach allows for more flexibility, scalability, and robustness in managing data. Kubernetes achieves this through its powerful and flexible storage architecture.
+
+Key Concepts:
+
+Persistent Volumes (PVs):
+
+Definition: A Persistent Volume (PV) is a piece of storage in the cluster that has been provisioned by an administrator or dynamically provisioned using Storage Classes.
+Lifecycle: PVs exist independently of the pods that use them, meaning they persist beyond the life of individual pods.
+Usage: PVs are used to store data that needs to outlive pod restarts and rescheduling.
+Persistent Volume Claims (PVCs):
+
+Definition: A Persistent Volume Claim (PVC) is a request for storage by a user. PVCs consume PV resources.
+Binding: When a PVC is created, it can be dynamically bound to an appropriate PV that meets the storage requirements.
+Storage Classes:
+
+Definition: Storage Classes provide a way to describe the “classes” of storage available in a cluster. Different classes might map to quality-of-service levels, backup policies, or arbitrary policies determined by the cluster administrators.
+Dynamic Provisioning: Storage Classes enable dynamic provisioning of PVs. When a PVC requests storage, Kubernetes automatically provisions a PV from the specified Storage Class.
+Decoupling Mechanism:
+
+Abstraction: PVs and PVCs abstract the underlying storage details from the applications. This allows developers to request storage without needing to know the specifics of the storage backend.
+Flexibility: Applications can be deployed, updated, and scaled independently of the underlying storage infrastructure.
+
+Here is the script with comments added to each command line for better understanding:
+
+---
+############Creating Persistent Volumes#####################
+
+# Open a new file called pv.yaml to define a PersistentVolume
+vi pv.yaml
+
+# Content of pv.yaml:
+# Define a PersistentVolume resource
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pv-volume # Name of the PersistentVolume
+  labels:
+    type: local # A label to identify the type of volume
+spec:
+  capacity:
+    storage: 2Gi # Define the storage capacity of the PV
+  accessModes:
+    - ReadWriteOnce # The PV can be mounted as read-write by a single node
+  hostPath:
+    path: "/mydata" # Path on the host where the PV data will be stored
+
+# Create the PersistentVolume using the definition in pv.yaml
+kubectl create -f pv.yaml
+
+# Describe the PersistentVolume to get detailed information about it
+kubectl describe pv pv-volume
+
+# SSH into the Minikube virtual machine
+minikube ssh
+
+# List the contents of the root directory on Minikube to verify the hostPath
+docker@minikube:~$ ls /
+
+###########Managing Persistent Volume Claims############
+
+# Open a new file called pvc.yaml to define a PersistentVolumeClaim
+vi pvc.yaml
+
+# Content of pvc.yaml:
+# Define a PersistentVolumeClaim resource
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pv-claim # Name of the PersistentVolumeClaim
+spec:
+  accessModes:
+    - ReadWriteOnce # The PVC can be mounted as read-write by a single node
+  resources:
+    requests:
+      storage: 1Gi # Request 1Gi of storage
+
+# Create the PersistentVolumeClaim using the definition in pvc.yaml
+kubectl create -f pvc.yaml
+
+# Get the status of the PersistentVolumeClaim to verify it has been created and bound to a PV
+kubectl get pvc
+# Example output:
+# NAME       STATUS   VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS   VOLUMEATTRIBUTESCLASS   AGE
+# pv-claim   Bound    pvc-6d3b0605-c6bb-4dff-a811-0148f188e65a   1Gi        RWO            standard       <unset>                 41s
+
+# Get the status of both the PersistentVolume and PersistentVolumeClaim to verify binding
+kubectl get pvc,pv
+
+# Describe the bound PersistentVolume to get detailed information
+kubectl describe pv pvc-6d3b0605-c6bb-4dff-a811-0148f188e65a
+
+# Get the available storage classes in the cluster
+kubectl get storageclass
+
+# List Minikube addons to ensure the storage provisioner is enabled by default
+minikube addons list
+
+#############Setting up Pods to Use Persistent Volumes##################
+
+# Open a new file called pv-pod.yaml to define a Pod that uses the PersistentVolumeClaim
+vi pv-pod.yaml
+
+# Content of pv-pod.yaml:
+# Define a Pod resource
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pv-pod # Name of the Pod
+spec:
+  volumes:
+    - name: pv-storage # Name of the volume
+      persistentVolumeClaim:
+        claimName: pv-claim # Reference to the PersistentVolumeClaim
+  containers:
+    - name: pv-container # Name of the container
+      image: nginx # Image to use for the container
+      ports:
+        - containerPort: 80 # Expose port 80
+          name: "http-server" # Name the port
+      volumeMounts:
+        - mountPath: "/usr/share/nginx/html" # Mount path inside the container
+          name: pv-storage # Reference to the volume defined above
+
+# Create the Pod using the definition in pv-pod.yaml
+kubectl create -f pv-pod.yaml
+
+# Describe the Pod to get detailed information about its status and configuration
+kubectl describe pod pv-pod
+
+# Execute a command inside the Pod to create a file in the mounted volume
+kubectl exec -it pv-pod -- touch /usr/share/nginx/html/hello.txt
+
+# SSH into the Minikube virtual machine
+minikube ssh
+
+# Verify the file was created in the hostPath directory on Minikube
+docker@minikube:~$ ls -lt /tmp/hostpath-provisioner/default/pv-claim/hello.txt
+
+#############Lab Solution: Providing Access to Storage################
+
+# Open a new file called morevolumes.yaml to define a Pod with multiple containers sharing a volume
+vi morevolumes.yaml
+
+# Content of morevolumes.yaml:
+# Define a Pod resource
+apiVersion: v1
+kind: Pod
+metadata:
+  name: lab8 # Name of the Pod
+spec:
+  containers:
+    - name: centos1 # Name of the first container
+      image: centos:7 # Image to use for the first container
+      command:
+        - sleep # Command to run in the first container
+        - "3600" # Sleep for 3600 seconds
+      volumeMounts:
+        - mountPath: /centos1 # Mount path inside the first container
+          name: test # Reference to the shared volume
+    - name: centos2 # Name of the second container
+      image: centos:7 # Image to use for the second container
+      command:
+        - sleep # Command to run in the second container
+        - "3600" # Sleep for 3600 seconds
+      volumeMounts:
+        - mountPath: /centos2 # Mount path inside the second container
+          name: test # Reference to the shared volume
+  volumes:
+    - name: test # Name of the shared volume
+      hostPath:
+        path: /myfiles # Path on the host to be mounted as a volume
+
+# Create the Pod using the definition in morevolumes.yaml
+kubectl create -f morevolumes.yaml
+
+# Execute a command inside the first container to create a file in the shared volume
+kubectl exec -it lab8 -c centos1 -- touch /centos1/hostpath.txt
+
+# SSH into the Minikube virtual machine
+minikube ssh
+
+# Navigate to the hostPath directory and verify the file was created
+docker@minikube:~$ cd /myfiles/
+docker@minikube:/myfiles$ ls
+# Verify the presence of hostpath.txt
+hostpath.txt
+```
+
+#################Decoupling Configuration Files and Variables from Applications######################
+Decoupling starts by having a container image. And in this container image you don't want to have any site-specific information. How are you going to do that? Normally, you would create a container image from a docker file or a container file, as you call it nowadays, and you can use add or copy to copy files into the container image. But that is something that specifically you don't wanna do in a decoupled environment. Because if you are going to do that, your container image contains site-specific information
+
+
+############Using ConfigMaps for Variables####################
+ConfigMaps can be used in two ways. You can use it to provide variables and to provide configuration files. So the way how the ConfigMap is addressed depends on how it is used, If a ConfigMap contains variables, it's access using env from in the pod specification. And if the ConfigMap contains configuration files, it's mounted, mounted like a volume. There's also Secrets. Secrets are base64 encoded ConfigMaps. If you know how ConfigMaps are working, using Secrets is not that different. 
+
+1. **Create a file with environment variables:**
+    ---
+    vi varsfile
+    ```
+  
+    MYSQL_ROOT_PASSWORD=password
+    MYSQL_USER=anna
+======================
+Explanation: This line sets the environment variable MYSQL_ROOT_PASSWORD to the value password.
+Usage: The MYSQL_ROOT_PASSWORD variable is used by the MySQL/MariaDB database to define the root user's password. This is a critical environment variable for initializing the database with the root account's password.
+Security Note: Storing plain text passwords in files is not recommended for production environments. Instead, use Kubernetes Secrets for sensitive data.
+    ```
+
+2. **Create a ConfigMap from the environment file:**
+    ---
+    kubectl create cm mydbvars --from-env-file=varsfile
+    ```
+    This command creates a ConfigMap named `mydbvars` using the `varsfile`.
+
+3. **Describe the ConfigMap to verify its content:**
+    ---
+    kubectl describe cm mydbvars
+    ```
+    This command displays detailed information about the ConfigMap `mydbvars`.
+
+4. **Create a deployment using the MariaDB image:**
+    ---
+    kubectl create deployment mydb --image=mariadb --replicas=3
+    ```
+    This command creates a deployment named `mydb` with 3 replicas of the MariaDB container.
+
+5. **Set environment variables in the deployment from the ConfigMap:**
+    ---
+    kubectl set env deploy mydb --from=configmap/mydbvars
+    ```
+    This command sets the environment variables in the `mydb` deployment using the values from the `mydbvars` ConfigMap.
+
+6. **Verify the deployment:**
+    ---
+    kubectl get all --selector app=mydb
+    kubectl describe pod mydb-<pod-id>
+    kubectl logs mydb-<pod-id>
+    ```
+    These commands check the status and details of the deployment and its pods, and view the logs of one of the pods.
+
+7. **Export the deployment YAML for inspection or backup:**
+    ---
+    kubectl get deployments.apps mydb -o yaml > mydb1.yaml
+    kubectl get deployments.apps mydb -o yaml | less
+    ```
+    These commands export the deployment configuration to a YAML file and view it in a pager.
+
+### Storing Configuration Files in ConfigMaps
+
+1. **Create a configuration file:**
+    ---
+    echo hello world > index.html
+    ```
+    This command creates a file named `index.html` with the content "hello world".
+
+2. **Create a ConfigMap from the file:**
+    ---
+    kubectl create cm myindex --from-file=index.html
+    ```
+    This command creates a ConfigMap named `myindex` using the `index.html` file.
+
+3. **Describe the ConfigMap to verify its content:**
+    ---
+    kubectl describe cm myindex
+    ```
+    This command displays detailed information about the ConfigMap `myindex`.
+
+4. **Create a deployment and mount the ConfigMap as a volume:**
+    ---
+    kubectl create deployment myweb --image=nginx
+    kubectl edit deployments.apps myweb
+    ```
+    Add the following under `spec` to the deployment YAML:
+   volumes:                       # Define the volumes section in the pod spec
+  - name: cmvol                # Name of the volume, can be any valid identifier
+    configMap:                 # Specify that this volume comes from a ConfigMap
+      name: myindex            # Name of the ConfigMap to use, which was created earlier
+
+containers:                    # Define the containers section in the pod spec
+  - name: <container-name>     # Name of the container, replace <container-name> with the actual container name
+    volumeMounts:              # Specify the volume mounts within the container
+      - mountPath: /usr/share/nginx/html # Path inside the container where the volume should be mounted
+        name: cmvol            # Name of the volume to mount, must match the volume name defined above
+
+
+5. **Verify the file in the running pod:**
+    ---
+    kubectl describe pod myweb-<pod-id>
+    kubectl exec -it myweb-<pod-id> -- cat /usr/share/nginx/html/index.html
+    ```
+    These commands check the pod details and verify the contents of the mounted file.
+
+### Using Secrets for Sensitive Information
+
+1. **Create a secret for the database password:**
+    ---
+    kubectl create secret generic dbpwd --from-literal=ROOT_PASSWORD=password
+    ```
+    This command creates a secret named `dbpwd` with the key-value pair `ROOT_PASSWORD=password`.
+
+2. **Describe the secret to verify its content:**
+    ---
+    kubectl describe secrets dbpwd
+    kubectl get secrets dbpwd -o yaml
+    ```
+    These commands display detailed information about the secret `dbpwd`.
+
+3. **Decode the secret for verification:**
+    ---
+    echo cGFzc3dvcmQ= | base64 -d
+    ```
+    This command decodes the base64-encoded value to verify the secret content.
+
+4. **Create a deployment and use the secret:**
+    ---
+    kubectl create deployment myotherdb --image=mariadb
+    kubectl set env deploy myotherdb --from=secret/dbpwd --prefix=MYSQL_
+    kubectl get all --selector app=myotherdb
+    ```
+    These commands create a deployment named `myotherdb` using the MariaDB image and set environment variables from the `dbpwd` secret with the prefix `MYSQL_`.
+
+### Using Docker-registry Secrets
+
+1. **Create a Docker registry secret:**
+    ---
+    kubectl create secret docker-registry dockercreds --docker-server=hub.docker.com --docker-username=assulai --docker-password=123456 --docker-email=farajassulai@gmail.com
+    ```
+    This command creates a Docker registry secret named `dockercreds`.
+
+2. **Verify the secret:**
+    ---
+    kubectl get secrets dockercreds -o yaml
+    echo eyJhdXRocyI6eyJodWIuZG9ja2VyLmNvbSI6eyJ1c2VybmFtZSI6ImFzc3VsYWkiLCJwYXNzd29yZCI6IipMaWJ5YTRldmVyKiIsImVtYWlsIjoiZmFyYWphc3N1bGFpQGdtYWlsLmNvbSIsImF1dGgiOiJZWE56ZFd4aGFUb3FUR2xpZVdFMFpYWmxjaW89In19fQ== | base64 -d
+    ```
+    These commands display detailed information about the `dockercreds` secret and decode its content for verification.
+
+3. **Create a pod that uses the Docker registry secret:**
+    ---
+    kubectl run secretpod --image=nginx --dry-run=client -o yaml > secretpod.yaml
+    vi secretpod.yaml
+    ```
+    Edit `secretpod.yaml` to include the image pull secret:
+  apiVersion: v1               # Specifies the API version used to create this object. Here, v1 is used.
+kind: Pod                    # Specifies the type of Kubernetes object being created. Here, it's a Pod.
+metadata:                    # Provides metadata about the object.
+  creationTimestamp: null    # Initially set to null, will be automatically populated by Kubernetes when the Pod is created.
+  labels:                    # Key-value pairs to categorize the Pod.
+    run: secretpod           # A label with the key 'run' and value 'secretpod' for identifying the Pod.
+  name: secretpod            # The name of the Pod, which is 'secretpod'.
+spec:                        # Specification of the Pod's desired state.
+  containers:                # List of containers that will run in the Pod.
+    - image: nginx           # The container image to use. Here, it's the official Nginx image.
+      name: secretpod        # The name of the container.
+      resources: {}          # Resources for the container. Currently empty, meaning no specific resource limits or requests.
+  dnsPolicy: ClusterFirst    # The DNS policy for the Pod. 'ClusterFirst' means DNS queries are first attempted within the cluster.
+  imagePullSecrets:          # References to secrets for pulling private container images.
+    - name: dockercreds      # The name of the secret containing Docker registry credentials.
+  restartPolicy: Always      # Specifies the Pod's restart policy. 'Always' means the container will always be restarted if it fails.
+status: {}                   # Current status of the Pod. Initially empty, will be populated by Kubernetes.
+
+
+4. **Create the pod:**
+    ---
+    kubectl create -f secretpod.yaml
+    kubectl get pods
+    ```
+    These commands create the pod defined in `secretpod.yaml` and verify its creation.
+
+###########################Understanding the API####################
+ an API exposes resources that are available to the end-user client program. That's a generic definition. In Kubernetes there's a set of APIs, each with its own status and version. And these APIs are providing access to the
+different resources. When you are using specific Kubernetes resources and define them in YAML files, it's important to identify the API version that should be used so that Kubernetes knows how exactly the resource must be addressed and the correct properties can be addressed.
+
+kubectl api-resources 
+
+###################Using kube-proxy to Connect to the API####################
+access the API, there is this process, the kube-apiserver. And it's kube-apiserver, is secured. And the security in Kubernetes, by default, is happening using TLS. So, TLS, it's about public private keys that need to be present in order to give yourself a secure access to the API. So, this is a closer environment that needs to be accessed. How is that going to happen? Well, that depends. Level number one, is kubectl. So, how are we using kubectl? Well, you probably know that kubectl is using the .kube/config file and this .kube/config file is containing all the information to get secure access through TLS to the API. Sometimes you might want to access the API information in a different way, using curl, for instance. I mean, in the end, the Kubernetes API is exposing HTTP and that means that you can perfectly use curl and address the HTTP commands directly. But, do you really want to specify all of your certificates every single time that you are using curl? Most people don't. And that is why there is the kube-proxy process. You can run it using kubectl-proxy, and kubectl-proxy is running on the local host and really is providing TLS secured access to the API. So that's what kube-proxy is doing and that's why you use kubectl-proxy to expose a local port on your own workstation. And this local port is doing port forwarding to the API. Now, how about applications? If you have an application that needs access to the API, that's a scenario as well. Well, in order to provide an application with access to the API, the application is using a service account. And service account, as we will discover in the next lessons, is a specific API resource. It's kind of a user account. And if it's kind of a user account, that means that the service account, also is using TLS in some way. And you know how that is happening? That is happening by the service account secret. So the service account is using a secret and this secret is using a token. And this token comes down to a TLS-secured connection. So the service account comes with a secret and the secret allows for secure access to the kube-apiserver. So regardless, if it is you as an administrator or if it's a generic curl request or an application that needs to fetch information about other running bots, for instance, Kubernetes is providing solutions. 
+
+
+
+
+### Exploring the API with curl
+
+---
+###############Exploring the API with curl##########################
+kubectl proxy --port=8001 &  # Starts a local proxy to the Kubernetes API server, running in the background on port 8001
+curl http://localhost:8001/version  # Fetches the version of the Kubernetes API server
+curl http://localhost:8001/api/v1/namespaces/default/pods  # Lists all pods in the 'default' namespace
+kubectl get pods  # Retrieves and displays all pods in the current namespace using kubectl
+curl http://localhost:8001/api/v1/namespaces/default/pods/pv-pod  # Fetches details of a specific pod named 'pv-pod' in the 'default' namespace
+curl -XDELETE http://localhost:8001/api/v1/namespaces/default/pods/pv-pod  # Deletes the 'pv-pod' pod in the 'default' namespace
+kubectl get pods  # Verifies the deletion by listing all pods in the current namespace
+```
+
+### Using kubectl explain to Describe Kubernetes Objects
+
+---
+###############Using kubectl explain to Describe Kubernetes Objects##############
+kubectl explain --recursive pod.spec | less  # Provides a detailed explanation of the 'pod.spec' object, with output paginated using 'less'
+kubectl create -f redis-deploy.yaml  # Attempts to create resources defined in 'redis-deploy.yaml'
+error: resource mapping not found for name: "redis" namespace: "" from "redis-deploy.yaml": no matches for kind "Deployment" in version "apps/v1beta1"  # Error message indicating an issue with the 'redis-deploy.yaml' file
+ensure CRDs are installed first  # Suggests checking if Custom Resource Definitions (CRDs) are installed
+kubectl api-versions | less  # Lists available API versions in the cluster, with output paginated using 'less'
+vi redis-deploy.yaml  # Opens 'redis-deploy.yaml' in the vi editor for editing
+```
+
+### redis-deploy.yaml
+
+```yaml
+====================
+--  # YAML separator
+apiVersion: apps/v1  # Specifies the API version as 'apps/v1'
+kind: Deployment  # Defines the resource type as 'Deployment'
+metadata:
+  name: redis  # Names the deployment 'redis'
+  labels:
+    app: redis  # Assigns a label 'app=redis'
+spec:
+  selector:
+    matchLabels:
+      app: redis  # Selects pods with the label 'app=redis'
+  replicas:  # Specifies the number of pod replicas (value missing here)
+  template:
+    metadata:
+      labels:
+        app: redis  # Labels the pod template with 'app=redis'
+    spec:
+      containers:
+      - name: redis  # Names the container 'redis'
+        image: redis:alpine  # Uses the 'redis:alpine' image
+        ports:  # Specifies container ports (values missing here)
+=============================
+```
+
+### Creating the Deployment and Verifying
+
+---
+kubectl create -f redis-deploy.yaml  # Creates the deployment using the corrected 'redis-deploy.yaml' file
+sudo ss -tunap  # Lists all listening ports and associated processes
+```
+
+### Getting Started with Kubernetes in Google Cloud
+
+---
+####################Getting Started with Kubernetes in Google Cloud####################
+login on Google Cloud account ---> click on create en autopilot cluster ---> name=autopilot-K8S --->region=us-central1---> create --->click on : (actions)---> connect---> click on run in cloud shell --->wait for while ---> click enter ---> click AUTHORIZE  # Steps to create and connect to an Autopilot Kubernetes cluster in Google Cloud
+kubectl get all  # Lists all Kubernetes resources in the current namespace
+kubectl get all -a  # Lists all Kubernetes resources in all namespaces
+kubectl create deploy nginx --image=nginx --replicas=3  # Creates a deployment named 'nginx' with 3 replicas using the 'nginx' image
+kubectl get all  # Verifies the creation by listing all resources in the current namespace
+
+*** after you have done your job **** 
+select the cluster --->delete --->type the name of the cluster "autopilot-K8S"--->delete  # Steps to delete the cluster
+```
+
+### Using Kubernetes in Amazon
+
+---
+######################Using Kubernetes in Amazon#######################
+create user under IAM  # Create a new IAM user in AWS
+users --->click add user---> username= EKS ---> under AWS Access Type --->select access key- programmatic access--->next"permissions--->click on "attach existing policies directly--->select "administrator access"--->next"tag"--->next--->creat user---> click on show access key and copy it in txt file  # Steps to create a new IAM user with programmatic access and administrator permissions
+ *** open the VM linux client to configure AWS Client****
+su yum install awscli  # Switch to the superuser and install the AWS CLI
+aws configure ---> AWS Acess Key ID: --->AWS Secret Acess Key --->deafult region name=usa-east-2--->deafult output format --->press enter  # Configure the AWS CLI with your credentials and default settings
+
+*** install kubctl ***
+**install EKSCTL aws redhat9***
+
+***after installation of EKSCTL**
+eksctl version  # Verify the installation of eksctl by checking its version
+eksctl create cluster --name cliclus --region us-east-2 "after while will create will take time more than 20 min"  # Create a new EKS cluster named 'cliclus' in the 'us-east-2' region
+kubectl get all  # Lists all Kubernetes resources in the current namespace
+
+open the AWS Councel ---> Amazon elastic Kubernets Service--->click on cluster--->click on it --->  # Navigate to the EKS cluster in the AWS console
+```
+
+### Using Kubernetes in Azure
+
+---
+#####################Using Kubernetes in Azure##########################
+login on AZURE ---> kubernetes services --->create --->create kubernets cluster---> subscribtion =free trail---> Resource group --->create ---> name=AZEKS--->ok---> under cluster presist configuration=DevTest---> kubernetes cluster name= EKSK8S---> scale --->manual=2---> review & create---> create "after while will create will take time more than 20 min"---> connect to cluster ---> click on cloud shell "wait for while until finish creating the cliud shell"---> then the run the commmand from the cluster page and follow the instrcution  # Steps to create and connect to an AKS cluster in Azure
+after finish 
+kubctl get all  # Lists all Kubernetes resources in the current namespace
+kubctl get nodes  # Lists all nodes in the cluster
+kubctl create deploy testweb --image=nginx --replicas=3  # Creates a deployment named 'testweb' with 3 replicas using the 'nginx' image
+kubctl get all  # Verifies the creation by listing all resources in the current namespace
+
+**after finish from cluster you have to clean it up ****  # Reminder to delete the cluster after use
+```
+
+### Building Your Own On-Premise Kubernetes Cluster
+
+---
+*************Building Your Own On-Premise Kubernetes Cluster*************
+The exact procedure has been down sighted in lesson ten, four. I'm not going to do it all over again I just want to summarize the procedure and for additional details, I would invite you to watch lesson ten, four again. So, to start with from the course git repository your own setup container dot S, H. Which is setting up the container run time. Then from the same git repository, needing Sudo permissions, you need setup Kubetools dot S, H. You're just making sure that Kubeadm and Kubelets and the Kubetcl are available. Then you move to the controller node, and on the controller node you use Kubeadm init. And Kubeadm init is going to set up closure for you. And the nice thing is that once Kubeadm init is done it'll tell you exactly what to do. Which is three steps, you need to set up the client, you need to set up an extra agent, and you need to join the other nodes. So first you set up the client, then you set up the network plugin. This network plugin is not really shown how to do it in the Kubeadm init output. Just run the command, Kubectl apply minus F followed by the URL that you can see right here, to install the Calico plugin. And then on the additional nodes, you can use Kubeadm join as instructed. Make sure that you use join token as well, that is generated specifically for this closure setup. And if you have a different join token, you are not going to be able to join anything. And then at the end, verify using Kubectl get all. Or even better, Kubectl get nodes, which is showing you that nodes is successfully joined. And that's all.
+
+create another two virtual machine and repert all steps (studen,worker2,worker1)  # Create two additional VMs and repeat the setup steps
+sudo -i  # Switch to the superuser
+sudo hostnamectl set-hostname "K8S-master" && exec bash
+sudo hostnamectl set-hostname "K8S1" && exec bash 
+sudo hostnamectl set-hostname "K8S2" && exec bash 
+
+vi /etc/hosts
+K8S-master   192.168.1.145
+K8S1         192.168.1.143
+K8S2          192.168.1.22
+git clone https://github.com/sandervanvugt/kubernetes  # Clone the Kubernetes setup repository
+cd kubernetes  # Navigate to the cloned repository
+./setup-container
+
+.sh  # Run the container setup script
+./setup-kubetools.sh  # Run the Kubernetes tools setup script
+
+
+
+***just run it on main node***
+kubeadm init  # Initialize the Kubernetes control plane on the main node
+exit  # Exit the superuser session
+mkdir -p $HOME/.kube  # Create the .kube directory in the home directory
+sudo cp -i /etc/kubernets/admin.conf $HOME/.kube/config  # Copy the Kubernetes admin config file to the .kube directory
+sudo chown $(id -u):$(id -g) $HOME/.kube/config  # Change ownership of the config file to the current user
+
+
+
+
+kubectl apply -f http://docs.projectcalico.org/manifests/calico.yaml  # Install the Calico network plugin
+kubectl get all -a  # Lists all Kubernetes resources in all namespaces
+
+*** use it on other nodes (2,3)**
+kubeadm join 192.168.1.145:6443 --token jyomwj.5uiyx3zcbdsat7ky \
+	--discovery-token-ca-cert-hash sha256:12583dc1325080a2a6e44522af62ee0efb626ebbf925e75b14ddd7c67dd8b4e2 
+  # Join additional nodes to the cluster using the provided token
+
+***after finish the configuration , back to main node and run the following command ****
+kubectl get nodes  # Verify that all nodes have successfully joined the cluster
+** if not ready **
+sleep 45; kubectl get nodes  # If nodes are not ready, wait 45 seconds and check again
+
+
+
+*************Providing Flexible Storage*****************
+Certainly! Here are comments and explanations for each command line in the provided script:
+
+### *************Providing Flexible Storage*****************
+
+**Run the command on three virtual machines:**
+1. `yum install nfs*`  
+   *Installs NFS server and client packages on the system.*
+   
+2. `mkdir /storage`  
+   *Creates a directory named `/storage` for sharing via NFS.*
+
+3. `chmod 777 /storage`  
+   *Sets permissions on the `/storage` directory to allow read, write, and execute for all users.*
+
+4. `sudo sh -c 'echo "/storage *(rw,no_root_squash)" > /etc/exports'`  
+   *Exports the `/storage` directory, allowing read/write access to all clients without root squashing.*
+
+5. `sudo systemctl start rpcbind`  
+   *Starts the `rpcbind` service which is required for NFS.*
+
+6. `sudo systemctl enable rpcbind`  
+   *Enables `rpcbind` to start on boot.*
+
+7. `sudo systemctl start nfs-server`  
+   *Starts the NFS server service.*
+
+8. `sudo systemctl enable nfs-server`  
+   *Enables the NFS server to start on boot.*
+
+9. `sudo exportfs -a`  
+   *Exports all directories listed in `/etc/exports`.*
+
+10. `showmount -e localhost`  
+    *Displays the NFS shares available on the local machine.*
+
+**Verifying the NFS storage is accessible:**
+
+**On nodes (K8S2 & K8S3):**
+11. `showmount -e 192.168.1.145`  
+    *Verifies that the NFS share from the server at `192.168.1.145` is accessible.*
+
+**On the server node (K8S-master):**
+12. `cd kubernetes`  
+    *Changes the directory to `kubernetes`.*
+
+13. `vi nfs-pv.yaml`  
+    *Edits the `nfs-pv.yaml` file to configure the Persistent Volume.*
+
+14. *Change only the IP address of your server to **192.168.1.145**, then save the file.*
+
+15. `kubectl create -f nfs-pv.yaml`  
+    *Creates the Persistent Volume resource in Kubernetes.*
+
+16. `kubectl get pv,pvc`  
+    *Lists all Persistent Volumes (PVs) and Persistent Volume Claims (PVCs).*
+
+17. `vi nfs-pv-pod.yaml`  
+    *Edits the `nfs-pv-pod.yaml` file to configure the pod that will use the NFS share.*
+
+18. `kubectl create -f nfs-pv-pod.yaml`  
+    *Creates the pod that uses the NFS Persistent Volume.*
+
+19. `kubectl describe pod nfs-pv-pod.yaml`  
+    *Describes the pod to verify its configuration and status.*
+
+20. `kubectl get pods`  
+    *Lists all pods to check their status.*
+
+21. `kubectl exec -it nfs-pv-pod -c nfs-client1 -- touch /nfs/share/myfile`  
+    *Creates a file named `myfile` in the NFS shared directory from within the pod.*
+
+22. `ls -l /storage`  
+    *Lists files in the `/storage` directory on the server to verify the file creation.*
+
+### *************Monitoring Pods*********************
+
+23. `kubectl apply -f https://github.com/kubernetes-sign/metrics-server/releases/latest/download/components.yaml`  
+    *Installs the Metrics Server for resource usage monitoring.*
+
+24. `kubectl get pods -A`  
+    *Lists all pods across all namespaces to verify the Metrics Server deployment.*
+
+25. `kubectl edit deploy -n kube-system metrics-server`  
+    *Edits the Metrics Server deployment to configure it.*
+
+**Add the following line under `containers`:**
+26. `- --kubelet-insecure-tls`  
+    *Allows the Metrics Server to work with self-signed certificates.*
+
+**Save the file.**
+
+27. `kubectl get pods -A`  
+    *Lists all pods across all namespaces to verify that the Metrics Server is running.*
+
+28. `kubectl top pods`  
+    *Displays the resource usage of pods.*
+
+29. `kubectl top pods -A`  
+    *Displays the resource usage of all pods across all namespaces.*
+
+### *************Configuring Ingress*****************
+
+30. `helm upgrade --install ingress-nginx ingress-nginx --repo https://kubernetes.github.io/ingress-nginx --namespace ingress-nginx --create-namespace`  
+    *Installs or upgrades the NGINX Ingress controller using Helm.*
+
+31. `kubectl get pods -n ingress-nginx`  
+    *Lists pods in the `ingress-nginx` namespace to verify the Ingress controller deployment.*
+
+32. `kubectl create deploy nginxsvc --image=nginx --port=80`  
+    *Creates a deployment named `nginxsvc` with the NGINX image and exposes port 80.*
+
+33. `kubectl expose deploy nginxsvc`  
+    *Exposes the `nginxsvc` deployment as a service.*
+
+34. `kubectl edit svc nginxsvc`  
+    *Edits the service to change its type.*
+
+**Modify the service type from `ClusterIP` to `NodePort` and save the file.**
+
+35. `kubectl get all`  
+    *Lists all resources in the current namespace to verify the service.*
+
+36. `kubectl create ingress -h | less`  
+    *Displays the help for creating an Ingress resource.*
+
+37. `kubectl create ingress nginxsvc --class=nginx --rule=nginxsvc.info/*=nginxsvc:80`  
+    *Creates an Ingress resource for the `nginxsvc` service with the specified rule.*
+
+38. `kubectl port-forward -n ingress-nginx svc/ingress-nginx-controller 8080:80`  
+    *Port-forwards port 80 of the Ingress controller to local port 8080.*
+
+39. `sudo sh -c 'echo "127.0.0.1 nginxsvc.info" >> /etc/hosts'`  
+    *Adds an entry to the `/etc/hosts` file to resolve `nginxsvc.info` to `127.0.0.1`.*
+
+40. `curl nginxsvc.info:8080`  
+    *Sends a request to `nginxsvc.info` on port 8080 to verify the Ingress setup.*
+
+### ***************Using Canary Deployment Application Updates*****************
+
+41. `echo oldsite > oldnginx.html`  
+    *Creates a file named `oldnginx.html` with content `oldsite`.*
+
+42. `kubectl create cm oldnginx --from-file=oldnginx.html`  
+    *Creates a ConfigMap named `oldnginx` from the `oldnginx.html` file.*
+
+43. `kubectl create deploy oldnginx --image=nginx:1.14 --replicas=3 --dry-run=client -o yaml > oldnginx.yaml`  
+    *Creates a YAML file for the `oldnginx` deployment with 3 replicas using NGINX 1.14.*
+
+44. `kubectl create -f oldnginx.yaml`  
+    *Deploys the `oldnginx` application from the YAML file.*
+
+45. `kubectl expose oldnginx --name=canary --port=80 --selector type=canary`  
+    *Exposes the `oldnginx` deployment as a service named `canary` on port 80.*
+
+46. `kubectl describe svc canary`  
+    *Describes the `canary` service to verify its configuration.*
+
+47. `kubectl edit service canary`  
+    *Edits the `canary` service to change its type.*
+
+**Change the service type to `NodePort` and save the file.**
+
+48. `echo newsite > nginxnew.html`  
+    *Creates a file named `nginxnew.html` with content `newsite`.*
+
+49. `kubectl create cm newnginx --from-file=newnginx.html`  
+    *Creates a ConfigMap named `newnginx` from the `nginxnew.html` file.*
+
+50. `kubectl create deploy newnginx --image=nginx --replicas=1 --dry-run=client -o yaml > newnginx.yaml`  
+    *Creates a YAML file for the `newnginx` deployment with 1 replica.*
+
+**Alternatively:**
+51. `cp oldnginx.yaml newnginx.yaml`  
+    *Copies the `oldnginx.yaml` file to `newnginx.yaml`.*
+
+52. `vi newnginx.yaml`  
+    *Edits the `newnginx.yaml` file.*
+
+53. `:%s/old/new`  
+    *Replaces `old` with `new` in the `newnginx.yaml` file.*
+
+**Modify the replicas specification to 1:**
+54. `spec: replicas: 1`
+
+55. `kubectl create -f newnginx.yaml`  
+    *Deploys the `newnginx` application from the YAML file.*
+
+56. `kubectl describe svc canary`  
+    *Describes the `canary` service to verify its configuration.*
+
+57. `kubectl get pods -o wide`  
+    *Lists all pods with detailed information.*
+
+58. `kubectl get svc`  
+    *Lists all services.*
+
+59. `curl 192.168.*.*:32155`  
+    *Sends a request to the service to verify the deployment.*
+
+60. `kubectl describe pod oldnginx-**` 
+
+
+61. `kubectl edit cm oldnginx`  
+    *Edits the `oldnginx` ConfigMap to change the key `oldnginx.html` to `index.html`.*
+
+**Change the `data` section:**
+```yaml
+data:
+  index.html: |
+    oldsite
+```
+
+62. `kubectl edit cm newnginx`  
+    *Edits the `newnginx` ConfigMap to change the key `nginxnew.html` to `index.html`.*
+
+**Change the `data` section:**
+```yaml
+data:
+  index.html: |
+    newsite
+```
+
+63. `curl 192.168.*.*:32155`  
+    *Sends a request to the service to verify the content being served.*
+
+**Expected output:**
+```plaintext
+oldsite
+```
+
+64. `curl 192.168.*.*:32155`  
+    *Sends another request to verify the new content after switching the deployment.*
+
+**Expected output:**
+```plaintext
+newsite
+```
+
+65. `kubectl scale deployment newnginx --replicas=3`  
+    *Scales the `newnginx` deployment to 3 replicas.*
+
+66. `kubectl scale deployment oldnginx --replicas=0`  
+    *Scales the `oldnginx` deployment to 0 replicas, effectively stopping it.*
+
+67. `curl 192.168.*.*:32155`  
+    *Sends a request to the service to verify that only the new content is being served.*
+
+**Expected output:**
+```plaintext
+newsite
+```
+
+************Understanding Role Based Access Control (RBAC)***********
+ So what is it about? Well, it's about basic cluster access. After installation, the cluster is accessed using a basic TLS certificate kubeadmin user. This is the kubeadmin user that you can use based on the configuration in the .kube/config directory. For advanced user setup, custom users can be created as well. And permissions are taken care of by using Role Based Access Control. So using a Role Based Access Control allows you to set up users with specific permissions to specific namespaces. That's pretty cool because you can delegate, you can create users that only have access to a limited part of the cluster. So how does that work? Well, in RBAC, a Role is an API resource that defines specific permissions. And next, there is a RoleBinding, which also is an API resource that defines access to a specific role. And RoleBindings are assigned to users or ServiceAccounts. Creating users is a little bit complicated, but we'll talk about ServiceAccounts in the next few lessons as this is quite interesting. A ServiceAccount is an API resource that can be used to give Pods additional access permissions to cluster resources. And every Pod by default is configured to use some specific ServiceAccount. Now ClusterRoles and ClusterRoleBindings can be used to grant permissions to the entire cluster instead of just a namespace. So you have Roles and ClusterRoles, and you have RoleBindings and ClusterRoleBindings. And either the ServiceAccount or the user can use both of them. Complicated? Let me try to enlighten you a little bit by making a drawing. In this video, I would like to give you an overview of how ServiceAccounts and Role Based Access Control make sure that you can access your API resources. So in this API resources are in the etcd, right? So let's call it etcd resources. How does it work by default? Well, by default, if you are using a Pod, then this Pod is using a ServiceAccount. And this ServiceAccount is a default ServiceAccount that exists in all of the namespaces. Now the thing is that this default ServiceAccount is giving very limited access to resources in the API. And that's because your applications have no business getting any access to API resources. Now, how are you going to take care of this very limited access? What are you going to do if you want more? Well, if you want more, you need to build kind of a construction, and in this construction you are going to define a role. This role is a set of permission and in the set of permission you are using verbs to define additional access. Once you have defined this role, you need to make sure that somebody can use it. Now, in order to use it, you are going to define your custom ServiceAccount, the SA. And this custom ServiceAccount needs to be connected to the role by using a role binding. Now you can use your roles if you want all of this to be happening at a namespace level. You can also use ClusterRoles and ClusterRoleBindings if you want to use a ServiceAccount to get access to the entire cluster. So what you need to do, you need to connect your Pod to the ServiceAccount. And normally your Pod would be hosted by a deployment. So you would use kubectl set SA for your ServiceAccount to connect your application to the ServiceAccount with the enhanced privileges. And once the ServiceAccount has access to this additional role, well, your Pod can get all the information that it needs out of the etcd and that is how ServiceAccounts and Roles and RoleBindings are working together to give your applications more access than what is allowed by default
+
+### ***************Defining Pod Access to API Resources*****************
+
+1. `cd kubernetes`
+   - Change the current directory to the `kubernetes` directory.
+
+2. `vi securitycontextdemo.yaml`
+   - Open a new file `securitycontextdemo.yaml` in the vi editor to define security context for a pod.
+
+3. `kubectl create -f securitycontextdemo.yaml`
+   - Create a Kubernetes pod using the configuration defined in `securitycontextdemo.yaml`.
+
+4. `kubectl describe pod nginxsecure`
+   - Describe the `nginxsecure` pod to see its details and confirm if it was created successfully.
+   
+   *Note: This will show an error because the container image requires a root password, which will block it.*
+
+### *************Using ServiceAccounts************************
+
+5. `vi list-pods.yaml`
+   - Open a new file `list-pods.yaml` in the vi editor to define a configuration for listing pods.
+
+6. `kubectl create -f list-pods.yaml`
+   - Create a resource using the configuration in `list-pods.yaml`.
+
+7. `kubectl create serviceaccount mysa`
+   - Create a new service account named `mysa`.
+
+8. `vi list-pods-mysa-binding.yaml`
+   - Open a new file `list-pods-mysa-binding.yaml` in the vi editor to define a role binding for the `mysa` service account.
+
+9. `kubectl create -f list-pods-mysa-binding.yaml`
+   - Create the role binding using the configuration in `list-pods-mysa-binding.yaml`.
+
+10. `kubectl get deploy`
+    - List all the deployments in the current namespace.
+
+11. `kubectl set sa deployment newnginx mysa`
+    - Set the service account `mysa` for the `newnginx` deployment.
+
+12. `kubectl get all`
+    - List all resources in the current namespace.
+
+13. `kubectl get pod newnginx-** -o yaml`
+    - Get the YAML configuration of the `newnginx` pod.
+
+14. `kubectl get sa -A`
+    - List all service accounts across all namespaces.
+
+### **************** Using DaemonSets*****************
+
+15. `kubectl create deploy daemonnginx --image=nginx --dry-run=client -o yaml > daemonnginx.yaml`
+    - Create a YAML configuration for a deployment named `daemonnginx` using the nginx image, but do not apply it yet (`--dry-run=client`). Output the configuration to `daemonnginx.yaml`.
+
+16. Edit `daemonnginx.yaml`:
+    - Change the kind from `Deployment` to `DaemonSet`.
+    - Delete the `replicas`, `strategy`, and `status` fields.
+    - **Save the file.**
+
+17. `kubectl create -f daemonnginx.yaml`
+    - Create the DaemonSet using the modified `daemonnginx.yaml`.
+
+18. `kubectl get dc,pods`
+    - List all DaemonSets and pods in the current namespace.
+
+19. `kubectl get ds -A`
+    - List all DaemonSets across all namespaces.
+
+20. `kubectl edit -n kube-system ds calcio-node`
+    - Edit the `calcio-node` DaemonSet in the `kube-system` namespace.
+
+    - Copy the `tolerations` section:
+    ```yaml
+    - effect: 
+      operator: 
+    ```
+
+21. `kubectl edit ds daemonnginx`
+    - Edit the `daemonnginx` DaemonSet.
+    - Add the copied `tolerations` section under the second `spec:` inside the `updateStrategy`.
+
+22. `kubectl get ds`
+    - List all DaemonSets in the current namespace.
+
+### **************Running Stateful Applications with StatefulSet**************
+
+23. `cd kubernetes`
+    - Change the current directory to the `kubernetes` directory.
+
+24. `vi statefulset.yaml`
+    - Open a new file `statefulset.yaml` in the vi editor to define a StatefulSet configuration.
+
+25. `kubectl create -f statefulset.yaml`
+    - Create the StatefulSet using the configuration in `statefulset.yaml`.
+
+26. `kubectl get statefulset,pods`
+    - List all StatefulSets and pods in the current namespace.
+
+27. `kubectl describe pod web-0`
+    - Describe the pod `web-0` to see its details.
+
+28. Edit `statefulset.yaml`:
+    - Add `StorageClassName: "my-storage-class"` because of `StorageClassName`.
+
+29. `kubectl explain pv.spec`
+    - Search for `StorageClassName` in the PersistentVolume (PV) specification.
+
+30. `vi pv.yaml`
+    - Open a new file `pv.yaml` in the vi editor to define a PersistentVolume configuration.
+
+31. Add under spec in `pv.yaml`:
+    ```yaml
+    StorageClassName: my-storage-class
+    ```
+
+32. `kubectl create -f pv.yaml`
+    - Create the PersistentVolume using the configuration in `pv.yaml`.
+
+33. `kubectl get statefulset,pods`
+    - List all StatefulSets and pods in the current namespace.
+
+### *****************Managing Custom Resources***********************
+
+34. `cd kubernetes`
+    - Change the current directory to the `kubernetes` directory.
+
+35. `kubectl api-resources | grep -i custom`
+    - List all API resources and filter for custom resources.
+
+36. `vi crd-object.yaml`
+    - Open a new file `crd-object.yaml` in the vi editor to define a CustomResourceDefinition (CRD) configuration.
+
+37. `kubectl create -f crd-object.yaml`
+    - Create the custom resource using the configuration in `crd-object.yaml`.
+
+38. `kubectl api-resources | grep -i backup`
+    - List all API resources and filter for backup-related resources.
+
+39. `vi crd-backup.yaml`
+    - Open a new file `crd-backup.yaml` in the vi editor to define a backup CRD configuration.
+
+40. `kubectl create -f crd-backup.yaml`
+    - Create the backup custom resource using the configuration in `crd-backup.yaml`.
+
+41. `kubectl get backup`
+    - List all backup custom resources in the current namespace.
+
+### ****************Installing Applications with helm********************
+
+42. Download Helm from the GitHub repository.
+
+43. `tar xvf helm-**`
+    - Extract the downloaded Helm archive.
+
+44. `cp linux-amd64/helm /usr/local/bin`
+    - Copy the Helm binary to `/usr/local/bin` to make it globally accessible.
+
+45. `helm version`
+    - Verify the Helm installation and check the version.
+
+46. Go to `artifacthub.io`:
+    - Search for the `hello-world` package.
+    - Follow the instructions to install it.
+    - Copy the first command and run it on the CLI to add the repository.
+
+47. `helm repo list`
+    - List all Helm repositories.
+
+48. Copy the second command and run it on the CLI to install the `hello-world` package.
+
+49. `kubectl get all`
+    - List all resources in the current namespace.
+
+### **************** Using Operators**********************
+
+50. Go to `operatorhub.io`:
+    - Search for the Redis operator.
+    - Follow the instructions to install it.
+    - Copy all commands and run them on the CLI to install the operator.
+
+51. `kubectl api-resources | less`
+    - List all API resources and use `less` for easier navigation.
+
+### **********************Troubleshooting Applications Running in Pods************
+
+1. `kubectl run somedb --image=mariadb`
+   - Create a new pod named `somedb` using the `mariadb` image.
+
+2. `kubectl get pods`
+   - List all pods in the current namespace to check the status of the `somedb` pod.
+
+3. `kubectl logs somedb`
+   - Retrieve the logs of the `somedb` pod to troubleshoot any issues.
+
+### ******************Troubleshooting Pods and Other Objects*********************
+
+4. `cd kubernetes`
+   - Change the current directory to the `kubernetes` directory.
+
+5. `kubectl create deploy -h | less`
+   - View the help documentation for creating deployments using `kubectl` and pipe it to `less` for easier reading.
+
+6. `kubectl create deployment my-dep --image=busybox`
+   - Create a deployment named `my-dep` using the `busybox` image.
+
+7. `kubectl get all --selector app=my-app`
+   - List all resources with the label `app=my-app`.
+
+8. `kubectl describe pod my-dep-**`
+   - Describe the pod(s) created by the `my-dep` deployment to check the `state:` and `last state:` for troubleshooting.
+
+9. `kubectl delete deployment my-dep-**`
+   - Delete the `my-dep` deployment.
+
+10. `kubectl create deployment my-dep --image=busybox -- sleep 3600`
+    - Create a new deployment named `my-dep` using the `busybox` image with a command to sleep for 3600 seconds.
+
+11. `kubectl get all --selector app=my-app`
+    - List all resources with the label `app=my-app` again.
+
+12. `kubectl create -f frontend-resource.yaml`
+    - Create resources defined in the `frontend-resource.yaml` file.
+
+13. `vi frontend-resource.yaml`
+    - Open the `frontend-resource.yaml` file in the vi editor for editing.
+
+14. `kubectl get pods`
+    - List all pods in the current namespace.
+
+15. `kubectl describe pods frontend | less`
+    - Describe the `frontend` pods and pipe the output to `less` for easier reading. Check the `state:` and `last states:` reasons.
+
+16. `kubectl delete -f frontend-resource.yaml`
+    - Delete the resources defined in the `frontend-resource.yaml` file.
+
+17. `vi frontend-resource.yaml`
+    - Edit the `frontend-resource.yaml` file to change the memory values:
+      - Under `resources`, change `memory: "64Gi"`.
+      - Under `limits`, change `memory: "128Gi"`.
+      - Save and close the file.
+
+18. `kubectl create -f frontend-resource.yaml`
+    - Create the resources again with the updated memory values.
+
+19. `kubectl get pods`
+    - List all pods in the current namespace.
+
+20. `kubectl describe pods frontend | less`
+    - Describe the `frontend` pods again to check for any memory-related issues. If there is a problem with the large memory values, it will be indicated here.
+
+21. `kubectl delete -f frontend-resource.yaml`
+    - Delete the problematic resources.
+
+### ***************Troubleshooting Networking Issues**********************
+
+22. `kubectl get svc`
+    - List all services in the current namespace.
+
+23. `curl (IP):port`
+    - Attempt to access a service using curl. If you receive a "connection refused" error, proceed to further troubleshooting.
+
+24. `kubectl get endpoints`
+    - List all endpoints in the current namespace to check if they are correctly configured.
+
+25. `kubectl describe svc nginxsvc`
+    - Describe the `nginxsvc` service to identify any issues, such as problems with the selector label.
+
+    - *Note: If the label name is capitalized, it might cause issues.*
+
+26. `kubectl get pods --show-labels`
+    - List all pods and show their labels to verify if the labels match the service selector.
+
+27. `kubectl edit svc nginxsvc`
+    - Modify the selector label of the `nginxsvc` service to match the pod labels.
+
+28. `kubectl get endpoints`
+    - List all endpoints again to confirm that the issue is resolved.
+
+### ******************Troubleshooting Authentication and Authorization************
+
+29. `kubectl get pods`
+    - Attempt to list the pods. If you see an error like "the connection to the server localhost:8080 was refused," proceed to the next steps.
+
+30. `ls -l ~/.kube`
+    - List the contents of the `.kube` directory. If there is no `config` file, proceed to the next step.
+
+31. `sudo cp /etc/kubernetes/admin.conf ~/.kube/config`
+    - Copy the Kubernetes admin configuration file to the `.kube` directory.
+
+32. `ls -l ~/.kube`
+    - List the contents of the `.kube` directory again to confirm that the `config` file is present along with the `cache`.
+
+33. `chown user:user ~/.kube/config`
+    - Change the ownership of the `config` file to the current user.
+
+34. `kubectl get pods`
+    - Attempt to list the pods again to verify that the authentication issue is resolved.
+
+35. `kubectl get all`
+    - List all resources in the current namespace to ensure that you have the necessary permissions.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
