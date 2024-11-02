@@ -2037,29 +2037,3 @@ newsite
 35. `kubectl get all`
     - List all resources in the current namespace to ensure that you have the necessary permissions.
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
