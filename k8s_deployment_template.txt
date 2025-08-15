@@ -1,0 +1,1096 @@
+# Enhanced Production-Ready Kubernetes Deployment Template
+# Replace variables with your specific values:
+# {{APP_NAME}} - Your application name
+# {{NAMESPACE}} - Target namespace
+# {{IMAGE_NAME}} - Container image
+# {{IMAGE_TAG}} - Image version/tag
+# {{REPLICAS}} - Number of pod replicas
+# {{CONTAINER_PORT}} - Application port
+# {{SERVICE_PORT}} - Service exposed port
+# {{VOLUME_PATH}} - Host path for persistent volume
+# {{NETWORK_POLICY}} - Network policy name
+# {{CPU_REQUEST}} - CPU request (e.g., "250m")
+# {{CPU_LIMIT}} - CPU limit (e.g., "500m")
+# {{MEMORY_REQUEST}} - Memory request (e.g., "256Mi")
+# {{MEMORY_LIMIT}} - Memory limit (e.g., "512Mi")
+# {{STORAGE_CLASS}} - Storage class name (e.g., "standard")
+# {{LIVENESS_PATH}} - Liveness probe path (e.g., "/health")
+# {{READINESS_PATH}} - Readiness probe path (e.g., "/ready")
+# {{STARTUP_PATH}} - Startup probe path (e.g., "/startup")
+# {{LIVENESS_INITIAL_DELAY}} - Liveness probe initial delay (e.g., 30)
+# {{READINESS_INITIAL_DELAY}} - Readiness probe initial delay (e.g., 5)
+# {{STARTUP_INITIAL_DELAY}} - Startup probe initial delay (e.g., 10)
+# {{INGRESS_HOST}} - Ingress host (e.g., "{{APP_NAME}}.example.com")
+# {{PROMETHEUS_LABEL}} - Prometheus pod label (e.g., "prometheus")
+# {{INGRESS_LABEL}} - Ingress controller label (e.g., "nginx-ingress")
+# {{TLS_SECRET_NAME}} - TLS certificate secret name
+# {{STORAGE_SIZE}} - PVC storage size (e.g., "20Gi")
+# {{MIN_REPLICAS}} - HPA minimum replicas
+# {{MAX_REPLICAS}} - HPA maximum replicas
+# {{TARGET_CPU}} - HPA CPU target utilization
+# {{TARGET_MEMORY}} - HPA memory target utilization
+
+---
+# Namespace (ensure it exists)
+apiVersion: v1
+kind: Namespace
+metadata:
+  namespaceSelector:
+    matchLabels:
+      name: {{NAMESPACE}}
+
+---
+# PriorityClass for critical workloads
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: high-priority
+  labels:
+    app.kubernetes.io/component: priorityclass
+value: 1000
+globalDefault: false
+description: "High priority class for critical application pods"
+
+---
+# DestinationRule for Istio (if using service mesh)
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: {{APP_NAME}}-destination-rule
+  namespace: {{NAMESPACE}}
+  labels:
+    app: {{APP_NAME}}
+    app.kubernetes.io/name: {{APP_NAME}}
+    app.kubernetes.io/instance: {{APP_NAME}}
+spec:
+  host: {{APP_NAME}}-service
+  trafficPolicy:
+    connectionPool:
+      tcp:
+        maxConnections: 100
+      http:
+        http1MaxPendingRequests: 10
+        maxRequestsPerConnection: 2
+    loadBalancer:
+      simple: LEAST_CONN
+    outlierDetection:
+      consecutiveErrors: 3
+      interval: 30s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 50
+
+---
+# VirtualService for Istio (if using service mesh)
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: {{APP_NAME}}-virtual-service  
+  namespace: {{NAMESPACE}}
+  labels:
+    app: {{APP_NAME}}
+    app.kubernetes.io/name: {{APP_NAME}}
+    app.kubernetes.io/instance: {{APP_NAME}}
+spec:
+  hosts:
+    - {{INGRESS_HOST}}
+  gateways:
+    - {{APP_NAME}}-gateway
+  http:
+    - match:
+        - uri:
+            prefix: "/health"
+      route:
+        - destination:
+            host: {{APP_NAME}}-service
+            port:
+              number: {{SERVICE_PORT}}
+      timeout: 5s
+    - match:
+        - uri:
+            prefix: "/"
+      route:
+        - destination:
+            host: {{APP_NAME}}-service
+            port:
+              number: {{SERVICE_PORT}}
+      timeout: 30s
+      retries:
+        attempts: 3
+        perTryTimeout: 10s
+        retryOn: gateway-error,connect-failure,refused-stream
+
+---
+# Gateway for Istio (if using service mesh)
+apiVersion: networking.istio.io/v1beta1
+kind: Gateway
+metadata:
+  name: {{APP_NAME}}-gateway
+  namespace: {{NAMESPACE}}
+  labels:
+    app: {{APP_NAME}}
+    app.kubernetes.io/name: {{APP_NAME}}
+    app.kubernetes.io/instance: {{APP_NAME}}
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+    - port:
+        number: 80
+        name: http
+        protocol: HTTP
+      hosts:
+        - {{INGRESS_HOST}}
+      tls:
+        httpsRedirect: true
+    - port:
+        number: 443
+        name: https
+        protocol: HTTPS
+      tls:
+        mode: SIMPLE
+        credentialName: {{TLS_SECRET_NAME}}
+      hosts:
+        - {{INGRESS_HOST}}
+
+---
+# Kustomization file for easy deployment management
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+metadata:
+  name: {{APP_NAME}}-kustomization
+  namespace: {{NAMESPACE}}
+
+# Common labels applied to all resources
+commonLabels:
+  app: {{APP_NAME}}
+  app.kubernetes.io/name: {{APP_NAME}}
+  app.kubernetes.io/instance: {{APP_NAME}}
+  app.kubernetes.io/version: {{IMAGE_TAG}}
+  app.kubernetes.io/part-of: {{APP_NAME}}
+  app.kubernetes.io/managed-by: kustomize
+
+# Resources to include
+resources:
+  - namespace.yaml
+  - serviceaccount.yaml
+  - role.yaml
+  - rolebinding.yaml
+  - pvc.yaml
+  - configmap.yaml
+  - secret.yaml
+  - deployment.yaml
+  - service.yaml
+  - hpa.yaml
+  - pdb.yaml
+  - networkpolicy.yaml
+  - ingress.yaml
+  - servicemonitor.yaml
+  - priorityclass.yaml
+
+# Images to be replaced during deployment
+images:
+  - name: {{IMAGE_NAME}}
+    newTag: {{IMAGE_TAG}}
+
+# ConfigMap and Secret generators (optional)
+configMapGenerator:
+  - name: {{APP_NAME}}-env-config
+    literals:
+      - APP_ENV=production
+      - LOG_LEVEL=INFO
+
+secretGenerator:
+  - name: {{APP_NAME}}-generated-secrets
+    literals:
+      - session-key=generated-session-key-123
+
+# Patches for different environments
+patchesStrategicMerge:
+  - patches/production-patch.yaml
+
+# JSON patches for specific modifications
+patchesJson6902:
+  - target:
+      version: v1
+      kind: Deployment
+      name: {{APP_NAME}}-deployment
+    path: patches/replica-patch.yamle: {{NAMESPACE}}
+  labels:
+    name: {{NAMESPACE}}
+    kubernetes.io/managed-by: "kubectl"
+  annotations:
+    kubernetes.io/description: "Namespace for {{APP_NAME}} application"
+
+---
+# ServiceAccount
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{APP_NAME}}-sa
+  namespace: {{NAMESPACE}}
+  labels:
+    app: {{APP_NAME}}
+    app.kubernetes.io/name: {{APP_NAME}}
+    app.kubernetes.io/instance: {{APP_NAME}}
+    app.kubernetes.io/version: {{IMAGE_TAG}}
+    app.kubernetes.io/component: serviceaccount
+    app.kubernetes.io/part-of: {{APP_NAME}}
+    app.kubernetes.io/managed-by: kubectl
+automountServiceAccountToken: false
+
+---
+# Role for ServiceAccount with minimal permissions
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{APP_NAME}}-role
+  namespace: {{NAMESPACE}}
+  labels:
+    app: {{APP_NAME}}
+    app.kubernetes.io/name: {{APP_NAME}}
+    app.kubernetes.io/instance: {{APP_NAME}}
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get"]
+    resourceNames: ["{{APP_NAME}}-secrets"]
+
+---
+# RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{APP_NAME}}-role-binding
+  namespace: {{NAMESPACE}}
+  labels:
+    app: {{APP_NAME}}
+    app.kubernetes.io/name: {{APP_NAME}}
+subjects:
+  - kind: ServiceAccount
+    name: {{APP_NAME}}-sa
+    namespace: {{NAMESPACE}}
+roleRef:
+  kind: Role
+  name: {{APP_NAME}}-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# PersistentVolumeClaim
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{APP_NAME}}-pvc
+  namespace: {{NAMESPACE}}
+  labels:
+    app: {{APP_NAME}}
+    app.kubernetes.io/name: {{APP_NAME}}
+    app.kubernetes.io/instance: {{APP_NAME}}
+  annotations:
+    volume.beta.kubernetes.io/storage-provisioner: "kubernetes.io/aws-ebs"
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{STORAGE_SIZE}}
+  storageClassName: {{STORAGE_CLASS}}
+  volumeMode: Filesystem
+
+---
+# ConfigMap with comprehensive configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{APP_NAME}}-config
+  namespace: {{NAMESPACE}}
+  labels:
+    app: {{APP_NAME}}
+    app.kubernetes.io/name: {{APP_NAME}}
+    app.kubernetes.io/instance: {{APP_NAME}}
+    app.kubernetes.io/component: config
+data:
+  # Application properties
+  app.properties: |
+    server.port={{CONTAINER_PORT}}
+    logging.level.root=INFO
+    logging.level.org.springframework=INFO
+    logging.pattern.console=%d{yyyy-MM-dd HH:mm:ss} - %msg%n
+    management.endpoints.web.exposure.include=health,info,metrics,prometheus
+    management.endpoint.health.show-details=when-authorized
+    management.metrics.export.prometheus.enabled=true
+    spring.profiles.active=production
+    app.name={{APP_NAME}}
+    app.version={{IMAGE_TAG}}
+  
+  # Nginx configuration with security headers
+  nginx.conf: |
+    upstream backend {
+        server localhost:{{CONTAINER_PORT}};
+    }
+    
+    server {
+        listen 80;
+        server_name _;
+        server_tokens off;
+        
+        # Security headers
+        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-XSS-Protection "1; mode=block" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Content-Security-Policy "default-src 'self'" always;
+        
+        # Gzip compression
+        gzip on;
+        gzip_vary on;
+        gzip_min_length 1024;
+        gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript;
+        
+        location / {
+            proxy_pass http://backend;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_connect_timeout 5s;
+            proxy_send_timeout 10s;
+            proxy_read_timeout 10s;
+        }
+        
+        location /health {
+            access_log off;
+            return 200 "healthy\n";
+            add_header Content-Type text/plain;
+        }
+        
+        location /ready {
+            access_log off;
+            return 200 "ready\n";
+            add_header Content-Type text/plain;
+        }
+        
+        location /startup {
+            access_log off;
+            return 200 "started\n";
+            add_header Content-Type text/plain;
+        }
+        
+        location /metrics {
+            proxy_pass http://backend/actuator/prometheus;
+            access_log off;
+        }
+    }
+  
+  # Database configuration
+  database.yaml: |
+    database:
+      host: {{APP_NAME}}-db
+      port: 5432
+      name: {{APP_NAME}}
+      ssl: require
+      pool_size: 10
+      max_connections: 20
+      connection_timeout: 30
+      idle_timeout: 600
+      
+  # Logging configuration
+  logback-spring.xml: |
+    <?xml version="1.0" encoding="UTF-8"?>
+    <configuration>
+        <springProfile name="production">
+            <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+                <encoder class="net.logstash.logback.encoder.LoggingEventCompositeJsonEncoder">
+                    <providers>
+                        <timestamp/>
+                        <logLevel/>
+                        <loggerName/>
+                        <message/>
+                        <mdc/>
+                        <stackTrace/>
+                    </providers>
+                </encoder>
+            </appender>
+            <root level="INFO">
+                <appender-ref ref="CONSOLE"/>
+            </root>
+        </springProfile>
+    </configuration>
+
+---
+# Secret with comprehensive secrets
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{APP_NAME}}-secrets
+  namespace: {{NAMESPACE}}
+  labels:
+    app: {{APP_NAME}}
+    app.kubernetes.io/name: {{APP_NAME}}
+    app.kubernetes.io/instance: {{APP_NAME}}
+    app.kubernetes.io/component: secret
+type: Opaque
+data:
+  # Database credentials (base64 encoded)
+  database-url: cG9zdGdyZXNxbDovL3VzZXI6cGFzc3dvcmRAe3tBUFBfTkFNRX19LWRiOjU0MzIve3tBUFBfTkFNRX19P3NzbG1vZGU9cmVxdWlyZQ==
+  database-username: dXNlcg==
+  database-password: cGFzc3dvcmQ=
+  
+  # API keys and tokens
+  api-key: bXlfc2VjcmV0X2FwaV9rZXlfMTIzNDU2Nzg5MA==
+  jwt-secret: and1dF9zZWNyZXRfa2V5XzEyMzQ1Njc4OTA=
+  jwt-issuer: e3tBUFBfTkFNRX19LXNlcnZpY2U=
+  
+  # External service credentials
+  redis-password: cmVkaXNfcGFzc3dvcmRfMTIz
+  elasticsearch-password: ZWxhc3RpY19wYXNzd29yZA==
+  
+  # SSL/TLS certificates (if needed)
+  tls.crt: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0t
+  tls.key: LS0tLS1CRUdJTiBQUklWQVRFIEtFWS0tLS0t
+
+---
+# Deployment with enhanced configuration
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{APP_NAME}}-deployment
+  namespace: {{NAMESPACE}}
+  labels:
+    app: {{APP_NAME}}
+    app.kubernetes.io/name: {{APP_NAME}}
+    app.kubernetes.io/instance: {{APP_NAME}}
+    app.kubernetes.io/version: {{IMAGE_TAG}}
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/part-of: {{APP_NAME}}
+    app.kubernetes.io/managed-by: kubectl
+    version: {{IMAGE_TAG}}
+    environment: production
+  annotations:
+    deployment.kubernetes.io/revision: "1"
+    kubernetes.io/change-cause: "Initial deployment"
+    configmap.reloader.stakater.com/reload: "{{APP_NAME}}-config"
+    secret.reloader.stakater.com/reload: "{{APP_NAME}}-secrets"
+spec:
+  replicas: {{REPLICAS}}
+  
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 25%
+      maxSurge: 25%
+  
+  selector:
+    matchLabels:
+      app: {{APP_NAME}}
+      app.kubernetes.io/name: {{APP_NAME}}
+      app.kubernetes.io/instance: {{APP_NAME}}
+  
+  template:
+    metadata:
+      labels:
+        app: {{APP_NAME}}
+        app.kubernetes.io/name: {{APP_NAME}}
+        app.kubernetes.io/instance: {{APP_NAME}}
+        app.kubernetes.io/version: {{IMAGE_TAG}}
+        version: {{IMAGE_TAG}}
+        environment: production
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+        prometheus.io/path: "/metrics"
+        cluster-autoscaler.kubernetes.io/safe-to-evict: "true"
+        co.elastic.logs/enabled: "true"
+        co.elastic.logs/json.keys_under_root: "true"
+    
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 3000
+        fsGroup: 2000
+        seccompProfile:
+          type: RuntimeDefault
+      
+      serviceAccountName: {{APP_NAME}}-sa
+      
+      imagePullSecrets:
+        - name: registry-secret
+      
+      # Enhanced init container with proper database connectivity check
+      initContainers:
+        - name: init-db-check
+          image: postgres:15-alpine
+          command: 
+            - sh
+            - -c
+            - |
+              echo "Checking database connectivity..."
+              until pg_isready -h {{APP_NAME}}-db -p 5432 -U $(cat /run/secrets/db-user/username); do
+                echo "Waiting for database to be ready..."
+                sleep 2
+              done
+              echo "Database is ready!"
+          env:
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{APP_NAME}}-secrets
+                  key: database-password
+          volumeMounts:
+            - name: db-user-secret
+              mountPath: /run/secrets/db-user
+              readOnly: true
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+      
+      containers:
+        - name: {{APP_NAME}}
+          image: {{IMAGE_NAME}}:{{IMAGE_TAG}}
+          imagePullPolicy: IfNotPresent
+          
+          ports:
+            - name: http
+              containerPort: {{CONTAINER_PORT}}
+              protocol: TCP
+            - name: metrics
+              containerPort: 9090
+              protocol: TCP
+          
+          env:
+            - name: APP_NAME
+              value: "{{APP_NAME}}"
+            - name: APP_VERSION
+              value: "{{IMAGE_TAG}}"
+            - name: ENVIRONMENT
+              value: "production"
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{APP_NAME}}-secrets
+                  key: database-url
+            - name: API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{APP_NAME}}-secrets
+                  key: api-key
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{APP_NAME}}-secrets
+                  key: jwt-secret
+            - name: CONFIG_PATH
+              value: "/app/config"
+            - name: JAVA_OPTS
+              value: "-XX:MaxRAMPercentage=75.0 -XX:+UseG1GC -XX:+UseStringDeduplication"
+          
+          envFrom:
+            - configMapRef:
+                name: {{APP_NAME}}-config
+          
+          resources:
+            requests:
+              memory: "{{MEMORY_REQUEST}}"
+              cpu: "{{CPU_REQUEST}}"
+              ephemeral-storage: "1Gi"
+            limits:
+              memory: "{{MEMORY_LIMIT}}"
+              cpu: "{{CPU_LIMIT}}"
+              ephemeral-storage: "5Gi"
+          
+          # Enhanced health checks
+          livenessProbe:
+            httpGet:
+              path: {{LIVENESS_PATH}}
+              port: http
+              scheme: HTTP
+              httpHeaders:
+                - name: User-Agent
+                  value: "k8s-liveness-probe"
+            initialDelaySeconds: {{LIVENESS_INITIAL_DELAY}}
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+            successThreshold: 1
+          
+          readinessProbe:
+            httpGet:
+              path: {{READINESS_PATH}}
+              port: http
+              scheme: HTTP
+              httpHeaders:
+                - name: User-Agent
+                  value: "k8s-readiness-probe"
+            initialDelaySeconds: {{READINESS_INITIAL_DELAY}}
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+            successThreshold: 1
+          
+          startupProbe:
+            httpGet:
+              path: {{STARTUP_PATH}}
+              port: http
+              scheme: HTTP
+              httpHeaders:
+                - name: User-Agent
+                  value: "k8s-startup-probe"
+            initialDelaySeconds: {{STARTUP_INITIAL_DELAY}}
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 60
+            successThreshold: 1
+          
+          volumeMounts:
+            - name: app-storage
+              mountPath: /app/data
+            - name: config-volume
+              mountPath: /app/config
+              readOnly: true
+            - name: secrets-volume
+              mountPath: /app/secrets
+              readOnly: true
+            - name: temp-volume
+              mountPath: /tmp
+            - name: cache-volume
+              mountPath: /app/cache
+            - name: logs-volume
+              mountPath: /app/logs
+            - name: db-user-secret
+              mountPath: /run/secrets/db-user
+              readOnly: true
+          
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 1000
+            capabilities:
+              drop:
+                - ALL
+              add:
+                - NET_BIND_SERVICE
+            seccompProfile:
+              type: RuntimeDefault
+          
+          # Graceful shutdown
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  - /bin/sh
+                  - -c
+                  - "sleep 15"
+      
+      volumes:
+        - name: app-storage
+          persistentVolumeClaim:
+            claimName: {{APP_NAME}}-pvc
+        
+        - name: config-volume
+          configMap:
+            name: {{APP_NAME}}-config
+            defaultMode: 0644
+        
+        - name: secrets-volume
+          secret:
+            secretName: {{APP_NAME}}-secrets
+            defaultMode: 0600
+        
+        - name: db-user-secret
+          secret:
+            secretName: {{APP_NAME}}-secrets
+            defaultMode: 0600
+            items:
+              - key: database-username
+                path: username
+              - key: database-password
+                path: password
+        
+        - name: temp-volume
+          emptyDir:
+            sizeLimit: 2Gi
+        
+        - name: cache-volume
+          emptyDir:
+            sizeLimit: 4Gi
+            medium: Memory
+        
+        - name: logs-volume
+          emptyDir:
+            sizeLimit: 1Gi
+      
+      nodeSelector:
+        kubernetes.io/os: linux
+        kubernetes.io/arch: amd64
+      
+      tolerations:
+        - key: "node-role.kubernetes.io/worker"
+          operator: "Equal"
+          value: "true"
+          effect: "NoSchedule"
+        - key: "node.kubernetes.io/not-ready"
+          operator: "Exists"
+          effect: "NoExecute"
+          tolerationSeconds: 300
+        - key: "node.kubernetes.io/unreachable"
+          operator: "Exists"
+          effect: "NoExecute"
+          tolerationSeconds: 300
+      
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                  - key: app
+                    operator: In
+                    values:
+                      - {{APP_NAME}}
+              topologyKey: kubernetes.io/hostname
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - {{APP_NAME}}
+                topologyKey: topology.kubernetes.io/zone
+        
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: kubernetes.io/arch
+                    operator: In
+                    values:
+                      - amd64
+                  - key: node-type
+                    operator: In
+                    values:
+                      - worker
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 50
+              preference:
+                matchExpressions:
+                  - key: instance-type
+                    operator: In
+                    values:
+                      - m5.large
+                      - m5.xlarge
+      
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 60
+      
+      # Priority class for important workloads
+      priorityClassName: high-priority
+
+---
+# Service with enhanced configuration
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{APP_NAME}}-service
+  namespace: {{NAMESPACE}}
+  labels:
+    app: {{APP_NAME}}
+    app.kubernetes.io/name: {{APP_NAME}}
+    app.kubernetes.io/instance: {{APP_NAME}}
+    app.kubernetes.io/component: service
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: nlb
+    service.beta.kubernetes.io/aws-load-balancer-backend-protocol: http
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9090"
+    prometheus.io/path: "/metrics"
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: {{SERVICE_PORT}}
+      targetPort: http
+      protocol: TCP
+    - name: metrics
+      port: 9090
+      targetPort: metrics
+      protocol: TCP
+  selector:
+    app: {{APP_NAME}}
+    app.kubernetes.io/name: {{APP_NAME}}
+    app.kubernetes.io/instance: {{APP_NAME}}
+  sessionAffinity: None
+
+---
+# HorizontalPodAutoscaler with enhanced metrics
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{APP_NAME}}-hpa
+  namespace: {{NAMESPACE}}
+  labels:
+    app: {{APP_NAME}}
+    app.kubernetes.io/name: {{APP_NAME}}
+    app.kubernetes.io/instance: {{APP_NAME}}
+    app.kubernetes.io/component: autoscaler
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{APP_NAME}}-deployment
+  minReplicas: {{MIN_REPLICAS}}
+  maxReplicas: {{MAX_REPLICAS}}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{TARGET_CPU}}
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: {{TARGET_MEMORY}}
+    # Custom metrics (uncomment if you have custom metrics server)
+    # - type: Pods
+    #   pods:
+    #     metric:
+    #       name: http_requests_per_second
+    #     target:
+    #       type: AverageValue
+    #       averageValue: "100"
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Percent
+          value: 10
+          periodSeconds: 60
+        - type: Pods
+          value: 1
+          periodSeconds: 60
+      selectPolicy: Min
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+        - type: Percent
+          value: 50
+          periodSeconds: 60
+        - type: Pods
+          value: 2
+          periodSeconds: 60
+      selectPolicy: Max
+
+---
+# PodDisruptionBudget for high availability
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{APP_NAME}}-pdb
+  namespace: {{NAMESPACE}}
+  labels:
+    app: {{APP_NAME}}
+    app.kubernetes.io/name: {{APP_NAME}}
+    app.kubernetes.io/instance: {{APP_NAME}}
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: {{APP_NAME}}
+      app.kubernetes.io/name: {{APP_NAME}}
+      app.kubernetes.io/instance: {{APP_NAME}}
+
+---
+# NetworkPolicy with comprehensive security rules
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{APP_NAME}}-network-policy
+  namespace: {{NAMESPACE}}
+  labels:
+    app: {{APP_NAME}}
+    app.kubernetes.io/name: {{APP_NAME}}
+    app.kubernetes.io/instance: {{APP_NAME}}
+spec:
+  podSelector:
+    matchLabels:
+      app: {{APP_NAME}}
+      app.kubernetes.io/name: {{APP_NAME}}
+      app.kubernetes.io/instance: {{APP_NAME}}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow ingress controller traffic
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: ingress-nginx
+        - podSelector:
+            matchLabels:
+              app: {{INGRESS_LABEL}}
+      ports:
+        - protocol: TCP
+          port: {{CONTAINER_PORT}}
+    
+    # Allow Prometheus scraping
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: monitoring
+        - podSelector:
+            matchLabels:
+              app: {{PROMETHEUS_LABEL}}
+      ports:
+        - protocol: TCP
+          port: 9090
+    
+    # Allow inter-pod communication within same app
+    - from:
+        - podSelector:
+            matchLabels:
+              app: {{APP_NAME}}
+      ports:
+        - protocol: TCP
+          port: {{CONTAINER_PORT}}
+  
+  egress:
+    # Allow DNS resolution
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              name: kube-system
+      ports:
+        - protocol: TCP
+          port: 53
+        - protocol: UDP
+          port: 53
+    
+    # Allow database connectivity
+    - to:
+        - podSelector:
+            matchLabels:
+              app: {{APP_NAME}}-db
+      ports:
+        - protocol: TCP
+          port: 5432
+    
+    # Allow Redis connectivity (if needed)
+    - to:
+        - podSelector:
+            matchLabels:
+              app: {{APP_NAME}}-redis
+      ports:
+        - protocol: TCP
+          port: 6379
+    
+    # Allow HTTPS external connectivity
+    - to: []
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 80
+
+---
+# Ingress with SSL termination and security headers
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{APP_NAME}}-ingress
+  namespace: {{NAMESPACE}}
+  labels:
+    app: {{APP_NAME}}
+    app.kubernetes.io/name: {{APP_NAME}}
+    app.kubernetes.io/instance: {{APP_NAME}}
+    app.kubernetes.io/component: ingress
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "5"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      more_set_headers "X-Frame-Options: SAMEORIGIN";
+      more_set_headers "X-Content-Type-Options: nosniff";
+      more_set_headers "X-XSS-Protection: 1; mode=block";
+      more_set_headers "Referrer-Policy: strict-origin-when-cross-origin";
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  tls:
+    - hosts:
+        - {{INGRESS_HOST}}
+      secretName: {{TLS_SECRET_NAME}}
+  rules:
+    - host: {{INGRESS_HOST}}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{APP_NAME}}-service
+                port:
+                  number: {{SERVICE_PORT}}
+
+---
+# ServiceMonitor for Prometheus (if using Prometheus Operator)
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{APP_NAME}}-service-monitor
+  namespace: {{NAMESPACE}}
+  labels:
+    app: {{APP_NAME}}
+    app.kubernetes.io/name: {{APP_NAME}}
+    app.kubernetes.io/instance: {{APP_NAME}}
+    app.kubernetes.io/component: monitoring
+spec:
+  selector:
+    matchLabels:
+      app: {{APP_NAME}}
+      app.kubernetes.io/name: {{APP_NAME}}
+      app.kubernetes.io/instance: {{APP_NAME}}
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: 30s
+      scrapeTimeout: 10s
+  nam

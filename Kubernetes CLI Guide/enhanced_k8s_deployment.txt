@@ -1,0 +1,651 @@
+---
+# Enhanced Kubernetes Deployment Template
+# This template includes modern best practices, security enhancements, and comprehensive configurations
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: generic-deployment
+  namespace: default # Verify namespace before applying; use 'kubectl config view --minify' to check current context
+  labels:
+    app: generic-app
+    version: v1
+    environment: production # Add environment context
+    team: platform
+    cost-center: engineering
+    component: backend
+  annotations:
+    deployment.kubernetes.io/revision: "1"
+    kubernetes.io/change-cause: "Initial deployment"
+spec:
+  replicas: 3 # Number of pod replicas for load balancing and availability
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0 # Ensure zero-downtime deployments
+  selector:
+    matchLabels:
+      app: generic-app
+  template:
+    metadata:
+      labels:
+        app: generic-app
+        version: v1
+        environment: production
+        team: platform
+      annotations:
+        # Monitoring & Observability
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+        
+        # Service Mesh Integration
+        sidecar.istio.io/inject: "true"
+        linkerd.io/inject: enabled
+        traffic.sidecar.istio.io/includeInboundPorts: "80,8080"
+        
+        # OpenTelemetry
+        sidecar.opentelemetry.io/inject: "true"
+        
+        # Logging
+        fluentd.org/format: "json"
+        
+        # Backup & DR
+        backup.velero.io/backup-volumes: "data-volume"
+        backup.velero.io/ttl: "720h"
+        
+        # Security
+        security.scan/last-scanned: "2025-01-15"
+        security.scan/severity: "low"
+        
+        # Application metadata
+        description: "Enhanced generic application deployment with modern best practices"
+        contact: "platform-team@company.com"
+    spec:
+      serviceAccountName: generic-app-sa # Use dedicated ServiceAccount
+      terminationGracePeriodSeconds: 30
+      
+      # Modern topology spread constraints (preferred over anti-affinity)
+      topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: DoNotSchedule
+        labelSelector:
+          matchLabels:
+            app: generic-app
+      - maxSkew: 1
+        topologyKey: topology.kubernetes.io/zone
+        whenUnsatisfiable: ScheduleAnyway
+        labelSelector:
+          matchLabels:
+            app: generic-app
+      
+      # Fallback anti-affinity for older clusters
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchLabels:
+                  app: generic-app
+              topologyKey: kubernetes.io/hostname
+        # Node affinity for specific node requirements
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 50
+            preference:
+              matchExpressions:
+              - key: node-type
+                operator: In
+                values: ["application"]
+      
+      tolerations:
+      - key: "app"
+        operator: "Equal"
+        value: "generic"
+        effect: "NoSchedule"
+      - key: "node.kubernetes.io/not-ready"
+        operator: "Exists"
+        effect: "NoExecute"
+        tolerationSeconds: 300
+      
+      # Enhanced security context at pod level
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 3000
+        fsGroup: 2000
+        supplementalGroups: [2000]
+        seccompProfile:
+          type: RuntimeDefault
+        # Add SELinux options if supported
+        # seLinuxOptions:
+        #   level: "s0:c123,c456"
+      
+      containers:
+      - name: app-container
+        # Use image digest for immutable deployments
+        image: <image-name>@sha256:<digest> # Replace with your image digest, e.g., nginx@sha256:abc123...
+        # Alternative with tag: <image-name>:<image-tag>
+        imagePullPolicy: IfNotPresent
+        
+        ports:
+        - containerPort: 80
+          name: http
+          protocol: TCP
+        - containerPort: 8080
+          name: metrics
+          protocol: TCP
+        - containerPort: 9090
+          name: admin
+          protocol: TCP
+        
+        # Enhanced environment variables
+        env:
+        - name: APP_VERSION
+          value: "v1.0.0"
+        - name: ENVIRONMENT
+          value: "production"
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        - name: SERVICE_ACCOUNT
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.serviceAccountName
+        
+        envFrom:
+        - configMapRef:
+            name: app-config
+        - secretRef:
+            name: app-secret
+        
+        # Enhanced resource specifications
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "250m"
+            ephemeral-storage: "1Gi"
+          limits:
+            memory: "256Mi"
+            cpu: "500m"
+            ephemeral-storage: "2Gi"
+        
+        # Enhanced health checks with custom headers
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: http
+            httpHeaders:
+            - name: X-Health-Check
+              value: "liveness"
+            - name: User-Agent
+              value: "k8s-liveness-probe"
+          initialDelaySeconds: 15
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+          successThreshold: 1
+        
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: http
+            httpHeaders:
+            - name: X-Health-Check
+              value: "readiness"
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+          successThreshold: 1
+        
+        startupProbe:
+          httpGet:
+            path: /healthz
+            port: http
+            httpHeaders:
+            - name: X-Health-Check
+              value: "startup"
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 30 # Allows ~5 minutes for startup
+        
+        # Lifecycle management
+        lifecycle:
+          postStart:
+            exec:
+              command:
+              - /bin/sh
+              - -c
+              - |
+                echo "Container started at $(date)" > /tmp/startup.log
+                # Additional startup tasks
+          preStop:
+            exec:
+              command:
+              - /bin/sh
+              - -c
+              - |
+                echo "Graceful shutdown initiated at $(date)" >> /tmp/shutdown.log
+                # Graceful shutdown delay for load balancer deregistration
+                sleep 15
+        
+        volumeMounts:
+        - name: config-volume
+          mountPath: /etc/app/config
+          readOnly: true
+        - name: secret-volume
+          mountPath: /etc/app/secrets
+          readOnly: true
+        - name: cache-volume
+          mountPath: /tmp/cache
+        - name: logs-volume
+          mountPath: /var/log/app
+        # - name: data-volume
+        #   mountPath: /data
+        
+        # Enhanced container security context
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          runAsUser: 1000
+          runAsGroup: 3000
+          readOnlyRootFilesystem: true
+          seccompProfile:
+            type: RuntimeDefault
+          capabilities:
+            drop:
+            - ALL
+            # add:
+            # - NET_BIND_SERVICE # Only if needed for privileged ports
+        
+        # Working directory
+        workingDir: /app
+        
+        # Command and args (uncomment if needed)
+        # command: ["/app/start.sh"]
+        # args: ["--config", "/etc/app/config/app.yaml"]
+      
+      # Enhanced logging sidecar
+      - name: logging-sidecar
+        image: fluentd:v1.16-1 # Use specific version
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: FLUENTD_CONF
+          value: "fluent.conf"
+        - name: LOG_LEVEL
+          value: "info"
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+        volumeMounts:
+        - name: logs-volume
+          mountPath: /logs
+          readOnly: true
+        - name: fluentd-config
+          mountPath: /fluentd/etc
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          runAsUser: 1000
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+      
+      # Optional monitoring sidecar
+      # - name: monitoring-sidecar
+      #   image: prom/node-exporter:v1.6.1
+      #   ports:
+      #   - containerPort: 9100
+      #     name: metrics
+      #   resources:
+      #     requests:
+      #       memory: "32Mi"
+      #       cpu: "50m"
+      #     limits:
+      #       memory: "64Mi"
+      #       cpu: "100m"
+      
+      volumes:
+      - name: config-volume
+        configMap:
+          name: app-config
+          defaultMode: 0644
+      - name: secret-volume
+        secret:
+          secretName: app-secret
+          defaultMode: 0600
+      - name: cache-volume
+        emptyDir:
+          sizeLimit: 1Gi
+      - name: logs-volume
+        emptyDir:
+          sizeLimit: 2Gi
+      - name: fluentd-config
+        configMap:
+          name: fluentd-config
+      # Persistent volume for data
+      # - name: data-volume
+      #   persistentVolumeClaim:
+      #     claimName: app-pvc
+      
+      restartPolicy: Always
+      
+      # DNS configuration
+      dnsPolicy: ClusterFirst
+      dnsConfig:
+        options:
+        - name: ndots
+          value: "2"
+        - name: edns0
+      
+      # Image pull secrets for private registries
+      imagePullSecrets:
+      - name: registry-secret
+      
+      # Host network (uncomment if needed)
+      # hostNetwork: false
+      # hostPID: false
+      # hostIPC: false
+      
+      # Priority class for scheduling
+      # priorityClassName: high-priority
+      
+      # Node selector
+      nodeSelector:
+        kubernetes.io/os: linux
+        # node-type: application
+
+---
+# ServiceAccount with minimal RBAC
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: generic-app-sa
+  namespace: default
+  labels:
+    app: generic-app
+automountServiceAccountToken: false # Security best practice
+
+---
+# RBAC Role (if needed)
+# apiVersion: rbac.authorization.k8s.io/v1
+# kind: Role
+# metadata:
+#   name: generic-app-role
+#   namespace: default
+# rules:
+# - apiGroups: [""]
+#   resources: ["configmaps"]
+#   verbs: ["get", "list"]
+
+# ---
+# # RBAC RoleBinding
+# apiVersion: rbac.authorization.k8s.io/v1
+# kind: RoleBinding
+# metadata:
+#   name: generic-app-binding
+#   namespace: default
+# subjects:
+# - kind: ServiceAccount
+#   name: generic-app-sa
+#   namespace: default
+# roleRef:
+#   kind: Role
+#   name: generic-app-role
+#   apiGroup: rbac.authorization.k8s.io
+
+---
+# Service definition
+apiVersion: v1
+kind: Service
+metadata:
+  name: generic-app-service
+  namespace: default
+  labels:
+    app: generic-app
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb" # For AWS
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8080"
+    prometheus.io/path: "/metrics"
+spec:
+  type: ClusterIP
+  selector:
+    app: generic-app
+  ports:
+  - name: http
+    port: 80
+    targetPort: http
+    protocol: TCP
+  - name: metrics
+    port: 8080
+    targetPort: metrics
+    protocol: TCP
+  sessionAffinity: None
+
+---
+# HorizontalPodAutoscaler
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: generic-app-hpa
+  namespace: default
+  labels:
+    app: generic-app
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: generic-deployment
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 10
+        periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+      - type: Percent
+        value: 50
+        periodSeconds: 60
+
+---
+# PodDisruptionBudget for high availability
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: generic-app-pdb
+  namespace: default
+  labels:
+    app: generic-app
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: generic-app
+
+---
+# NetworkPolicy for secure pod communication
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: generic-app-netpol
+  namespace: default
+  labels:
+    app: generic-app
+spec:
+  podSelector:
+    matchLabels:
+      app: generic-app
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - podSelector: {} # Allow from same namespace
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring # Allow from monitoring namespace
+    ports:
+    - protocol: TCP
+      port: 80
+    - protocol: TCP
+      port: 8080
+  egress:
+  - to: [] # Allow all egress (customize as needed)
+    ports:
+    - protocol: TCP
+      port: 53 # DNS
+    - protocol: UDP
+      port: 53 # DNS
+    - protocol: TCP
+      port: 80 # HTTP
+    - protocol: TCP
+      port: 443 # HTTPS
+
+---
+# Example ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: default
+  labels:
+    app: generic-app
+data:
+  app.yaml: |
+    server:
+      port: 80
+      host: 0.0.0.0
+    logging:
+      level: info
+      format: json
+    database:
+      pool_size: 10
+      timeout: 30s
+  nginx.conf: |
+    server {
+        listen 80;
+        location / {
+            return 200 'OK';
+        }
+        location /healthz {
+            return 200 'healthy';
+        }
+        location /ready {
+            return 200 'ready';
+        }
+    }
+
+---
+# Example Fluentd ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fluentd-config
+  namespace: default
+data:
+  fluent.conf: |
+    <source>
+      @type tail
+      path /logs/*.log
+      pos_file /tmp/fluentd-app.log.pos
+      tag app.logs
+      format json
+    </source>
+    
+    <match app.logs>
+      @type stdout
+    </match>
+
+# ---
+# # Example Secret (create separately with proper values)
+# apiVersion: v1
+# kind: Secret
+# metadata:
+#   name: app-secret
+#   namespace: default
+# type: Opaque
+# data:
+#   database-password: <base64-encoded-password>
+#   api-key: <base64-encoded-api-key>
+
+# ---
+# # Example PersistentVolumeClaim
+# apiVersion: v1
+# kind: PersistentVolumeClaim
+# metadata:
+#   name: app-pvc
+#   namespace: default
+#   labels:
+#     app: generic-app
+# spec:
+#   accessModes:
+#   - ReadWriteOnce
+#   resources:
+#     requests:
+#       storage: 10Gi
+#   storageClassName: fast-ssd
+
+# ---
+# # VerticalPodAutoscaler (if VPA is installed)
+# apiVersion: autoscaling.k8s.io/v1
+# kind: VerticalPodAutoscaler
+# metadata:
+#   name: generic-app-vpa
+#   namespace: default
+# spec:
+#   targetRef:
+#     apiVersion: apps/v1
+#     kind: Deployment
+#     name: generic-deployment
+#   updatePolicy:
+#     updateMode: "Auto"
+#   resourcePolicy:
+#     containerPolicies:
+#     - containerName: app-container
+#       maxAllowed:
+#         cpu: 1
+#         memory: 500Mi
+#       minAllowed:
+#         cpu: 100m
+#         memory: 50Mi

@@ -1,0 +1,152 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webserver-app
+  namespace: webserver
+  labels:
+    app: webserver # Fixed: added space after colon
+    version: v1.0.0 # Fixed: added space after colon
+    environment: production # Fixed: added space after colon
+spec:
+  replicas: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1 # Fixed: added space after colon
+      maxSurge: 1 # Fixed: corrected "maxsurge" to "maxSurge" and added space
+  selector:
+    matchLabels:
+      # Fixed: corrected "matchlables" to "matchLabels"
+      app: webserver # Fixed: proper indentation and spacing
+  template:
+    # Fixed: removed extra colon
+    metadata:
+      labels:
+        app: webserver
+        version: v1.0.0
+      annotations:
+        # Fixed: moved to same level as labels
+        description: "Deployment for webserver application"
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9113"
+        prometheus.io/path: "/metrics"
+
+    spec:
+      containers:
+      - name: webserver-container
+        image: nginx:1.21
+        ports:
+        - containerPort: 80
+          name: http
+
+        resources:
+          limits:
+            memory: "256Mi" # Fixed: corrected "265mib" to "256Mi"
+            cpu: "500m"
+          requests:
+            memory: "128Mi" # Fixed: corrected "128mib" to "128Mi" and proper indentation
+            cpu: "250m"
+
+        volumeMounts:
+        # Fixed: corrected "volumesMounts" to "volumeMounts"
+        - name: app-data
+          mountPath: /var/lib/app-data # Fixed: corrected "mountpath" to "mountPath"
+        - name: nginx-config
+          mountPath: /etc/nginx/conf.d
+        - name: cache-volume
+          mountPath: /var/cache/nginx
+
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 80
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 80
+          initialDelaySeconds: 20
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+
+        env:
+        # Fixed: proper indentation
+        - name: ENVIRONMENT
+          value: "production"
+        - name: LOG_LEVEL
+          value: "info"
+
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true # Fixed: corrected "runASnonRoot" to "runAsNonRoot"
+          runAsUser: 1000
+
+      # Monitoring Sidecar:
+      - name: nginx-exporter
+        image: nginx/nginx-prometheus-exporter:0.9.0
+        ports:
+        - containerPort: 9113
+          name: metrics # Fixed: removed quotes and "/" - should be just the name
+        args:
+        - -nginx.scrape-uri=http://localhost/nginx_status # Fixed: corrected "loaclhost" to "localhost"
+
+        resources:
+          limits:
+            memory: "100Mi" # Fixed: corrected "100mib" to "100Mi"
+            cpu: "200m"
+          requests:
+            memory: "50Mi" # Fixed: corrected "50mib" to "50Mi"
+            cpu: "100m"
+
+        livenessProbe:
+          httpGet:
+            path: /metrics
+            port: 9113
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+
+        readinessProbe:
+          httpGet:
+            path: /metrics
+            port: 9113
+          initialDelaySeconds: 20
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+
+      volumes:
+      - name: app-data
+        persistentVolumeClaim:
+          claimName: app-data-pvc
+      - name: nginx-config
+        configMap:
+          name: nginx-config-map
+          items:
+          - key: nginx.conf
+            path: nginx.conf
+      - name: cache-volume
+        emptyDir: {}
+
+      securityContext:
+        fsGroup: 2000
+
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - webserver
+              topologyKey: "kubernetes.io/hostname"
