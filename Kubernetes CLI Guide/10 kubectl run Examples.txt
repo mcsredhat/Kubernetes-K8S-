@@ -1,0 +1,915 @@
+# 10 kubectl run Examples for Different Applications
+
+## 1. **NGINX Web Server**
+# Enhanced Nginx Pod with Security Context - Step by Step Guide
+
+## Step 1: Create the Namespace (if not exists)
+
+```bash
+kubectl create namespace web --dry-run=client -o yaml | kubectl apply -f -
+```
+
+## Step 2: Create a ConfigMap for Nginx Configuration
+
+First, create a custom nginx configuration file:
+
+```bash
+# Create nginx.conf file
+cat > nginx.conf << 'EOF'
+user nginx;
+worker_processes auto;
+error_log /var/log/nginx/error.log notice;
+pid /var/run/nginx.pid;
+
+events {
+    worker_connections 1024;
+}
+
+http {
+    include /etc/nginx/mime.types;
+    default_type application/octet-stream;
+    
+    log_format main '$remote_addr - $remote_user [$time_local] "$request" '
+                    '$status $body_bytes_sent "$http_referer" '
+                    '"$http_user_agent" "$http_x_forwarded_for"';
+    
+    access_log /var/log/nginx/access.log main;
+    sendfile on;
+    keepalive_timeout 65;
+    
+    server {
+        listen 8080;
+        server_name localhost;
+        
+        location / {
+            root /usr/share/nginx/html;
+            index index.html index.htm;
+        }
+        
+        location /health {
+            access_log off;
+            return 200 "healthy\n";
+            add_header Content-Type text/plain;
+        }
+    }
+}
+EOF
+```
+
+Create the ConfigMap:
+
+```bash
+kubectl create configmap nginx-config \
+  --from-file=nginx.conf=nginx.conf \
+  --namespace=web \
+  --dry-run=client -o yaml | kubectl apply -f -
+```
+
+## Step 3: Enhanced kubectl Command with Security Features
+
+```bash
+kubectl run nginx-web \
+  --image=nginx:1.20 \
+  --port=8080 \
+  --restart=Never \
+  --namespace=web \
+  --labels="app=nginx,tier=frontend,version=1.20" \
+  --annotations="description=Nginx web server with security context,owner=web-team" \
+  --env="NGINX_PORT=8080" \
+  --env="NGINX_HOST=localhost" \
+  --overrides='{
+    "spec": {
+      "securityContext": {
+        "runAsNonRoot": true,
+        "runAsUser": 101,
+        "runAsGroup": 101,
+        "fsGroup": 101,
+        "seccompProfile": {
+          "type": "RuntimeDefault"
+        }
+      },
+      "containers": [{
+        "name": "nginx-web",
+        "image": "nginx:1.20",
+        "ports": [{"containerPort": 8080, "name": "http"}],
+        "securityContext": {
+          "allowPrivilegeEscalation": false,
+          "readOnlyRootFilesystem": true,
+          "runAsNonRoot": true,
+          "runAsUser": 101,
+          "runAsGroup": 101,
+          "capabilities": {
+            "drop": ["ALL"]
+          }
+        },
+        "resources": {
+          "requests": {"memory": "64Mi", "cpu": "100m"},
+          "limits": {"memory": "128Mi", "cpu": "200m"}
+        },
+        "volumeMounts": [
+          {
+            "name": "nginx-config",
+            "mountPath": "/etc/nginx/nginx.conf",
+            "subPath": "nginx.conf",
+            "readOnly": true
+          },
+          {
+            "name": "nginx-cache",
+            "mountPath": "/var/cache/nginx"
+          },
+          {
+            "name": "nginx-run",
+            "mountPath": "/var/run"
+          },
+          {
+            "name": "nginx-logs",
+            "mountPath": "/var/log/nginx"
+          }
+        ],
+        "livenessProbe": {
+          "httpGet": {
+            "path": "/health",
+            "port": 8080,
+            "scheme": "HTTP"
+          },
+          "initialDelaySeconds": 30,
+          "periodSeconds": 10,
+          "timeoutSeconds": 5,
+          "failureThreshold": 3
+        },
+        "readinessProbe": {
+          "httpGet": {
+            "path": "/health",
+            "port": 8080,
+            "scheme": "HTTP"
+          },
+          "initialDelaySeconds": 5,
+          "periodSeconds": 5,
+          "timeoutSeconds": 3,
+          "failureThreshold": 3
+        },
+        "startupProbe": {
+          "httpGet": {
+            "path": "/health",
+            "port": 8080,
+            "scheme": "HTTP"
+          },
+          "initialDelaySeconds": 10,
+          "periodSeconds": 3,
+          "timeoutSeconds": 1,
+          "failureThreshold": 30
+        }
+      }],
+      "volumes": [
+        {
+          "name": "nginx-config",
+          "configMap": {
+            "name": "nginx-config",
+            "items": [
+              {
+                "key": "nginx.conf",
+                "path": "nginx.conf"
+              }
+            ]
+          }
+        },
+        {
+          "name": "nginx-cache",
+          "emptyDir": {}
+        },
+        {
+          "name": "nginx-run",
+          "emptyDir": {}
+        },
+        {
+          "name": "nginx-logs",
+          "emptyDir": {}
+        }
+      ]
+    }
+  }' \
+  --dry-run=client \
+  --output=yaml > nginx-web-secure.yaml
+```
+
+## Step 4: Review and Apply the Generated YAML
+
+Review the generated file:
+
+```bash
+cat nginx-web-secure.yaml
+```
+
+Apply the configuration:
+
+```bash
+kubectl apply -f nginx-web-secure.yaml
+```
+
+## Step 5: Verify the Deployment
+
+Check pod status:
+
+```bash
+kubectl get pods -n web -l app=nginx
+```
+
+Check pod details:
+
+```bash
+kubectl describe pod nginx-web -n web
+```
+
+Test the health endpoint:
+
+```bash
+kubectl port-forward nginx-web 8080:8080 -n web &
+curl http://localhost:8080/health
+```
+
+Check security context:
+
+# Check user ID (this should work)
+kubectl exec nginx-web -n web -- id
+
+# Check running processes (ps may not be available in minimal images)
+kubectl exec nginx-web -n web -- ls -la /proc/
+
+# Alternative: Check what's running via /proc filesystem
+kubectl exec nginx-web -n web -- sh -c "ls -la /proc/*/exe 2>/dev/null | head -10"
+
+# Check nginx processes specifically
+kubectl exec nginx-web -n web -- sh -c "ls -la /proc/*/cmdline 2>/dev/null | xargs grep -l nginx 2>/dev/null | head -5"
+
+# If ps is needed, you can check what's installed
+kubectl exec nginx-web -n web -- sh -c "which ps || echo 'ps not available'"
+kubectl exec nginx-web -n web -- sh -c "which top || echo 'top not available'"
+## Security Features Added
+
+
+## Step 6: Clean Up (Optional)
+
+```bash
+kubectl delete pod nginx-web -n web
+kubectl delete configmap nginx-config -n web
+kubectl delete namespace web
+rm nginx.conf nginx-web-secure.yaml
+```
+
+## 2. **MySQL Database**
+Step 1: Create the Namespace (if not exists)
+kubectl create namespace production
+
+# Verify namespace creation
+kubectl get namespaces | grep production
+
+```bash
+kubectl run database \
+  --image=mysql:8.0 \
+  --port=3306 \
+  --restart=Never \
+  --namespace=production \
+  --labels="app=mysql,version=8.0,environment=development" \
+  --annotations="description=MySQL pod for database exploration,created-by=kubectl-advanced-deployment" \
+  --env="MYSQL_ROOT_PASSWORD=SecureRootPass123" \
+  --env="MYSQL_DATABASE=testdb" \
+  --env="MYSQL_USER=appuser" \
+  --env="MYSQL_PASSWORD=AppUserPass123" \
+  --env="ENVIRONMENT=development" \
+  --overrides='{
+    "spec": {
+      "nodeSelector": {"kubernetes.io/os": "linux"},
+      "securityContext": {
+        "runAsNonRoot": false,
+        "runAsUser": 999,
+        "runAsGroup": 999,
+        "fsGroup": 999,
+        "seccompProfile": {
+          "type": "RuntimeDefault"
+        }
+      },
+      "containers": [{
+        "name": "database",
+        "image": "mysql:8.0",
+        "ports": [{"containerPort": 3306}],
+        "env": [
+          {"name": "MYSQL_ROOT_PASSWORD", "value": "SecureRootPass123"},
+          {"name": "MYSQL_DATABASE", "value": "testdb"},
+          {"name": "MYSQL_USER", "value": "appuser"},
+          {"name": "MYSQL_PASSWORD", "value": "AppUserPass123"},
+          {"name": "ENVIRONMENT", "value": "development"}
+        ],
+        "resources": {
+          "requests": {
+            "memory": "512Mi",
+            "cpu": "500m"
+          },
+          "limits": {
+            "memory": "1Gi",
+            "cpu": "1000m"
+          }
+        },
+        "securityContext": {
+          "allowPrivilegeEscalation": false,
+          "readOnlyRootFilesystem": false,
+          "capabilities": {
+            "drop": ["ALL"],
+            "add": ["CHOWN", "DAC_OVERRIDE", "SETGID", "SETUID"]
+          }
+        },
+        "livenessProbe": {
+          "exec": {
+            "command": ["mysqladmin", "ping", "-h", "localhost", "-u", "root", "-pSecureRootPass123"]
+          },
+          "initialDelaySeconds": 60,
+          "periodSeconds": 30,
+          "timeoutSeconds": 10,
+          "successThreshold": 1,
+          "failureThreshold": 3
+        },
+        "readinessProbe": {
+          "exec": {
+            "command": ["mysql", "-h", "localhost", "-u", "root", "-pSecureRootPass123", "-e", "SELECT 1"]
+          },
+          "initialDelaySeconds": 30,
+          "periodSeconds": 10,
+          "timeoutSeconds": 5,
+          "successThreshold": 1,
+          "failureThreshold": 3
+        },
+        "startupProbe": {
+          "tcpSocket": {
+            "port": 3306
+          },
+          "initialDelaySeconds": 15,
+          "periodSeconds": 5,
+          "timeoutSeconds": 3,
+          "successThreshold": 1,
+          "failureThreshold": 20
+        },
+        "volumeMounts": [{
+          "name": "mysql-data",
+          "mountPath": "/var/lib/mysql"
+        }, {
+          "name": "mysql-config",
+          "mountPath": "/etc/mysql/conf.d",
+          "readOnly": true
+        }, {
+          "name": "mysql-init",
+          "mountPath": "/docker-entrypoint-initdb.d",
+          "readOnly": true
+        }]
+      }],
+      "volumes": [{
+        "name": "mysql-data",
+        "emptyDir": {}
+      }, {
+        "name": "mysql-config",
+        "configMap": {
+          "name": "mysql-custom-config",
+          "optional": true
+        }
+      }, {
+        "name": "mysql-init",
+        "configMap": {
+          "name": "mysql-init-scripts",
+          "optional": true
+        }
+      }]
+    }
+  }' \
+  --dry-run=client \
+  --output=yaml > database.yaml
+
+
+#Check the generated file:
+cat database.yaml
+#Apply the YAML to create the pod:
+kubectl apply --filename database.yaml
+
+#Verify the pod creation:
+kubectl get pods --namespace production
+kubectl describe pod database --namespace production
+kubectl logs pods/database --namespace production -f 
+kubectl exec -it database --namespace production -- mysql -u appuser -pAppUserPass123 testdb
+kubectl delete pods/database --namespace production
+```
+
+## 3. **Redis Cache**
+```bash
+kubectl create namespace cache
+
+## **Secure Redis with kubectl run**
+
+```bash
+kubectl run redis-cache \
+  --image=redis:7-alpine \
+  --port=6379 \
+  --restart=Never \
+  --namespace=cache \
+  --labels="app=redis,tier=cache,version=7" \
+  --annotations="description=Redis cache server,owner=cache-team" \
+  --overrides='{
+    "apiVersion": "v1",
+    "kind": "Pod",
+    "spec": {
+      "securityContext": {
+        "runAsUser": 1001,
+        "runAsGroup": 1001,
+        "fsGroup": 1001
+      },
+      "containers": [{
+        "name": "redis-cache",
+        "image": "redis:7-alpine",
+        "ports": [{"containerPort": 6379}],
+        "args": ["redis-server", "--requirepass", "CachePass123", "--appendonly", "yes"],
+        "resources": {
+          "requests": {"memory": "256Mi", "cpu": "200m"},
+          "limits": {"memory": "512Mi", "cpu": "400m"}
+        },
+        "volumeMounts": [{
+          "name": "redis-data",
+          "mountPath": "/data"
+        }],
+        "livenessProbe": {
+          "exec": {"command": ["redis-cli", "-a", "CachePass123", "ping"]},
+          "initialDelaySeconds": 20,
+          "periodSeconds": 10
+        }
+      }],
+      "volumes": [{
+        "name": "redis-data",
+        "emptyDir": {}
+      }]
+    }
+  }' \
+  --dry-run=client \
+  --output=yaml > redis-cache.yaml
+```
+
+### **How to confirm it works**
+ **Apply and Check Pod**
+
+```bash
+kubectl apply -f redis-cache.yaml
+kubectl get pods -n cache
+```
+ **Test Redis**
+
+```bash
+kubectl exec -n cache -it redis-cache -- redis-cli -a CachePass123 ping
+```
+Expected output:
+```
+PONG
+```
+ **Test Data**
+
+```bash
+kubectl exec -n cache -it redis-cache -- redis-cli -a CachePass123 SET mykey "Hello"
+kubectl exec -n cache -it redis-cache -- redis-cli -a CachePass123 GET mykey
+```
+Should return:
+```
+"Hello"
+```
+```
+
+## 4. **MongoDB Database**
+```bash
+kubectl run mongodb \
+  --image=mongo:6.0 \
+  --port=27017 \
+  --restart=Never \
+  --namespace=database \
+  --labels="app=mongodb,tier=database,version=6.0" \
+  --annotations="description=MongoDB document database,owner=db-team" \
+  --env="MONGO_INITDB_ROOT_USERNAME=admin" \
+  --env="MONGO_INITDB_ROOT_PASSWORD=MongoPass123" \
+  --env="MONGO_INITDB_DATABASE=appdata" \
+  --overrides='{
+    "spec": {
+      "containers": [{
+        "name": "mongodb",
+        "image": "mongo:6.0",
+        "ports": [{"containerPort": 27017}],
+        "env": [
+          {"name": "MONGO_INITDB_ROOT_USERNAME", "value": "admin"},
+          {"name": "MONGO_INITDB_ROOT_PASSWORD", "value": "MongoPass123"},
+          {"name": "MONGO_INITDB_DATABASE", "value": "appdata"}
+        ],
+        "resources": {
+          "requests": {"memory": "512Mi", "cpu": "300m"},
+          "limits": {"memory": "1Gi", "cpu": "600m"}
+        },
+        "livenessProbe": {
+          "tcpSocket": {"port": 27017},
+          "initialDelaySeconds": 60,
+          "periodSeconds": 30
+        },
+        "readinessProbe": {
+          "tcpSocket": {"port": 27017},
+          "initialDelaySeconds": 30,
+          "periodSeconds": 10
+        }
+      }]
+    }
+  }' \
+  --dry-run=client \
+  --output=yaml > mongodb.yaml
+
+```
+kubectl apply --filename mongodb.yaml
+kubectl get pods -n database -o wide 
+
+# Check logs
+kubectl logs mongodb -n database 
+
+# Once ready, test connection
+kubectl exec mongodb -n database -- mongosh --eval "db.adminCommand('ping')"
+
+# Check if the initial database was created
+kubectl exec mongodb -n database -- mongosh -u admin -p MongoPass123 --authenticationDatabase admin --eval "show dbs"
+
+# Check if there are any custom log files
+kubectl exec mongodb -n database -- ls -la /var/log/mongodb/
+
+
+## 5. **PostgreSQL Database**
+```bash
+kubectl run postgresql \
+  --image=postgres:14 \
+  --port=5432 \
+  --restart=Never \
+  --namespace=database \
+  --labels="app=postgresql,tier=database,version=14" \
+  --annotations="description=PostgreSQL relational database,owner=db-team" \
+  --overrides='{
+    "spec": {
+      "containers": [{
+        "name": "postgresql",
+        "image": "postgres:14",
+        "ports": [{"containerPort": 5432}],
+        "env": [
+          {"name": "POSTGRES_DB", "value": "appdb"},
+          {"name": "POSTGRES_USER", "value": "dbuser"},
+          {"name": "POSTGRES_PASSWORD", "value": "PostgresPass123"}
+        ],
+        "resources": {
+          "requests": {"memory": "256Mi", "cpu": "250m"},
+          "limits": {"memory": "512Mi", "cpu": "500m"}
+        },
+        "livenessProbe": {
+          "exec": {"command": ["pg_isready", "-U", "dbuser", "-d", "appdb"]},
+          "initialDelaySeconds": 30,
+          "periodSeconds": 15
+        },
+        "readinessProbe": {
+          "exec": {"command": ["pg_isready", "-U", "dbuser", "-d", "appdb"]},
+          "initialDelaySeconds": 10,
+          "periodSeconds": 5
+        }
+      }]
+    }
+  }' \
+  --dry-run=client \
+  --output=yaml > postgresql.yaml
+```
+Here’s a quick step-by-step checklist to confirm your **PostgreSQL pod is running correctly** after you fix the probes.
+
+---
+
+### **1. Check pod status**
+
+```bash
+kubectl get pods -n database
+```
+
+### **2. Check probe results**
+
+```bash
+kubectl describe pod postgresql -n database
+```
+
+### **3. Connect to the database**
+
+You can exec into the pod:
+
+```bash
+kubectl exec -it postgresql -n database -- psql -U dbuser -d appdb
+```
+
+If it works, you’ll see the `psql` prompt:
+
+```
+appdb=>
+```
+
+You can then test a simple query:
+
+```sql
+SELECT version();
+```
+
+Type `\q` to exit.
+
+---
+
+### **4. Check logs for startup success**
+
+```bash
+kubectl logs postgresql -n database
+```
+
+Look for:
+
+```
+database system is ready to accept connections
+```
+
+## 6. **Apache HTTP Server**
+Alright — let’s make your `kubectl run` setup **bulletproof** so Apache starts even if the ConfigMap is missing or slow to mount, and so we can test it works without that annoying `ServerName` warning.
+
+---
+
+### **Create the ConfigMap with ServerName**
+
+```bash
+kubectl create configmap apache-servername \
+  --from-literal=servername.conf="ServerName localhost" \
+  -n web
+```
+### ** Run Apache with ConfigMap mount and curl installed**
+
+```bash
+kubectl run apache-web \
+  --image=httpd:2.4 \
+  --port=80 \
+  --restart=Never \
+  --namespace=web \
+  --labels="app=apache,tier=frontend,version=2.4" \
+  --annotations="description=Apache HTTP web server,owner=web-team" \
+  --overrides='{
+    "spec": {
+      "containers": [{
+        "name": "apache-web",
+        "image": "httpd:2.4",
+        "ports": [{"containerPort": 80}],
+        "command": ["/bin/sh", "-c"],
+        "args": [
+          "apt-get update && apt-get install -y curl && httpd-foreground"
+        ],
+        "volumeMounts": [{
+          "name": "apache-servername-volume",
+          "mountPath": "/usr/local/apache2/conf/extra/servername.conf",
+          "subPath": "servername.conf"
+        }],
+        "livenessProbe": {
+          "httpGet": {"path": "/", "port": 80},
+          "initialDelaySeconds": 20, "periodSeconds": 10
+        },
+        "readinessProbe": {
+          "httpGet": {"path": "/", "port": 80},
+          "initialDelaySeconds": 5, "periodSeconds": 5
+        },
+        "resources": {
+          "requests": {"memory": "128Mi", "cpu": "100m"},
+          "limits": {"memory": "256Mi", "cpu": "300m"}
+        }
+      }],
+      "volumes": [{
+        "name": "apache-servername-volume",
+        "configMap": {
+          "name": "apache-servername",
+          "optional": true
+        }
+      }]
+    }
+  }' \
+  --dry-run=client \
+  -o yaml > apache-web.yaml
+```
+---
+### *Apply the YAML**
+
+```bash
+kubectl apply -f apache-web.yaml
+```
+### Confirm it works**
+
+```bash
+# Wait for pod to start
+kubectl get pods -n web -w
+kubectl get pods -n web -o wide 
+
+# Check logs for no "ServerName" warning
+kubectl logs apache-web -n web
+
+# Test from inside container
+kubectl exec -n web -it apache-web -- curl -s http://localhost
+```
+
+## 7. **Elasticsearch Search Engine**
+```bash
+kkubectl run elasticsearch \
+  --image=docker.elastic.co/elasticsearch/elasticsearch:8.8.0 \
+  --port=9200 \
+  --restart=Never \
+  --namespace=search \
+  --labels="app=elasticsearch,tier=search,version=8.8" \
+  --env="discovery.type=single-node" \
+  --env="ES_JAVA_OPTS=-Xms128m -Xmx256m" \
+  --env="xpack.security.enabled=false" \
+  --env="xpack.ml.enabled=false" \
+  --env="bootstrap.memory_lock=false" \
+  --env="cluster.routing.allocation.disk.threshold_enabled=false" \
+  --overrides='{
+    "spec": {
+      "containers": [{
+        "name": "elasticsearch",
+        "image": "docker.elastic.co/elasticsearch/elasticsearch:8.8.0",
+        "ports": [{"containerPort": 9200}],
+        "resources": {
+          "requests": {"memory": "256Mi", "cpu": "100m"},
+          "limits": {"memory": "512Mi", "cpu": "500m"}
+        },
+        "env": [
+          {"name": "discovery.type", "value": "single-node"},
+          {"name": "ES_JAVA_OPTS", "value": "-Xms128m -Xmx256m"},
+          {"name": "xpack.security.enabled", "value": "false"},
+          {"name": "xpack.ml.enabled", "value": "false"},
+          {"name": "bootstrap.memory_lock", "value": "false"}
+        ]
+      }]
+    }
+  }' \
+  --dry-run=client \
+  --output=yaml > elasticsearch-minimal.yaml
+```
+kubectl create namesapce search 
+
+kubectl apply --filename  elasticsearch-minimal.yaml
+
+
+## Step 1: Check current pod status
+```bash
+kubectl get pods -n search
+```
+
+## Step 2: Test Elasticsearch connectivity
+```bash
+kubectl port-forward pod/elasticsearch -n search 9200:9200
+```
+*Keep this terminal open*
+
+## Step 3: Test health endpoint (in new terminal)
+```bash
+curl http://localhost:9200/_cluster/health
+```
+*Expected: Should return cluster health info*
+
+## Step 4: Test main endpoint
+```bash
+curl http://localhost:9200/
+```
+*Expected: Should return Elasticsearch version and cluster info*
+
+## Step 5: Disable disk watermark warnings (optional)
+If you want to eliminate the disk warnings for testing:
+
+```bash
+kubectl exec -it elasticsearch -n search -- curl -X PUT "localhost:9200/_cluster/settings" \
+  -H 'Content-Type: application/json' \
+  -d '{"persistent": {"cluster.routing.allocation.disk.threshold_enabled": false}}'
+
+
+## 8. **RabbitMQ Message Broker**
+```bash
+kubectl run rabbitmq \
+  --image=rabbitmq:3-management \
+  --port=5672 \
+  --restart=Never \
+  --namespace=messaging \
+  --labels="app=rabbitmq,tier=messaging,version=3" \
+  --annotations="description=RabbitMQ message broker,owner=messaging-team" \
+  --env="RABBITMQ_DEFAULT_USER=admin" \
+  --env="RABBITMQ_DEFAULT_PASS=RabbitPass123" \
+  --overrides='{
+    "spec": {
+      "containers": [{
+        "name": "rabbitmq",
+        "image": "rabbitmq:3-management",
+        "ports": [{"containerPort": 5672}, {"containerPort": 15672}],
+        "resources": {
+          "requests": {"memory": "256Mi", "cpu": "200m"},
+          "limits": {"memory": "512Mi", "cpu": "400m"}
+        },
+        "livenessProbe": {
+          "exec": {"command": ["rabbitmqctl", "status"]},
+          "initialDelaySeconds": 60, "periodSeconds": 30
+        }
+      }]
+    }
+  }' \
+  --dry-run=client \
+  --output=yaml > rabbitmq.yaml
+```
+
+## 9. **Node.js Application**
+```bash
+kubectl run nodejs-app \
+  --image=node:18-alpine \
+  --port=3000 \
+  --restart=Never \
+  --namespace=apps \
+  --labels="app=nodejs,tier=backend,version=18" \
+  --annotations="description=Node.js application server,owner=dev-team" \
+  --env="NODE_ENV=production" \
+  --env="PORT=3000" \
+  --env="API_KEY=your-api-key" \
+  --overrides='{
+    "spec": {
+      "containers": [{
+        "name": "nodejs-app",
+        "image": "node:18-alpine",
+        "ports": [{"containerPort": 3000}],
+        "command": ["node"],
+        "args": ["-e", "require(\"http\").createServer((req,res)=>res.end(\"Hello from Node.js!\")).listen(3000)"],
+        "resources": {
+          "requests": {"memory": "128Mi", "cpu": "100m"},
+          "limits": {"memory": "256Mi", "cpu": "300m"}
+        },
+        "livenessProbe": {
+          "httpGet": {"path": "/", "port": 3000},
+          "initialDelaySeconds": 15, "periodSeconds": 10
+        }
+      }]
+    }
+  }' \
+  --dry-run=client \
+  --output=yaml > nodejs-app.yaml
+```
+
+## 10. **Prometheus Monitoring**
+```bash
+kubectl run prometheus \
+  --image=prom/prometheus:latest \
+  --port=9090 \
+  --restart=Never \
+  --namespace=monitoring \
+  --labels="app=prometheus,tier=monitoring,version=latest" \
+  --annotations="description=Prometheus monitoring server,owner=ops-team" \
+  --env="PROMETHEUS_RETENTION_TIME=15d" \
+  --overrides='{
+    "spec": {
+      "containers": [{
+        "name": "prometheus",
+        "image": "prom/prometheus:latest",
+        "ports": [{"containerPort": 9090}],
+        "args": ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.path=/prometheus/", "--web.console.libraries=/etc/prometheus/console_libraries", "--web.console.templates=/etc/prometheus/consoles"],
+        "resources": {
+          "requests": {"memory": "512Mi", "cpu": "300m"},
+          "limits": {"memory": "1Gi", "cpu": "600m"}
+        },
+        "livenessProbe": {
+          "httpGet": {"path": "/-/healthy", "port": 9090},
+          "initialDelaySeconds": 30, "periodSeconds": 15
+        }
+      }]
+    }
+  }' \
+  --dry-run=client \
+  --output=yaml > prometheus.yaml
+```
+
+## Usage Instructions
+
+### Apply any of these configurations:
+```bash
+# Create the namespace first (if it doesn't exist)
+kubectl create namespace <namespace-name>
+
+# Apply the generated YAML
+kubectl apply --filename <filename>.yaml
+
+# Check the pod status
+kubectl get pods --namespace <namespace-name>
+
+# View pod details
+kubectl describe pod <pod-name> --namespace <namespace-name> -o wide
+
+# Check logs
+kubectl logs <pod-name> --namespace <namespace-name> -f
+
+kubectl get pods --all-namespaces
+
+kubectl delete pods --namespace production mysql-exploration
+```
+
+Each example includes:
+- ✅ **Appropriate image and port** for the application
+- ✅ **Proper resource limits** based on typical usage
+- ✅ **Application-specific environment variables**
+- ✅ **Health checks** tailored to each service type
+- ✅ **Organized namespaces** by application tier
+- ✅ **Descriptive labels and annotations** for management

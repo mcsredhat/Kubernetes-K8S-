@@ -50,12 +50,11 @@ In a traditional setup, these might all run as separate processes on the same se
 Let's explore how pods actually work by examining their behavior step by step:
 
 ```bash
-# This command creates a single pod running nginx
-# Let's think about what Kubernetes must do to fulfill this request
+
 kubectl run pod-exploration --image=nginx --restart=Never
 kubectl run pod-exploration --image=nginx:1.20 --port=80 --restart=Never
-Forward local port 8080 → Pod port 80:
-kubectl port-forward pod/pod-exploration 8080:80 #
+# Forward local port 8080 → Pod port 80:
+kubectl port-forward pod/pod-exploration 8080:80 
 kubectl get pods -o wide 
 kubectl describe pods/pod-exploration 
 kubectl run pod-busybox \
@@ -68,6 +67,415 @@ kubectl exec pod-busybox -- cat /root/shared-data/test.txt
 kubectl describe pods/pod-busybox
 kubectl delete pods pod-busybox
 kubectl delete pods --all
+
+# This command creates a single pod running nginx
+# Let's think about what Kubernetes must do to fulfill this request
+# #kubectl run flags used:
+# --image ✓
+# --port ✓
+# --restart ✓
+# --namespace ✓
+# --labels ✓
+# --annotations ✓
+# --env ✓ (can be used multiple times)
+# --overrides ✓ (for complex configurations)
+# --dry-run ✓
+# --output ✓)
+
+## 1. **NGINX Web Server**
+# Enhanced Nginx Pod with Security Context - Step by Step Guide
+
+## Step 1: Create the Namespace (if not exists)
+
+```bash
+kubectl create namespace web --dry-run=client -o yaml | kubectl apply -f -
+```
+
+## Step 2: Create a ConfigMap for Nginx Configuration
+
+First, create a custom nginx configuration file:
+
+```bash
+# Create nginx.conf file
+cat > nginx.conf << 'EOF'
+user nginx;
+worker_processes auto;
+error_log /var/log/nginx/error.log notice;
+pid /var/run/nginx.pid;
+
+events {
+    worker_connections 1024;
+}
+
+http {
+    include /etc/nginx/mime.types;
+    default_type application/octet-stream;
+    
+    log_format main '$remote_addr - $remote_user [$time_local] "$request" '
+                    '$status $body_bytes_sent "$http_referer" '
+                    '"$http_user_agent" "$http_x_forwarded_for"';
+    
+    access_log /var/log/nginx/access.log main;
+    sendfile on;
+    keepalive_timeout 65;
+    
+    server {
+        listen 8080;
+        server_name localhost;
+        
+        location / {
+            root /usr/share/nginx/html;
+            index index.html index.htm;
+        }
+        
+        location /health {
+            access_log off;
+            return 200 "healthy\n";
+            add_header Content-Type text/plain;
+        }
+    }
+}
+EOF
+```
+
+Create the ConfigMap:
+
+```bash
+kubectl create configmap nginx-config \
+  --from-file=nginx.conf=nginx.conf \
+  --namespace=web \
+  --dry-run=client -o yaml | kubectl apply -f 
+```
+
+## Step 3: Enhanced kubectl Command with Security Features
+
+```bash
+kubectl run nginx-web \
+  --image=nginx:1.20 \
+  --port=8080 \
+  --restart=Never \
+  --namespace=web \
+  --labels="app=nginx,tier=frontend,version=1.20" \
+  --annotations="description=Nginx web server with security context,owner=web-team" \
+  --env="NGINX_PORT=8080" \
+  --env="NGINX_HOST=localhost" \
+  --overrides='{
+    "spec": {
+      "securityContext": {
+        "runAsNonRoot": true,
+        "runAsUser": 101,
+        "runAsGroup": 101,
+        "fsGroup": 101,
+        "seccompProfile": {
+          "type": "RuntimeDefault"
+        }
+      },
+      "containers": [{
+        "name": "nginx-web",
+        "image": "nginx:1.20",
+        "ports": [{"containerPort": 8080, "name": "http"}],
+        "securityContext": {
+          "allowPrivilegeEscalation": false,
+          "readOnlyRootFilesystem": true,
+          "runAsNonRoot": true,
+          "runAsUser": 101,
+          "runAsGroup": 101,
+          "capabilities": {
+            "drop": ["ALL"]
+          }
+        },
+        "resources": {
+          "requests": {"memory": "64Mi", "cpu": "100m"},
+          "limits": {"memory": "128Mi", "cpu": "200m"}
+        },
+        "volumeMounts": [
+          {
+            "name": "nginx-config",
+            "mountPath": "/etc/nginx/nginx.conf",
+            "subPath": "nginx.conf",
+            "readOnly": true
+          },
+          {
+            "name": "nginx-cache",
+            "mountPath": "/var/cache/nginx"
+          },
+          {
+            "name": "nginx-run",
+            "mountPath": "/var/run"
+          },
+          {
+            "name": "nginx-logs",
+            "mountPath": "/var/log/nginx"
+          }
+        ],
+        "livenessProbe": {
+          "httpGet": {
+            "path": "/health",
+            "port": 8080,
+            "scheme": "HTTP"
+          },
+          "initialDelaySeconds": 30,
+          "periodSeconds": 10,
+          "timeoutSeconds": 5,
+          "failureThreshold": 3
+        },
+        "readinessProbe": {
+          "httpGet": {
+            "path": "/health",
+            "port": 8080,
+            "scheme": "HTTP"
+          },
+          "initialDelaySeconds": 5,
+          "periodSeconds": 5,
+          "timeoutSeconds": 3,
+          "failureThreshold": 3
+        },
+        "startupProbe": {
+          "httpGet": {
+            "path": "/health",
+            "port": 8080,
+            "scheme": "HTTP"
+          },
+          "initialDelaySeconds": 10,
+          "periodSeconds": 3,
+          "timeoutSeconds": 1,
+          "failureThreshold": 30
+        }
+      }],
+      "volumes": [
+        {
+          "name": "nginx-config",
+          "configMap": {
+            "name": "nginx-config",
+            "items": [
+              {
+                "key": "nginx.conf",
+                "path": "nginx.conf"
+              }
+            ]
+          }
+        },
+        {
+          "name": "nginx-cache",
+          "emptyDir": {}
+        },
+        {
+          "name": "nginx-run",
+          "emptyDir": {}
+        },
+        {
+          "name": "nginx-logs",
+          "emptyDir": {}
+        }
+      ]
+    }
+  }' \
+  --dry-run=client \
+  --output=yaml > nginx-web-secure.yaml
+```
+
+## Step 4: Review and Apply the Generated YAML
+
+Review the generated file:
+
+```bash
+cat nginx-web-secure.yaml
+```
+
+Apply the configuration:
+
+```bash
+kubectl apply --filename nginx-web-secure.yaml
+```
+
+## Step 5: Verify the Deployment
+
+Check pod status:
+
+```bash
+kubectl get pods --namespace web -l app=nginx
+```
+
+Check pod details:
+
+```bash
+kubectl describe pod nginx-web --namespace web
+```
+
+Test the health endpoint:
+
+```bash
+kubectl port-forward nginx-web 8080:8080 --namespace web &
+curl http://localhost:8080/health
+```
+
+Check security context:
+
+# Check user ID (this should work)
+kubectl exec nginx-web --namespace web -- id
+
+# Check running processes (ps may not be available in minimal images)
+kubectl exec nginx-web --namespace web -- ls -la /proc/
+
+# Alternative: Check what's running via /proc filesystem
+kubectl exec nginx-web --namespace web -- sh -c "ls -la /proc/*/exe 2>/dev/null | head -10"
+
+# Check nginx processes specifically
+kubectl exec nginx-web --namespace web -- sh -c "ls -la /proc/*/cmdline 2>/dev/null | xargs grep -l nginx 2>/dev/null | head -5"
+
+# If ps is needed, you can check what's installed
+kubectl exec nginx-web --namespace web -- sh -c "which ps || echo 'ps not available'"
+kubectl exec nginx-web --namespace web -- sh -c "which top || echo 'top not available'"
+
+## Step : Clean Up (Optional)
+
+```bash
+kubectl delete pod nginx-web --namespace web
+kubectl delete configmap nginx-config --namespace web
+kubectl delete namespace web
+rm nginx.conf nginx-web-secure.yaml
+
+
+
+## 2. **MySQL Database**
+Step 1: Create the Namespace (if not exists)
+kubectl create namespace production
+
+# Verify namespace creation
+kubectl get namespaces | grep production
+
+```bash
+kubectl run database \
+  --image=mysql:8.0 \
+  --port=3306 \
+  --restart=Never \
+  --namespace=production \
+  --labels="app=mysql,version=8.0,environment=development" \
+  --annotations="description=MySQL pod for database exploration,created-by=kubectl-advanced-deployment" \
+  --env="MYSQL_ROOT_PASSWORD=SecureRootPass123" \
+  --env="MYSQL_DATABASE=testdb" \
+  --env="MYSQL_USER=appuser" \
+  --env="MYSQL_PASSWORD=AppUserPass123" \
+  --env="ENVIRONMENT=development" \
+  --overrides='{
+    "spec": {
+      "nodeSelector": {"kubernetes.io/os": "linux"},
+      "securityContext": {
+        "runAsNonRoot": false,
+        "runAsUser": 999,
+        "runAsGroup": 999,
+        "fsGroup": 999,
+        "seccompProfile": {
+          "type": "RuntimeDefault"
+        }
+      },
+      "containers": [{
+        "name": "database",
+        "image": "mysql:8.0",
+        "ports": [{"containerPort": 3306}],
+        "env": [
+          {"name": "MYSQL_ROOT_PASSWORD", "value": "SecureRootPass123"},
+          {"name": "MYSQL_DATABASE", "value": "testdb"},
+          {"name": "MYSQL_USER", "value": "appuser"},
+          {"name": "MYSQL_PASSWORD", "value": "AppUserPass123"},
+          {"name": "ENVIRONMENT", "value": "development"}
+        ],
+        "resources": {
+          "requests": {
+            "memory": "512Mi",
+            "cpu": "500m"
+          },
+          "limits": {
+            "memory": "1Gi",
+            "cpu": "1000m"
+          }
+        },
+        "securityContext": {
+          "allowPrivilegeEscalation": false,
+          "readOnlyRootFilesystem": false,
+          "capabilities": {
+            "drop": ["ALL"],
+            "add": ["CHOWN", "DAC_OVERRIDE", "SETGID", "SETUID"]
+          }
+        },
+        "livenessProbe": {
+          "exec": {
+            "command": ["mysqladmin", "ping", "-h", "localhost", "-u", "root", "-pSecureRootPass123"]
+          },
+          "initialDelaySeconds": 60,
+          "periodSeconds": 30,
+          "timeoutSeconds": 10,
+          "successThreshold": 1,
+          "failureThreshold": 3
+        },
+        "readinessProbe": {
+          "exec": {
+            "command": ["mysql", "-h", "localhost", "-u", "root", "-pSecureRootPass123", "-e", "SELECT 1"]
+          },
+          "initialDelaySeconds": 30,
+          "periodSeconds": 10,
+          "timeoutSeconds": 5,
+          "successThreshold": 1,
+          "failureThreshold": 3
+        },
+        "startupProbe": {
+          "tcpSocket": {
+            "port": 3306
+          },
+          "initialDelaySeconds": 15,
+          "periodSeconds": 5,
+          "timeoutSeconds": 3,
+          "successThreshold": 1,
+          "failureThreshold": 20
+        },
+        "volumeMounts": [{
+          "name": "mysql-data",
+          "mountPath": "/var/lib/mysql"
+        }, {
+          "name": "mysql-config",
+          "mountPath": "/etc/mysql/conf.d",
+          "readOnly": true
+        }, {
+          "name": "mysql-init",
+          "mountPath": "/docker-entrypoint-initdb.d",
+          "readOnly": true
+        }]
+      }],
+      "volumes": [{
+        "name": "mysql-data",
+        "emptyDir": {}
+      }, {
+        "name": "mysql-config",
+        "configMap": {
+          "name": "mysql-custom-config",
+          "optional": true
+        }
+      }, {
+        "name": "mysql-init",
+        "configMap": {
+          "name": "mysql-init-scripts",
+          "optional": true
+        }
+      }]
+    }
+  }' \
+  --dry-run=client \
+  --output=yaml > database.yaml
+
+
+#Check the generated file:
+cat database.yaml
+#Apply the YAML to create the pod:
+kubectl apply --filename database.yaml
+
+#Verify the pod creation:
+kubectl get pods --namespace production
+kubectl describe pod database --namespace production
+kubectl logs pods/database --namespace production -f 
+kubectl exec -it database --namespace production -- mysql -u appuser -pAppUserPass123 testdb
+kubectl delete pods/database --namespace production
+
+
 
 # Before running this, consider: What steps must happen?
 # 1. Kubernetes must choose which server (node) will run this pod
