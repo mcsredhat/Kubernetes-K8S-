@@ -1,0 +1,85 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-with-sidecar
+  labels:
+    app: web-with-logging
+spec:
+  containers:
+  # Main application container
+  - name: web-server
+    image: nginx:1.21
+    ports:
+    - containerPort: 80
+    volumeMounts:
+    - name: shared-logs
+      mountPath: /var/log/nginx
+    - name: web-content
+      mountPath: /usr/share/nginx/html
+      
+  # Sidecar logging container
+  - name: log-processor
+    image: busybox:1.35
+    command:
+    - /bin/sh
+    - -c
+    - |
+      echo "Log processor starting..."
+      while true; do
+        echo "$(date): Processing logs..." >> /shared/processing.log
+        if [ -f /var/log/nginx/access.log ]; then
+          tail -n 5 /var/log/nginx/access.log >> /shared/recent_access.log
+        fi
+        sleep 30
+      done
+    volumeMounts:
+    - name: shared-logs
+      mountPath: /var/log/nginx
+    - name: shared-data
+      mountPath: /shared
+      
+  # Monitoring sidecar
+  - name: metrics-collector
+    image: busybox:1.35
+    command:
+    - /bin/sh
+    - -c
+    - |
+      while true; do
+        echo "$(date): Collecting metrics..." >> /shared/metrics.log
+        echo "Active connections: $(netstat -an | grep :80 | wc -l)" >> /shared/metrics.log
+        sleep 60
+      done
+    volumeMounts:
+    - name: shared-data
+      mountPath: /shared
+      
+  volumes:
+  - name: shared-logs
+    emptyDir: {}
+  - name: shared-data
+    emptyDir: {}
+  - name: web-content
+    configMap:
+      name: sidecar-content
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sidecar-content
+data:
+  index.html: |
+    <!DOCTYPE html>
+    <html>
+    <head><title>Multi-Container Pod Demo</title></head>
+    <body>
+        <h1>Web Server with Sidecars</h1>
+        <p>This pod contains:</p>
+        <ul>
+            <li>Main web server (nginx)</li>
+            <li>Log processing sidecar</li>
+            <li>Metrics collection sidecar</li>
+        </ul>
+        <p>All containers share the same network and storage!</p>
+    </body>
+    </html>

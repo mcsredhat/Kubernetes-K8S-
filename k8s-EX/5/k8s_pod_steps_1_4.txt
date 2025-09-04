@@ -1,0 +1,144 @@
+# ============================================================================
+# KUBERNETES POD PROGRESSION - STEPS 1-4
+# Cumulative Learning Progression: Each step builds upon previous steps
+# ============================================================================
+
+# ============================================================================
+# STEP 1: BASIC POD - Absolute minimum required fields
+# ============================================================================
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: basic-pod
+spec:
+  containers:
+  - name: web-server
+    image: nginx:1.25
+
+---
+# ============================================================================
+# STEP 2: BASIC POD WITH PORTS - Adding port configuration
+# Contains: Basic pod + Port definitions
+# ============================================================================
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-with-ports
+spec:
+  containers:
+  - name: web-server
+    image: nginx:1.25
+    ports:
+    - name: http
+      containerPort: 80
+      protocol: TCP
+    - name: https  
+      containerPort: 443
+      protocol: TCP
+
+---
+# ============================================================================
+# STEP 3: ADDING LABELS AND METADATA - Organization and identification
+# Contains: Basic pod + Ports + Labels/Annotations/Namespace
+# ============================================================================
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: labeled-pod
+  namespace: default
+  labels:
+    app: web-server
+    version: v1.0
+    environment: development
+  annotations:
+    description: "Web server pod with labels"
+    maintainer: "devops-team@company.com"
+spec:
+  containers:
+  - name: web-server
+    image: nginx:1.25
+    ports:
+    - name: http
+      containerPort: 80
+      protocol: TCP
+    - name: https  
+      containerPort: 443
+      protocol: TCP
+
+---
+# ============================================================================
+# STEP 4: ENVIRONMENT VARIABLES - Configuration through env vars
+# Contains: Basic pod + Ports + Labels/Annotations + Environment Variables
+# ============================================================================
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-with-env
+  namespace: default
+  labels:
+    app: web-server
+    version: v1.0
+    environment: development
+  annotations:
+    description: "Web server pod with environment variables"
+    maintainer: "devops-team@company.com"
+spec:
+  containers:
+  - name: web-server
+    image: nginx:1.25
+    ports:
+    - name: http
+      containerPort: 80
+      protocol: TCP
+    - name: https  
+      containerPort: 443
+      protocol: TCP
+    # Direct environment variables
+    env:
+    - name: SERVER_NAME
+      value: "my-web-server"
+    - name: LOG_LEVEL
+      value: "info"
+    - name: PORT
+      value: "80"
+    # Environment variable from pod metadata
+    - name: POD_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.name
+    - name: POD_NAMESPACE
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.namespace
+
+# ============================================================================
+# DEPLOYMENT COMMANDS FOR STEPS 1-4:
+# ============================================================================
+
+# Apply individual pod:
+# kubectl apply -f <filename>.yaml
+
+# Check pod status:
+# kubectl get pods
+# kubectl describe pod <pod-name>
+
+# View pod logs:
+# kubectl logs <pod-name>
+
+# Execute commands in pod:
+# kubectl exec -it <pod-name> -- /bin/bash
+
+# Delete pods:
+# kubectl delete pod <pod-name>
+
+# ============================================================================
+# FEATURES LEARNED IN STEPS 1-4:
+# ============================================================================
+# Step 1: Basic pod structure (apiVersion, kind, metadata, spec, containers)
+# Step 2: Port definitions (containerPort, protocol, name)
+# Step 3: Metadata organization (labels, annotations, namespace)
+# Step 4: Environment variables (direct values, field references)

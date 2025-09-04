@@ -605,7 +605,7 @@ kubectl exec pods/multi-container-example --container web-server -- sh -c " ls -
 # Test storage sharing - read the file from the container  called "log-processor"
  kubectl exec multi-container-example --container log-processor -- cat /shared-data/message.txt
  kubectl exec pods/multi-container-example --container log-processor -- cat /shared-data/message.txt
-  kubectl exec pods/multi-container-example --container log-processor -- cat /shared-data/list.txt
+ kubectl exec pods/multi-container-example --container log-processor -- cat /shared-data/list.txt
 
 | Part                           | Meaning                                                                                                     |
 | ------------------------------ | ----------------------------------------------------------------------------------------------------------- |

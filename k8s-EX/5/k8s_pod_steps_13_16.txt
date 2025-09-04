@@ -1,0 +1,1271 @@
+# ============================================================================
+# KUBERNETES POD PROGRESSION - STEPS 13-16
+# Cumulative Learning Progression: Each step builds upon previous steps
+# ============================================================================
+
+# ============================================================================
+# STEP 13: ADVANCED PROBES AND LIFECYCLE - Comprehensive health management
+# Contains: All previous features + Startup Probes + Lifecycle Hooks
+# ============================================================================
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: advanced-health-pod
+  namespace: default
+  labels:
+    app: web-server
+    version: v1.0
+    environment: development
+    tier: frontend
+  annotations:
+    description: "Pod with advanced health management"
+    maintainer: "devops-team@company.com"
+spec:
+  securityContext:
+    runAsUser: 1000
+    runAsGroup: 1000
+    runAsNonRoot: true
+    fsGroup: 1000
+  
+  nodeSelector:
+    kubernetes.io/os: linux
+    node-type: worker
+  
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+        - matchExpressions:
+          - key: kubernetes.io/arch
+            operator: In
+            values: ["amd64", "arm64"]
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchLabels:
+              app: web-server
+          topologyKey: kubernetes.io/hostname
+  
+  tolerations:
+  - key: "dedicated"
+    operator: "Equal"
+    value: "web-servers"
+    effect: "NoSchedule"
+  
+  initContainers:
+  - name: content-downloader
+    image: busybox:1.35
+    command: ['sh', '-c']
+    args:
+    - |
+      echo "Downloading advanced health pod content..."
+      echo "<h1>Hello from Advanced Health Pod!</h1>" > /shared/index.html
+      echo "Content download completed"
+    volumeMounts:
+    - name: shared-content
+      mountPath: /shared
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "100m"
+      limits:
+        memory: "128Mi"
+        cpu: "200m"
+  
+  containers:
+  - name: web-server
+    image: nginx:1.25
+    ports:
+    - name: http
+      containerPort: 8080
+      protocol: TCP
+    env:
+    - name: SERVER_NAME
+      value: "advanced-health-server"
+    - name: LOG_LEVEL
+      value: "info"
+    - name: POD_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.name
+    - name: POD_NAMESPACE
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.namespace
+    securityContext:
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      capabilities:
+        drop: ["ALL"]
+        add: ["NET_BIND_SERVICE"]
+    volumeMounts:
+    - name: shared-content
+      mountPath: /usr/share/nginx/html
+    - name: shared-logs
+      mountPath: /var/log/nginx
+    - name: tmp-volume
+      mountPath: /tmp
+    - name: var-cache-nginx
+      mountPath: /var/cache/nginx
+    - name: var-run
+      mountPath: /var/run
+    
+    # Startup probe - for slow-starting containers
+    startupProbe:
+      httpGet:
+        path: /
+        port: http
+      initialDelaySeconds: 10
+      periodSeconds: 5
+      timeoutSeconds: 3
+      failureThreshold: 30      # Allow 150s for startup (30 * 5s)
+      successThreshold: 1
+    
+    # Liveness probe - different probe type (TCP)
+    livenessProbe:
+      tcpSocket:
+        port: http
+      initialDelaySeconds: 30
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: 3
+      successThreshold: 1
+    
+    # Readiness probe - HTTP with custom headers
+    readinessProbe:
+      httpGet:
+        path: /health
+        port: http
+        httpHeaders:
+        - name: Accept
+          value: application/json
+        - name: User-Agent
+          value: kubernetes-probe
+      initialDelaySeconds: 5
+      periodSeconds: 5
+      timeoutSeconds: 3
+      failureThreshold: 3
+      successThreshold: 1
+    
+    # Lifecycle hooks
+    lifecycle:
+      postStart:
+        exec:
+          command:
+          - /bin/sh
+          - -c
+          - |
+            echo "Container started at $(date)" > /tmp/startup.log
+            echo "Performing post-start setup..."
+      preStop:
+        exec:
+          command:
+          - /bin/sh
+          - -c
+          - |
+            echo "Gracefully shutting down at $(date)" > /tmp/shutdown.log
+            nginx -s quit
+            sleep 15
+    
+    resources:
+      requests:
+        memory: "128Mi"
+        cpu: "250m"
+      limits:
+        memory: "256Mi"
+        cpu: "500m"
+  
+  # Log processor sidecar
+  - name: log-processor
+    image: busybox:1.35
+    command: ['sh', '-c']
+    args:
+    - |
+      while true; do
+        echo "Processing advanced health pod logs at $(date)"
+        if [ -f /logs/access.log ]; then
+          tail -n 10 /logs/access.log
+        fi
+        sleep 60
+      done
+    volumeMounts:
+    - name: shared-logs
+      mountPath: /logs
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "100m"
+      limits:
+        memory: "128Mi"
+        cpu: "200m"
+  
+  volumes:
+  - name: shared-content
+    emptyDir: {}
+  - name: shared-logs
+    emptyDir: {}
+  - name: tmp-volume
+    emptyDir: {}
+  - name: var-cache-nginx
+    emptyDir: {}
+  - name: var-run
+    emptyDir: {}
+
+---
+# ============================================================================
+# STEP 14: SERVICE ACCOUNTS AND RBAC - Authentication and Authorization
+# Contains: All previous features + Service Accounts + RBAC
+# ============================================================================
+
+# ServiceAccount definition (prerequisite)
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: web-server-sa
+  namespace: default
+automountServiceAccountToken: true
+
+---
+# ClusterRole definition (prerequisite)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: web-server-role
+rules:
+- apiGroups: [""]
+  resources: ["pods", "services", "configmaps"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["apps"]
+  resources: ["deployments"]
+  verbs: ["get", "list"]
+
+---
+# ClusterRoleBinding definition (prerequisite)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: web-server-binding
+subjects:
+- kind: ServiceAccount
+  name: web-server-sa
+  namespace: default
+roleRef:
+  kind: ClusterRole
+  name: web-server-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# Pod with ServiceAccount
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-with-serviceaccount
+  namespace: default
+  labels:
+    app: web-server
+    version: v1.0
+    environment: development
+    tier: frontend
+  annotations:
+    description: "Pod with ServiceAccount and RBAC"
+    maintainer: "devops-team@company.com"
+spec:
+  # Service Account
+  serviceAccountName: web-server-sa
+  automountServiceAccountToken: true
+  
+  securityContext:
+    runAsUser: 1000
+    runAsGroup: 1000
+    runAsNonRoot: true
+    fsGroup: 1000
+  
+  nodeSelector:
+    kubernetes.io/os: linux
+    node-type: worker
+  
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+        - matchExpressions:
+          - key: kubernetes.io/arch
+            operator: In
+            values: ["amd64", "arm64"]
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchLabels:
+              app: web-server
+          topologyKey: kubernetes.io/hostname
+  
+  tolerations:
+  - key: "dedicated"
+    operator: "Equal"
+    value: "web-servers"
+    effect: "NoSchedule"
+  
+  initContainers:
+  - name: content-downloader
+    image: busybox:1.35
+    command: ['sh', '-c']
+    args:
+    - |
+      echo "Downloading ServiceAccount pod content..."
+      echo "<h1>Hello from ServiceAccount Pod!</h1>" > /shared/index.html
+      echo "Content download completed"
+    volumeMounts:
+    - name: shared-content
+      mountPath: /shared
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "100m"
+      limits:
+        memory: "128Mi"
+        cpu: "200m"
+  
+  containers:
+  - name: web-server
+    image: nginx:1.25
+    ports:
+    - name: http
+      containerPort: 8080
+      protocol: TCP
+    env:
+    - name: SERVER_NAME
+      value: "serviceaccount-server"
+    - name: LOG_LEVEL
+      value: "info"
+    - name: POD_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.name
+    - name: POD_NAMESPACE
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.namespace
+    - name: SERVICE_ACCOUNT
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.serviceAccountName
+    securityContext:
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      capabilities:
+        drop: ["ALL"]
+        add: ["NET_BIND_SERVICE"]
+    volumeMounts:
+    - name: shared-content
+      mountPath: /usr/share/nginx/html
+    - name: shared-logs
+      mountPath: /var/log/nginx
+    - name: tmp-volume
+      mountPath: /tmp
+    - name: var-cache-nginx
+      mountPath: /var/cache/nginx
+    - name: var-run
+      mountPath: /var/run
+    startupProbe:
+      httpGet:
+        path: /
+        port: http
+      initialDelaySeconds: 10
+      periodSeconds: 5
+      timeoutSeconds: 3
+      failureThreshold: 30
+      successThreshold: 1
+    livenessProbe:
+      tcpSocket:
+        port: http
+      initialDelaySeconds: 30
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: 3
+      successThreshold: 1
+    readinessProbe:
+      httpGet:
+        path: /
+        port: http
+        httpHeaders:
+        - name: Accept
+          value: application/json
+        - name: User-Agent
+          value: kubernetes-probe
+      initialDelaySeconds: 5
+      periodSeconds: 5
+      timeoutSeconds: 3
+      failureThreshold: 3
+      successThreshold: 1
+    lifecycle:
+      postStart:
+        exec:
+          command:
+          - /bin/sh
+          - -c
+          - |
+            echo "ServiceAccount container started at $(date)" > /tmp/startup.log
+            echo "Performing post-start setup..."
+      preStop:
+        exec:
+          command:
+          - /bin/sh
+          - -c
+          - |
+            echo "Gracefully shutting down at $(date)" > /tmp/shutdown.log
+            nginx -s quit
+            sleep 15
+    resources:
+      requests:
+        memory: "128Mi"
+        cpu: "250m"
+      limits:
+        memory: "256Mi"
+        cpu: "500m"
+  
+  # API client sidecar that uses ServiceAccount permissions
+  - name: api-client
+    image: bitnami/kubectl:latest
+    command: ['sh', '-c']
+    args:
+    - |
+      while true; do
+        echo "API client running at $(date)"
+        kubectl get pods --namespace=default
+        sleep 300  # Check every 5 minutes
+      done
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "100m"
+      limits:
+        memory: "128Mi"
+        cpu: "200m"
+  
+  # Log processor sidecar
+  - name: log-processor
+    image: busybox:1.35
+    command: ['sh', '-c']
+    args:
+    - |
+      while true; do
+        echo "Processing ServiceAccount pod logs at $(date)"
+        if [ -f /logs/access.log ]; then
+          tail -n 10 /logs/access.log
+        fi
+        sleep 60
+      done
+    volumeMounts:
+    - name: shared-logs
+      mountPath: /logs
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "100m"
+      limits:
+        memory: "128Mi"
+        cpu: "200m"
+  
+  volumes:
+  - name: shared-content
+    emptyDir: {}
+  - name: shared-logs
+    emptyDir: {}
+  - name: tmp-volume
+    emptyDir: {}
+  - name: var-cache-nginx
+    emptyDir: {}
+  - name: var-run
+    emptyDir: {}
+
+---
+# ============================================================================
+# STEP 15: POD DISRUPTION BUDGETS AND PRIORITY - Availability and Scheduling
+# Contains: All previous features + PodDisruptionBudget + PriorityClass
+# ============================================================================
+
+# PriorityClass definition (prerequisite)
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: high-priority-web
+value: 1000
+globalDefault: false
+description: "High priority class for critical web servers"
+
+---
+# PodDisruptionBudget definition (prerequisite)
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: web-server-pdb
+  namespace: default
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: web-server
+      tier: frontend
+
+---
+# Pod with Priority and PDB
+apiVersion: v1
+kind: Pod
+metadata:
+  name: priority-protected-pod
+  namespace: default
+  labels:
+    app: web-server
+    version: v1.0
+    environment: development
+    tier: frontend
+  annotations:
+    description: "Pod with priority and disruption protection"
+    maintainer: "devops-team@company.com"
+spec:
+  serviceAccountName: web-server-sa
+  automountServiceAccountToken: true
+  
+  # Pod priority and scheduling settings
+  priority: 1000
+  priorityClassName: high-priority-web
+  restartPolicy: Always
+  terminationGracePeriodSeconds: 60
+  
+  securityContext:
+    runAsUser: 1000
+    runAsGroup: 1000
+    runAsNonRoot: true
+    fsGroup: 1000
+  
+  nodeSelector:
+    kubernetes.io/os: linux
+    node-type: worker
+  
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+        - matchExpressions:
+          - key: kubernetes.io/arch
+            operator: In
+            values: ["amd64", "arm64"]
+    podAntiAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+      - labelSelector:
+          matchLabels:
+            app: web-server
+        topologyKey: kubernetes.io/hostname
+  
+  tolerations:
+  - key: "dedicated"
+    operator: "Equal"
+    value: "web-servers"
+    effect: "NoSchedule"
+  - key: "node.kubernetes.io/memory-pressure"
+    operator: "Exists"
+    effect: "NoExecute"
+    tolerationSeconds: 300
+  
+  initContainers:
+  - name: content-downloader
+    image: busybox:1.35
+    command: ['sh', '-c']
+    args:
+    - |
+      echo "Downloading priority protected pod content..."
+      echo "<h1>Hello from Priority Protected Pod!</h1>" > /shared/index.html
+      echo "Content download completed"
+    volumeMounts:
+    - name: shared-content
+      mountPath: /shared
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "100m"
+      limits:
+        memory: "128Mi"
+        cpu: "200m"
+  
+  containers:
+  - name: web-server
+    image: nginx:1.25
+    ports:
+    - name: http
+      containerPort: 8080
+      protocol: TCP
+    env:
+    - name: SERVER_NAME
+      value: "priority-protected-server"
+    - name: LOG_LEVEL
+      value: "info"
+    - name: POD_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.name
+    - name: POD_NAMESPACE
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.namespace
+    - name: SERVICE_ACCOUNT
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.serviceAccountName
+    - name: PRIORITY_CLASS
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.priorityClassName
+    securityContext:
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      capabilities:
+        drop: ["ALL"]
+        add: ["NET_BIND_SERVICE"]
+    volumeMounts:
+    - name: shared-content
+      mountPath: /usr/share/nginx/html
+    - name: shared-logs
+      mountPath: /var/log/nginx
+    - name: tmp-volume
+      mountPath: /tmp
+    - name: var-cache-nginx
+      mountPath: /var/cache/nginx
+    - name: var-run
+      mountPath: /var/run
+    startupProbe:
+      httpGet:
+        path: /
+        port: http
+      initialDelaySeconds: 10
+      periodSeconds: 5
+      timeoutSeconds: 3
+      failureThreshold: 30
+      successThreshold: 1
+    livenessProbe:
+      tcpSocket:
+        port: http
+      initialDelaySeconds: 30
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: 3
+      successThreshold: 1
+    readinessProbe:
+      httpGet:
+        path: /
+        port: http
+        httpHeaders:
+        - name: Accept
+          value: application/json
+        - name: User-Agent
+          value: kubernetes-probe
+      initialDelaySeconds: 5
+      periodSeconds: 5
+      timeoutSeconds: 3
+      failureThreshold: 3
+      successThreshold: 1
+    lifecycle:
+      postStart:
+        exec:
+          command:
+          - /bin/sh
+          - -c
+          - |
+            echo "Priority protected container started at $(date)" > /tmp/startup.log
+            echo "Performing post-start setup..."
+      preStop:
+        exec:
+          command:
+          - /bin/sh
+          - -c
+          - |
+            echo "Gracefully shutting down at $(date)" > /tmp/shutdown.log
+            nginx -s quit
+            sleep 15
+    resources:
+      requests:
+        memory: "128Mi"
+        cpu: "250m"
+        ephemeral-storage: "1Gi"
+      limits:
+        memory: "256Mi"
+        cpu: "500m"
+        ephemeral-storage: "2Gi"
+  
+  # API client sidecar
+  - name: api-client
+    image: bitnami/kubectl:latest
+    command: ['sh', '-c']
+    args:
+    - |
+      while true; do
+        echo "Priority API client running at $(date)"
+        kubectl get pods --namespace=default
+        sleep 300
+      done
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "100m"
+      limits:
+        memory: "128Mi"
+        cpu: "200m"
+  
+  # Log processor sidecar
+  - name: log-processor
+    image: busybox:1.35
+    command: ['sh', '-c']
+    args:
+    - |
+      while true; do
+        echo "Processing priority pod logs at $(date)"
+        if [ -f /logs/access.log ]; then
+          tail -n 10 /logs/access.log
+        fi
+        sleep 60
+      done
+    volumeMounts:
+    - name: shared-logs
+      mountPath: /logs
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "100m"
+      limits:
+        memory: "128Mi"
+        cpu: "200m"
+  
+  volumes:
+  - name: shared-content
+    emptyDir: {}
+  - name: shared-logs
+    emptyDir: {}
+  - name: tmp-volume
+    emptyDir: {}
+  - name: var-cache-nginx
+    emptyDir: {}
+  - name: var-run
+    emptyDir: {}
+
+---
+# ============================================================================
+# STEP 16: COMPLETE ADVANCED POD - All features combined
+# Contains: ALL FEATURES from Steps 1-15 in a single production-ready pod
+# ============================================================================
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: production-complete-pod
+  namespace: default
+  labels:
+    app: web-server
+    version: v2.0
+    tier: frontend
+    environment: production
+    component: web-application
+  annotations:
+    description: "Production web server with all advanced features"
+    maintainer: "platform-team@company.com"
+    deployment.kubernetes.io/revision: "1"
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9090"
+    prometheus.io/path: "/metrics"
+spec:
+  # Service Account and RBAC
+  serviceAccountName: web-server-sa
+  automountServiceAccountToken: true
+  
+  # Pod-level settings
+  restartPolicy: Always
+  terminationGracePeriodSeconds: 60
+  dnsPolicy: ClusterFirst
+  priority: 1000
+  priorityClassName: high-priority-web
+  
+  # Pod security context
+  securityContext:
+    runAsUser: 1001
+    runAsGroup: 1001
+    runAsNonRoot: true
+    fsGroup: 1001
+    seccompProfile:
+      type: RuntimeDefault
+  
+  # Node selection
+  nodeSelector:
+    kubernetes.io/os: linux
+    node.kubernetes.io/instance-type: m5.large
+  
+  # Advanced scheduling
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+        - matchExpressions:
+          - key: kubernetes.io/arch
+            operator: In
+            values: ["amd64"]
+          - key: node-role.kubernetes.io/worker
+            operator: Exists
+      preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        preference:
+          matchExpressions:
+          - key: topology.kubernetes.io/zone
+            operator: In
+            values: ["us-west-2a", "us-west-2b"]
+    podAntiAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+      - labelSelector:
+          matchExpressions:
+          - key: app
+            operator: In
+            values: ["web-server"]
+        topologyKey: kubernetes.io/hostname
+  
+  # Tolerations
+  tolerations:
+  - key: "dedicated"
+    operator: "Equal"
+    value: "frontend"
+    effect: "NoSchedule"
+  - key: "node.kubernetes.io/memory-pressure"
+    operator: "Exists"
+    effect: "NoExecute"
+    tolerationSeconds: 300
+  
+  # Topology spread constraints
+  topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: topology.kubernetes.io/zone
+    whenUnsatisfiable: DoNotSchedule
+    labelSelector:
+      matchLabels:
+        app: web-server
+  
+  # Init containers
+  initContainers:
+  # Database migration
+  - name: migration
+    image: migrate/migrate:v4.15.2
+    command: ['migrate']
+    args: ['-path', '/migrations', '-database', 'postgres://user:pass@db:5432/myapp', 'up']
+    env:
+    - name: DATABASE_URL
+      valueFrom:
+        secretKeyRef:
+          name: database-secret
+          key: url
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "100m"
+      limits:
+        memory: "128Mi"
+        cpu: "200m"
+  
+  # Configuration validator
+  - name: config-validator
+    image: busybox:1.35
+    command: ['sh', '-c']
+    args:
+    - |
+      echo "Validating production configuration..."
+      if [ ! -f /config/app.yaml ]; then
+        echo "Error: Configuration file not found"
+        exit 1
+      fi
+      echo "Configuration validation passed"
+    volumeMounts:
+    - name: app-config
+      mountPath: /config
+    resources:
+      requests:
+        memory: "32Mi"
+        cpu: "50m"
+      limits:
+        memory: "64Mi"
+        cpu: "100m"
+  
+  # Content downloader
+  - name: content-downloader
+    image: busybox:1.35
+    command: ['sh', '-c']
+    args:
+    - |
+      echo "Downloading production content..."
+      echo "<h1>Production Complete Pod - All Features!</h1>" > /shared/index.html
+      echo "<p>This pod demonstrates ALL Kubernetes pod features.</p>" >> /shared/index.html
+      echo "Content download completed"
+    volumeMounts:
+    - name: shared-content
+      mountPath: /shared
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "100m"
+      limits:
+        memory: "128Mi"
+        cpu: "200m"
+  
+  # Main containers
+  containers:
+  # Primary application container
+  - name: web-server
+    image: nginx:1.25.3
+    imagePullPolicy: IfNotPresent
+    
+    # Ports
+    ports:
+    - name: http
+      containerPort: 8080
+      protocol: TCP
+    - name: https
+      containerPort: 8443
+      protocol: TCP
+    - name: metrics
+      containerPort: 9090
+      protocol: TCP
+    
+    # Environment variables
+    env:
+    - name: NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
+    - name: POD_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.name
+    - name: POD_NAMESPACE
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.namespace
+    - name: POD_IP
+      valueFrom:
+        fieldRef:
+          fieldPath: status.podIP
+    - name: SERVICE_ACCOUNT
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.serviceAccountName
+    - name: CPU_REQUEST
+      valueFrom:
+        resourceFieldRef:
+          resource: requests.cpu
+    - name: MEMORY_REQUEST
+      valueFrom:
+        resourceFieldRef:
+          resource: requests.memory
+    - name: SERVER_NAME
+      value: "production-complete-server"
+    - name: LOG_LEVEL
+      value: "info"
+    
+    # Environment from ConfigMap and Secret
+    envFrom:
+    - configMapRef:
+        name: app-config
+    - secretRef:
+        name: app-secrets
+    
+    # Volume mounts
+    volumeMounts:
+    - name: app-config
+      mountPath: /etc/nginx/conf.d
+      readOnly: true
+    - name: ssl-certs
+      mountPath: /etc/ssl/certs
+      readOnly: true
+    - name: shared-content
+      mountPath: /usr/share/nginx/html
+    - name: logs
+      mountPath: /var/log/nginx
+    - name: cache
+      mountPath: /var/cache/nginx
+    - name: tmp
+      mountPath: /tmp
+    - name: run
+      mountPath: /var/run
+    
+    # Security context
+    securityContext:
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      capabilities:
+        drop: ["ALL"]
+        add: ["NET_BIND_SERVICE"]
+    
+    # Health probes
+    startupProbe:
+      httpGet:
+        path: /
+        port: http
+        httpHeaders:
+        - name: Accept
+          value: application/json
+      initialDelaySeconds: 10
+      periodSeconds: 5
+      timeoutSeconds: 3
+      failureThreshold: 30
+      successThreshold: 1
+    
+    livenessProbe:
+      httpGet:
+        path: /
+        port: http
+      initialDelaySeconds: 30
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: 3
+      successThreshold: 1
+      terminationGracePeriodSeconds: 30
+    
+    readinessProbe:
+      httpGet:
+        path: /
+        port: http
+      initialDelaySeconds: 5
+      periodSeconds: 5
+      timeoutSeconds: 3
+      failureThreshold: 3
+      successThreshold: 1
+    
+    # Lifecycle hooks
+    lifecycle:
+      postStart:
+        exec:
+          command: ["/bin/sh", "-c", "echo 'Production container started at $(date)' > /tmp/startup.log"]
+      preStop:
+        exec:
+          command: ["/bin/sh", "-c", "nginx -s quit && sleep 10"]
+    
+    # Resources
+    resources:
+      requests:
+        memory: "256Mi"
+        cpu: "500m"
+        ephemeral-storage: "1Gi"
+      limits:
+        memory: "512Mi"
+        cpu: "1000m"
+        ephemeral-storage: "2Gi"
+  
+  # Sidecar container - metrics exporter
+  - name: metrics-exporter
+    image: prom/nginx-exporter:0.10.0
+    ports:
+    - name: metrics
+      containerPort: 9113
+      protocol: TCP
+    args:
+    - '-nginx.scrape-uri=http://localhost:8080/nginx_status'
+    livenessProbe:
+      httpGet:
+        path: /metrics
+        port: metrics
+      initialDelaySeconds: 15
+      periodSeconds: 30
+    readinessProbe:
+      httpGet:
+        path: /metrics
+        port: metrics
+      initialDelaySeconds: 5
+      periodSeconds: 10
+    resources:
+      requests:
+        memory: "32Mi"
+        cpu: "50m"
+      limits:
+        memory: "64Mi"
+        cpu: "100m"
+  
+  # Sidecar container - log shipper
+  - name: log-shipper
+    image: fluent/fluent-bit:2.1.8
+    volumeMounts:
+    - name: logs
+      mountPath: /var/log
+      readOnly: true
+    - name: fluent-bit-config
+      mountPath: /fluent-bit/etc
+      readOnly: true
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "100m"
+      limits:
+        memory: "128Mi"
+        cpu: "200m"
+  
+  # API client sidecar
+  - name: api-client
+    image: bitnami/kubectl:latest
+    command: ['sh', '-c']
+    args:
+    - |
+      while true; do
+        echo "Production API client running at $(date)"
+        kubectl get pods --namespace=default
+        sleep 300
+      done
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "100m"
+      limits:
+        memory: "128Mi"
+        cpu: "200m"
+  
+  # Volumes
+  volumes:
+  - name: app-config
+    configMap:
+      name: nginx-config
+      defaultMode: 0644
+  
+  - name: ssl-certs
+    secret:
+      secretName: ssl-certificates
+      defaultMode: 0600
+  
+  - name: fluent-bit-config
+    configMap:
+      name: fluent-bit-config
+  
+  - name: shared-content
+    emptyDir: {}
+  
+  - name: logs
+    emptyDir:
+      sizeLimit: 1Gi
+  
+  - name: cache
+    emptyDir:
+      sizeLimit: 500Mi
+  
+  - name: tmp
+    emptyDir:
+      medium: Memory
+      sizeLimit: 128Mi
+  
+  - name: run
+    emptyDir:
+      medium: Memory
+      sizeLimit: 64Mi
+  
+  # Image pull secrets
+  imagePullSecrets:
+  - name: private-registry-secret
+
+# ============================================================================
+# DEPLOYMENT COMMANDS FOR STEPS 13-16:
+# ============================================================================
+
+# Prerequisites - Create all required resources:
+# kubectl create configmap app-config --from-literal=server_name=production-server
+# kubectl create secret generic app-secrets --from-literal=api_key=secret123
+# kubectl create secret generic database-secret --from-literal=url=postgres://user:pass@db/myapp
+# kubectl create secret generic ssl-certificates --from-file=tls.crt --from-file=tls.key
+# kubectl create secret docker-registry private-registry-secret --docker-server=my-registry.com --docker-username=user --docker-password=pass
+
+# Apply RBAC resources:
+# kubectl apply -f serviceaccount.yaml
+# kubectl apply -f clusterrole.yaml  
+# kubectl apply -f clusterrolebinding.yaml
+
+# Apply scheduling resources:
+# kubectl apply -f priorityclass.yaml
+# kubectl apply -f poddisruptionbudget.yaml
+
+# Apply the pods:
+# kubectl apply -f <filename>.yaml
+
+# Monitor startup probes:
+# kubectl describe pod advanced-health-pod | grep -A 10 "Startup:"
+
+# Check ServiceAccount permissions:
+# kubectl auth can-i get pods --as=system:serviceaccount:default:web-server-sa
+
+# Test PodDisruptionBudget:
+# kubectl get pdb web-server-pdb
+
+# Monitor priority scheduling:
+# kubectl get pods -o wide --sort-by=.spec.priority
+
+# Check all container logs:
+# kubectl logs production-complete-pod -c web-server
+# kubectl logs production-complete-pod -c metrics-exporter
+# kubectl logs production-complete-pod -c log-shipper
+# kubectl logs production-complete-pod -c api-client
+
+# ============================================================================
+# COMPLETE FEATURES SUMMARY (Steps 1-16):
+# ============================================================================
+
+# BASIC FEATURES (Steps 1-4):
+# - Basic pod structure (apiVersion, kind, metadata, spec)
+# - Port definitions (containerPort, protocol, name)
+# - Metadata organization (labels, annotations, namespace)
+# - Environment variables (direct values, field references)
+
+# RESOURCE & CONFIGURATION (Steps 5-8):
+# - Resource management (requests, limits for CPU/memory)
+# - External configuration (ConfigMaps, Secrets)
+# - Storage management (volumes, volumeMounts, various types)
+# - Health monitoring (liveness, readiness probes)
+
+# ADVANCED CONTAINER FEATURES (Steps 9-12):
+# - Init containers (setup tasks before main containers)
+# - Security contexts (user/group IDs, capabilities, read-only filesystem)
+# - Multi-container pods (main container + sidecars)
+# - Advanced scheduling (nodeSelector, affinity, anti-affinity, tolerations)
+
+# ADVANCED POD FEATURES (Steps 13-16):
+# - Comprehensive health management (startup probes, lifecycle hooks)
+# - Authentication & authorization (ServiceAccounts, RBAC)
+# - Availability & priority (PodDisruptionBudgets, PriorityClass)
+# - Production-ready combination (all features integrated)
+
+# ============================================================================
+# PRODUCTION BEST PRACTICES DEMONSTRATED:
+# ============================================================================
+
+# 1. SECURITY:
+#    - Non-root user execution
+#    - Read-only root filesystem
+#    - Minimal capabilities
+#    - ServiceAccount with RBAC
+
+# 2. RELIABILITY:
+#    - Comprehensive health checks (startup, liveness, readiness)
+#    - Graceful shutdown with lifecycle hooks
+#    - Resource requests and limits
+#    - Pod disruption budgets
+
+# 3. OBSERVABILITY:
+#    - Structured logging with log shipping
+#    - Metrics exposure and collection
+#    - Proper labeling and annotations
+#    - Multiple monitoring sidecars
+
+# 4. SCALABILITY:
+#    - Anti-affinity for distribution
+#    - Resource management
+#    - Priority-based scheduling
+#    - Topology spread constraints
+
+# 5. MAINTAINABILITY:
+#    - Configuration externalization
+#    - Clear separation of concerns
+#    - Comprehensive documentation
+#    - Version tracking in labels
+
+# This progression provides a complete learning path from basic pods
+# to production-ready, enterprise-grade Kubernetes pod configurations.
+  

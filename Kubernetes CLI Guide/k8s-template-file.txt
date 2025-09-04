@@ -1,0 +1,772 @@
+=======================================================================
+# TABLE OF CONTENTS - PRODUCTION KUBERNETES APPLICATION
+This comprehensive configuration file contains all the resources needed for a production-ready Kubernetes application. Each section is marked and can be modified independently.
+=======================================================================# SECTION 1: DEPLOYMENT (Lines ~80-200)
+=======================================================================# Purpose: Defines how your application runs inside Kubernetes
+# Contains:
+#   • Main Container: nginx:1.21 serving your web application
+#     - Resource Limits: 256Mi memory, 200m CPU maximum  
+#     - Health Checks: Liveness and readiness probes on /health
+#     - Security: Runs as non-root user (1000), read-only filesystem
+#     - Storage: Mounts persistent data, config, and cache volumes
+#   • Sidecar Container: nginx-prometheus-exporter for metrics
+#     - Exports nginx statistics to port 9113 for monitoring
+#     - Lightweight: Only 64Mi memory, 50m CPU maximum
+#   • Pod Configuration:
+#     - 3 replicas for high availability
+#     - Rolling update strategy (1 unavailable, 1 surge max)
+#     - Anti-affinity rules spread pods across different nodes
+=======================================================================# SECTION 2: CONFIGURATION (Lines ~200-280) 
+=======================================================================# Purpose: nginx.conf file that configures web server behaviour
+# Contains:
+#   • Main Server Block: Serves static files from /usr/share/nginx/html
+#     - Security headers: X-Frame-Options, X-XSS-Protection, etc.
+#     - Fallback routing: All requests serve index.html (SPA support)
+#   • Health Endpoints:
+#     - /health: Simple "healthy" response for Kubernetes probes
+#     - /ready: Readiness check endpoint for load balancer
+#   • Monitoring Endpoint:
+#     - /nginx_status: Exposes nginx metrics (localhost only)
+#   • Enhanced Logging: Detailed access logs with response times
+=======================================================================
+# SECTION 3: STORAGE (Lines ~280-300)
+=======================================================================
+# Purpose: Persistent data storage that survives pod restarts
+# Contains:
+#   • PersistentVolumeClaim: 10GB of persistent storage
+#     - Access Mode: ReadWriteOnce (single node attachment)
+#     - Storage Class: 'standard' (adjust based on your cluster)
+#     - Mounted at: /var/lib/app in application containers
+#   • Use Cases: User uploads, application data, database files
+======================================================================
+# SECTION 4: SERVICE (Lines~300-340)
+==============================================================
+# Purpose: Internal networking that connects pods to each other
+# Contains:
+#   • ClusterIP Service: Internal load balancer for pod traffic
+#     - Port 80: Routes HTTP traffic to application containers
+#     - Port 9113: Routes monitoring requests to the metrics exporter
+#   • Service Discovery: Other pods can reach your app at 
+#     'production-ready-app-service.production.svc.cluster.local'
+#   • Load Balancing: Distributes requests across healthy pod replicas
+=======================================================================
+# SECTION 5: INGRESS (Lines ~340-420)
+=======================================================================
+# Purpose: External access point that exposes your app to the internet
+# Contains:
+#   • TLS Configuration: 
+#     - Automatic HTTPS certificates via cert-manager
+#     - Supports both app.yourdomain.com and www.yourdomain.com
+#   • Security Features:
+#     - Force HTTPS redirects, modern TLS protocols only
+#     - Rate limiting: 100 requests per minute per IP
+#     - Security headers: HSTS, CSP, XSS protection
+#   • Performance Optimisations:
+#     - 60-second timeouts, 10MB request size limit
+#     - Connection pooling and keep-alive settings
+=======================================================================# SECTION 6: NETWORK POLICY (Lines ~420-550)
+=======================================================================
+# Purpose: Firewall rules that control pod-to-pod communication
+# Contains Three Complementary Policies:
+#   • 6A - Ingress Policy: Controls INCOMING traffic
+#     - Allows: Ingress controller, same namespace, monitoring
+#     - Blocks: All other inbound connections
+#   • 6B - Egress Policy: Controls OUTGOING traffic  
+#     - Allows: DNS resolution, same namespace, HTTPS/HTTP
+#     - Blocks: All other outbound connections
+#   • 6C - Deny-All Policy: Default security baseline
+#     - Blocks: Everything by default (other policies override)
+#     - Philosophy: "Deny by default, allow by exception"
+=======================================================================# SECTION 7: MONITORING (Lines ~550-590)
+=======================================================================
+# Purpose: Enables Prometheus to collect application metrics
+# Contains:
+#   • ServiceMonitor: Tells Prometheus how to scrape metrics
+#     - Target: Scrapes port 9113 every 30 seconds
+#     - Path: Collects data from the/metrics endpoint
+#     - Labels: Adds service metadata to collected metrics
+#   • Metric Customisation: Relabels nginx metrics for better organisation
+#   • Integration: Works with Prometheus Operator for automatic discovery
+
+=======================================================================
+# SECTION 8: AUTOSCALING (Lines ~590-650)
+======================================================================
+# Purpose: Automatically adjusts pod count based on resource usage
+# Contains:
+#   • Scaling Triggers:
+#     - CPU: Scale up when average usage > 70%
+#     - Memory: Scale up when average usage > 80%
+#   • Scaling Limits: Between 3 pods (minimum) and 10 pods (maximum)
+#   • Scaling Behavior:
+#     - Scale Up: Max 50% increase or 2 pods, wait 60 seconds
+#     - Scale Down: Max 25% decrease, wait 5 minutes (stability)
+#   • Cost Control: Prevents unlimited scaling while maintaining performance
+======================================================================
+# QUICK CUSTOMIZATION GUIDE:
+=======================================================================
+# Essential Changes for Your Environment:
+# - Line ~380: Replace 'app.yourdomain.com' with your actual domain
+# - Line ~385: Replace 'www.yourdomain.com' with your www subdomain  
+# - Line ~130: Adjust memory/CPU limits based on your app requirements
+# - Line ~630: Tune autoscaling thresholds based on your traffic patterns
+# - Line ~480: Update 'ingress-nginx' namespace to match your setup
+# - Line ~495: Update 'monitoring' namespace to match your Prometheus
+======================================================================
+# PREREQUISITES AND DEPENDENCIES:
+======================================================================
+# Your cluster must have these components installed:
+# - Nginx Ingress Controller: Handles external traffic routing
+# - Cert-manager: Manages TLS certificates automatically  
+# - Prometheus Operator: Enables monitoring (optional but recommended)
+# - Storage Class 'standard': Provides persistent volumes
+# - Network Policy Support: CNI plugin must support NetworkPolicies
+#
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+======================================================================
+# SECTION 1: DEPLOYMENT - Main application deployment with monitoring sidecar
+# This section defines the core application deployment with nginx and 
+# prometheus monitoring capabilities. The deployment uses rolling updates
+# and includes comprehensive health checks and resource management.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: production-ready-app              # Deployment name
+  namespace: production                   # Target namespace
+  labels:                                 # Labels for this Deployment
+    app: production-ready-app
+    version: v1.0.0
+    environment: production
+  annotations:
+    prometheus.io/scrape: "true"          # Enable Prometheus scraping
+    prometheus.io/port: "9113"            # Metrics port for nginx-prometheus-exporter
+    prometheus.io/path: "/metrics"        # Metrics endpoint path
+spec:
+  replicas: 3                            # Number of pod instances to run
+  strategy:
+    type: RollingUpdate                  # Update pods gradually
+    rollingUpdate:
+      maxUnavailable: 1                  # Max pods unavailable during update
+      maxSurge: 1                        # Max extra pods during update
+  selector:
+    matchLabels:
+      app: production-ready-app
+  template:
+    metadata:
+      labels:
+        app: production-ready-app
+        version: v1.0.0
+      annotations:
+        prometheus.io/scrape: "true"      # Enable pod-level scraping
+        prometheus.io/port: "9113"        # Metrics port
+        prometheus.io/path: "/metrics"    # Metrics endpoint
+    spec:
+      containers:
+      # MAIN APPLICATION CONTAINER: Serves the web application
+      - name: app                        
+        image: nginx:1.21                
+        ports:
+        - containerPort: 80              
+          name: http                     
+        resources:
+          requests:                      
+            memory: "128Mi"              
+            cpu: "100m"                  
+          limits:                        
+            memory: "256Mi"              
+            cpu: "200m"                  
+        volumeMounts:
+        - name: app-data                 
+          mountPath: /var/lib/app
+        - name: nginx-config             
+          mountPath: /etc/nginx/nginx.conf
+          subPath: nginx.conf
+          readOnly: true                 
+        - name: cache-volume             
+          mountPath: /var/cache/nginx
+        livenessProbe:
+          httpGet:                       
+            path: /health                # Use dedicated health endpoint
+            port: 80                     
+          initialDelaySeconds: 30        
+          periodSeconds: 10              
+          timeoutSeconds: 5              
+          failureThreshold: 3            
+        readinessProbe:
+          httpGet:                       
+            path: /health                # Use dedicated health endpoint
+            port: 80                     
+          initialDelaySeconds: 5         
+          periodSeconds: 5               
+          timeoutSeconds: 3              
+          failureThreshold: 2            
+        env:
+        - name: ENVIRONMENT              
+          value: "production"
+        - name: LOG_LEVEL                
+          value: "INFO"
+        securityContext:
+          allowPrivilegeEscalation: false 
+          readOnlyRootFilesystem: true    
+          runAsNonRoot: true              
+          runAsUser: 1000                 
+
+
+
+
+      # MONITORING SIDECAR: Exports nginx metrics to Prometheus
+      - name: nginx-exporter             
+        image: nginx/nginx-prometheus-exporter:0.10.0  
+        ports:
+        - containerPort: 9113            
+          name: metrics                  
+        args:
+        - -nginx.scrape-uri=http://localhost/nginx_status  
+        resources:
+          requests:
+            memory: "32Mi"               
+            cpu: "10m"                   
+          limits:
+            memory: "64Mi"               
+            cpu: "50m"                   
+        livenessProbe:
+          httpGet:
+            path: /metrics               
+            port: 9113
+          initialDelaySeconds: 15        
+          periodSeconds: 30              
+        readinessProbe:
+          httpGet:
+            path: /metrics               
+            port: 9113
+          initialDelaySeconds: 5         
+          periodSeconds: 10              
+
+      volumes:
+      - name: app-data                   
+        persistentVolumeClaim:
+          claimName: app-data-pvc        
+      - name: nginx-config               
+        configMap:
+          name: nginx-config             
+          items:
+          - key: nginx.conf              
+            path: nginx.conf             
+      - name: cache-volume               
+        emptyDir: {}                     
+
+      securityContext:
+        fsGroup: 2000                    
+      
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100                  
+            podAffinityTerm:
+              labelSelector:             
+                matchExpressions:
+                - key: app               
+                  operator: In
+                  values:
+                  - production-ready-app
+              topologyKey: kubernetes.io/hostname 
+
+======================================================================# SECTION 2: CONFIGURATION - Nginx configuration with monitoring endpoints
+# This ConfigMap contains the nginx configuration that enables both 
+# application serving and monitoring capabilities. It includes status 
+# endpoints required for Prometheus metrics collection.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-config
+  namespace: production
+  labels:
+    app: production-ready-app
+data:
+  nginx.conf: |
+    events {
+        worker_connections 1024;
+    }
+    http {
+        include       /etc/nginx/mime.types;
+        default_type  application/octet-stream;
+        
+        # ENHANCED LOGGING: Detailed logs for monitoring and debugging
+        log_format main '$remote_addr - $remote_user [$time_local] "$request" '
+                        '$status $body_bytes_sent "$http_referer" '
+                        '"$http_user_agent" "$http_x_forwarded_for" '
+                        'rt=$request_time uct="$upstream_connect_time" '
+                        'uht="$upstream_header_time" urt="$upstream_response_time"';
+
+        access_log /var/log/nginx/access.log main;
+        error_log /var/log/nginx/error.log warn;
+        
+        sendfile on;
+        tcp_nopush on;
+        tcp_nodelay on;
+        keepalive_timeout 65;
+        types_hash_max_size 2048;
+        
+        server {
+            listen 80;
+            server_name _;
+            root /usr/share/nginx/html;
+            index index.html;
+            
+            # MAIN APPLICATION: Serves static content with fallback
+            location / {
+                try_files $uri $uri/ /index.html;
+                # Security headers for production
+                add_header X-Content-Type-Options nosniff;
+                add_header X-Frame-Options DENY;
+                add_header X-XSS-Protection "1; mode=block";
+            }
+            
+            # METRICS ENDPOINT: Required for Prometheus nginx-exporter
+            location /nginx_status {
+                stub_status on;              
+                access_log off;              
+                allow 127.0.0.1;             
+                deny all;                    
+            }
+            
+            # HEALTH CHECK: Used by Kubernetes probes and load balancer
+            location /health {
+                access_log off;
+                return 200 "healthy\n";
+                add_header Content-Type text/plain;
+            }
+            
+            # READINESS CHECK: More comprehensive readiness validation
+            location /ready {
+                access_log off;
+                # You can add more complex readiness logic here
+                return 200 "ready\n";
+                add_header Content-Type text/plain;
+            }
+        }
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+======================================================================
+# SECTION 3: STORAGE - Persistent volume for application data
+# This PVC provides persistent storage for application data that needs 
+# to survive pod restarts and deployments.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: app-data-pvc
+  namespace: production
+  labels:
+    app: production-ready-app
+spec:
+  accessModes:
+    - ReadWriteOnce                      # Single node read-write access
+  resources:
+    requests:
+      storage: 10Gi                      # Request 10GB of storage
+  storageClassName: standard             # Use standard storage class
+
+======================================================================# SECTION 4: SERVICE - Internal cluster networking and load balancing
+# This service provides stable networking endpoints for the application
+# and enables service discovery within the cluster. It exposes both 
+# application and monitoring ports.
+apiVersion: v1
+kind: Service
+metadata:
+  name: production-ready-app-service
+  namespace: production
+  labels:
+    app: production-ready-app
+  annotations:
+    prometheus.io/scrape: "true"         # Enable service-level scraping
+    prometheus.io/port: "9113"           # Metrics port
+    prometheus.io/path: "/metrics"       # Metrics endpoint
+spec:
+  type: ClusterIP                        # Internal cluster service
+  selector:
+    app: production-ready-app            
+  ports:
+  - name: http                           # HTTP traffic port
+    port: 80                             
+    targetPort: http                     
+    protocol: TCP
+  - name: metrics                        # Monitoring port
+    port: 9113                           
+    targetPort: metrics                  
+    protocol: TCP
+======================================================================# SECTION 5: INGRESS - External access and TLS termination
+# This Ingress resource manages external access to the application,
+# providing TLS termination, host-based routing, and integration with
+# external load balancers. It includes production-ready annotations
+# for security and performance.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: production-ready-app-ingress
+  namespace: production
+  labels:
+    app: production-ready-app
+  annotations:
+    # INGRESS CLASS: Specify which ingress controller to use
+    kubernetes.io/ingress.class: "nginx"
+    
+    # TLS AND SECURITY: Enhanced security configuration
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/ssl-protocols: "TLSv1.2 TLSv1.3"
+    nginx.ingress.kubernetes.io/ssl-ciphers: "ECDHE-RSA-AES128-GCM-SHA256,ECDHE-RSA-AES256-GCM-SHA384"
+    
+    # PERFORMANCE: Connection and request optimization
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    
+    # RATE LIMITING: Protect against abuse
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+    
+    # SECURITY HEADERS: Additional protection
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      add_header X-Content-Type-Options nosniff;
+      add_header X-Frame-Options DENY;
+      add_header X-XSS-Protection "1; mode=block";
+      add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+      add_header Referrer-Policy "strict-origin-when-cross-origin";
+      
+    # CERT-MANAGER: Automatic TLS certificate management
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    
+    # MONITORING: Enable ingress monitoring
+    nginx.ingress.kubernetes.io/enable-prometheus-metrics: "true"
+
+spec:
+  # TLS CONFIGURATION: Secure communications
+  tls:
+  - hosts:
+    - app.yourdomain.com               # Replace with your actual domain
+    - www.yourdomain.com              # Additional domain alias
+    secretName: production-app-tls     # Secret containing TLS certificates
+  
+  # ROUTING RULES: Define how requests are routed
+  rules:
+  # PRIMARY DOMAIN: Main application domain
+  - host: app.yourdomain.com           # Replace with your actual domain
+    http:
+      paths:
+      - path: /                        # Route all paths
+        pathType: Prefix               # Match all paths starting with /
+        backend:
+          service:
+            name: production-ready-app-service
+            port:
+              number: 80
+              
+  # WWW REDIRECT: Handle www subdomain
+  - host: www.yourdomain.com           # Replace with your actual domain
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: production-ready-app-service
+            port:
+              number: 80
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+======================================================================
+# SECTION 6: NETWORK POLICY - Micro-segmentation and traffic control
+# These NetworkPolicies implement zero-trust networking principles,
+# controlling ingress and egress traffic to enhance security.
+# Each policy serves a specific security purpose.
+# SUBSECTION 6A: INGRESS POLICY - Control incoming traffic to application pods
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: production-ready-app-ingress-policy
+  namespace: production
+  labels:
+    app: production-ready-app
+    policy-type: ingress
+spec:
+  # TARGET: Apply this policy to application pods
+  podSelector:
+    matchLabels:
+      app: production-ready-app
+  
+  # POLICY TYPES: This policy controls incoming traffic
+  policyTypes:
+  - Ingress
+  
+  # INGRESS RULES: Define allowed incoming connections
+  ingress:
+  # RULE 1: Allow traffic from ingress controller
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx         # Adjust based on your ingress controller namespace
+    ports:
+    - protocol: TCP
+      port: 80                       # Application port
+    
+  # RULE 2: Allow internal service discovery and load balancer health checks
+  - from:
+    - podSelector: {}                # Allow from any pod in same namespace
+    ports:
+    - protocol: TCP
+      port: 80                       # Application port
+    - protocol: TCP
+      port: 9113                     # Metrics port
+  
+  # RULE 3: Allow Prometheus monitoring from monitoring namespace
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring           # Prometheus namespace
+    ports:
+    - protocol: TCP
+      port: 9113                     # Metrics port
+
+---
+# SUBSECTION 6B: EGRESS POLICY - Control outgoing traffic from application pods
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: production-ready-app-egress-policy
+  namespace: production
+  labels:
+    app: production-ready-app
+    policy-type: egress
+spec:
+  # TARGET: Apply this policy to application pods
+  podSelector:
+    matchLabels:
+      app: production-ready-app
+  
+  # POLICY TYPES: This policy controls outgoing traffic
+  policyTypes:
+  - Egress
+  
+  # EGRESS RULES: Define allowed outgoing connections
+  egress:
+  # RULE 1: Allow DNS resolution (required for service discovery)
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system          # DNS is typically in kube-system
+    ports:
+    - protocol: UDP
+      port: 53                       # DNS port
+    - protocol: TCP
+      port: 53                       # DNS over TCP
+  
+  # RULE 2: Allow communication within the same namespace
+  - to:
+    - podSelector: {}                # Allow to any pod in same namespace
+  
+  # RULE 3: Allow HTTPS outbound for external API calls (if needed)
+  - to: []                           # Allow to any external destination
+    ports:
+    - protocol: TCP
+      port: 443                      # HTTPS port
+  
+  # RULE 4: Allow HTTP outbound for package updates (if needed)
+  # Remove this rule if your containers don't need external HTTP access
+  - to: []                           
+    ports:
+    - protocol: TCP
+      port: 80                       # HTTP port
+
+---
+# SUBSECTION 6C: DENY-ALL POLICY - Default deny for enhanced security
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: production-namespace-deny-all
+  namespace: production
+  labels:
+    app: production-ready-app
+    policy-type: baseline-security
+spec:
+  # TARGET: Apply to all pods in the namespace
+  podSelector: {}
+  
+  # POLICY TYPES: Control both directions
+  policyTypes:
+  - Ingress
+  - Egress
+  
+  # NO RULES: This creates a default deny-all policy
+  # Other more specific policies will override this for allowed traffic
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+======================================================================# SECTION 7: MONITORING - Prometheus integration and metrics collection
+# This ServiceMonitor enables Prometheus to automatically discover
+# and scrape metrics from the application, providing observability.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: production-ready-app-monitor
+  namespace: production
+  labels:
+    app: production-ready-app
+    monitoring: prometheus
+spec:
+  # TARGET: Monitor services with matching labels
+  selector:
+    matchLabels:
+      app: production-ready-app          
+  
+  # ENDPOINTS: Define what to monitor
+  endpoints:
+  - port: metrics                        # Monitor the metrics port
+    interval: 30s                        # Scrape every 30 seconds
+    path: /metrics                       # Metrics endpoint path
+    honorLabels: true                    # Preserve original labels
+    
+    # MONITORING CONFIGURATION: Fine-tune metrics collection
+    scrapeTimeout: 10s                   # Timeout for scrape requests
+    
+    # METRIC RELABELING: Customize metric labels
+    metricRelabelings:
+    - sourceLabels: [__name__]
+      regex: 'nginx_.*'
+      targetLabel: service
+      replacement: 'production-ready-app'
+
+
+
+
+
+
+
+
+
+
+
+
+
+====================================================================== SECTION 8: AUTOSCALING - Horizontal Pod Autoscaler for dynamic scaling
+# This HPA automatically adjusts the number of pod replicas based on
+# CPU and memory utilization, ensuring optimal resource usage and
+# application performance under varying loads.
+
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: production-ready-app-hpa
+  namespace: production
+  labels:
+    app: production-ready-app
+spec:
+  # TARGET: The deployment to scale
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: production-ready-app           
+  
+  # SCALING BOUNDS: Min and max replica limits
+  minReplicas: 3                         # Minimum for high availability
+  maxReplicas: 10                        # Maximum to control costs
+  
+  # SCALING METRICS: What triggers scaling decisions
+  metrics:
+  # CPU-BASED SCALING: Scale based on CPU usage
+  - type: Resource
+    resource:
+      name: cpu                          
+      target:
+        type: Utilization
+        averageUtilization: 70           # Scale up when CPU > 70%
+  
+  # MEMORY-BASED SCALING: Scale based on memory usage  
+  - type: Resource
+    resource:
+      name: memory                       
+      target:
+        type: Utilization
+        averageUtilization: 80           # Scale up when memory > 80%
+  
+  # SCALING BEHAVIOR: Control scaling speed and stability
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60     # Wait 60s before scaling up again
+      policies:
+      - type: Percent
+        value: 50                        # Scale up by max 50% of current replicas
+        periodSeconds: 60                # Every 60 seconds
+      - type: Pods  
+        value: 2                         # Or add max 2 pods
+        periodSeconds: 60                # Every 60 seconds
+    scaleDown:
+      stabilizationWindowSeconds: 300    # Wait 5 minutes before scaling down
+      policies:
+      - type: Percent
+        value: 25                        # Scale down by max 25% of current replicas
+        periodSeconds: 60                # Every 60 seconds
+
+

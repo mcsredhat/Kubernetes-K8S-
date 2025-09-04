@@ -1,0 +1,305 @@
+nginx.env file
+# Pod Configuration
+POD_NAME="nginx-web"
+IMAGE="nginx"
+TAG="1.20"
+CONTAINER_PORT="8080"
+NAMESPACE="web"
+LABELS="app=nginx,tier=frontend,version=1.20"
+ANNOTATIONS="description=Nginx web server with security context,owner=web-team"
+ENV_VAR_1="NGINX_PORT=8080"
+ENV_VAR_2="NGINX_HOST=localhost"
+CONTAINER_NAME="nginx-web"
+PORT_NAME="http"
+OUTPUT_FILE="nginx-web-secure.yaml"
+
+# Security Configuration
+USER_ID="101"
+GROUP_ID="101"
+FS_GROUP_ID="101"
+
+# Resource Configuration
+MEMORY_REQUEST="64Mi"
+CPU_REQUEST="100m"
+MEMORY_LIMIT="128Mi"
+CPU_LIMIT="200m"
+
+# Application Configuration
+APP_NAME="nginx"
+CONFIG_MOUNT_PATH="/etc/nginx/nginx.conf"
+CONFIG_FILE_NAME="nginx.conf"
+CACHE_MOUNT_PATH="/var/cache/nginx"
+RUN_MOUNT_PATH="/var/run"
+LOGS_MOUNT_PATH="/var/log/nginx"
+HEALTH_PATH="/health"
+
+# Probe Configuration
+LIVENESS_INITIAL_DELAY="30"
+LIVENESS_PERIOD="10"
+LIVENESS_TIMEOUT="5"
+LIVENESS_FAILURE_THRESHOLD="3"
+READINESS_INITIAL_DELAY="5"
+READINESS_PERIOD="5"
+READINESS_TIMEOUT="3"
+READINESS_FAILURE_THRESHOLD="3"
+STARTUP_INITIAL_DELAY="10"
+STARTUP_PERIOD="3"
+STARTUP_TIMEOUT="1"
+STARTUP_FAILURE_THRESHOLD="30"
+
+
+# Secure Nginx Pod Deployment Guide
+
+## Prerequisites
+Make sure you have the nginx.env file with all the environment variables loaded:
+```bash
+source nginx.env
+```
+
+## Step 1: Create Namespace
+```bash
+kubectl create namespace web --dry-run=client -o yaml | kubectl apply -f -
+```
+
+## Step 2: Create Nginx Configuration File
+First, create the nginx.conf file:
+```bash
+cat > nginx.conf << 'EOF'
+user nginx;
+worker_processes auto;
+error_log /var/log/nginx/error.log notice;
+pid /var/run/nginx.pid;
+
+events {
+    worker_connections 1024;
+}
+
+http {
+    include /etc/nginx/mime.types;
+    default_type application/octet-stream;
+    
+    log_format main '$remote_addr - $remote_user [$time_local] "$request" '
+                    '$status $body_bytes_sent "$http_referer" '
+                    '"$http_user_agent" "$http_x_forwarded_for"';
+    
+    access_log /var/log/nginx/access.log main;
+    sendfile on;
+    keepalive_timeout 65;
+    
+    server {
+        listen 8080;
+        server_name localhost;
+        
+        location / {
+            root /usr/share/nginx/html;
+            index index.html index.htm;
+        }
+        
+        location /health {
+            access_log off;
+            return 200 "healthy\n";
+            add_header Content-Type text/plain;
+        }
+    }
+}
+EOF
+```
+
+## Step 3: Create ConfigMap
+```bash
+kubectl create configmap nginx-config \
+  --from-file=nginx.conf=nginx.conf \
+  --namespace=web \
+  --dry-run=client -o yaml | kubectl apply -f -
+```
+
+## Step 4: Fix File Permissions and Generate Pod YAML
+
+First, ensure you have write permissions in the current directory:
+```bash
+# Check current directory permissions
+ls -la .
+sudo chown cloud_user:cloud_user ./k8s-templates ./k8s-templates/nginx.env ./k8s-templates/nginx.conf 
+sudo chmod 644 ./k8s-templates ./k8s-templates/nginx.env ./k8s-templates/nginx.conf
+```
+
+ Generate YAML file first, then apply:
+```bash
+kubectl run ${POD_NAME} \
+  --image=${IMAGE}:${TAG} \
+  --port=${CONTAINER_PORT} \
+  --restart=Never \
+  --namespace=${NAMESPACE} \
+  --labels="${LABELS}" \
+  --annotations="${ANNOTATIONS}" \
+  --env="${ENV_VAR_1}" \
+  --env="${ENV_VAR_2}" \
+  --overrides='{
+    "spec": {
+      "securityContext": {
+        "runAsNonRoot": true,
+        "runAsUser": '${USER_ID}',
+        "runAsGroup": '${GROUP_ID}',
+        "fsGroup": '${FS_GROUP_ID}',
+        "seccompProfile": {
+          "type": "RuntimeDefault"
+        }
+      },
+      "containers": [{
+        "name": "'${CONTAINER_NAME}'",
+        "image": "'${IMAGE}':'${TAG}'",
+        "ports": [{"containerPort": '${CONTAINER_PORT}', "name": "'${PORT_NAME}'"}],
+        "securityContext": {
+          "allowPrivilegeEscalation": false,
+          "readOnlyRootFilesystem": true,
+          "runAsNonRoot": true,
+          "runAsUser": '${USER_ID}',
+          "runAsGroup": '${GROUP_ID}',
+          "capabilities": {
+            "drop": ["ALL"]
+          }
+        },
+        "resources": {
+          "requests": {"memory": "'${MEMORY_REQUEST}'", "cpu": "'${CPU_REQUEST}'"},
+          "limits": {"memory": "'${MEMORY_LIMIT}'", "cpu": "'${CPU_LIMIT}'"}
+        },
+        "volumeMounts": [
+          {
+            "name": "nginx-config",
+            "mountPath": "'${CONFIG_MOUNT_PATH}'",
+            "subPath": "'${CONFIG_FILE_NAME}'",
+            "readOnly": true
+          },
+          {
+            "name": "nginx-cache",
+            "mountPath": "'${CACHE_MOUNT_PATH}'"
+          },
+          {
+            "name": "nginx-run",
+            "mountPath": "'${RUN_MOUNT_PATH}'"
+          },
+          {
+            "name": "nginx-logs",
+            "mountPath": "'${LOGS_MOUNT_PATH}'"
+          }
+        ],
+        "livenessProbe": {
+          "httpGet": {
+            "path": "'${HEALTH_PATH}'",
+            "port": '${CONTAINER_PORT}',
+            "scheme": "HTTP"
+          },
+          "initialDelaySeconds": '${LIVENESS_INITIAL_DELAY}',
+          "periodSeconds": '${LIVENESS_PERIOD}',
+          "timeoutSeconds": '${LIVENESS_TIMEOUT}',
+          "failureThreshold": '${LIVENESS_FAILURE_THRESHOLD}'
+        },
+        "readinessProbe": {
+          "httpGet": {
+            "path": "'${HEALTH_PATH}'",
+            "port": '${CONTAINER_PORT}',
+            "scheme": "HTTP"
+          },
+          "initialDelaySeconds": '${READINESS_INITIAL_DELAY}',
+          "periodSeconds": '${READINESS_PERIOD}',
+          "timeoutSeconds": '${READINESS_TIMEOUT}',
+          "failureThreshold": '${READINESS_FAILURE_THRESHOLD}'
+        },
+        "startupProbe": {
+          "httpGet": {
+            "path": "'${HEALTH_PATH}'",
+            "port": '${CONTAINER_PORT}',
+            "scheme": "HTTP"
+          },
+          "initialDelaySeconds": '${STARTUP_INITIAL_DELAY}',
+          "periodSeconds": '${STARTUP_PERIOD}',
+          "timeoutSeconds": '${STARTUP_TIMEOUT}',
+          "failureThreshold": '${STARTUP_FAILURE_THRESHOLD}'
+        }
+      }],
+      "volumes": [
+        {
+          "name": "nginx-config",
+          "configMap": {
+            "name": "nginx-config",
+            "items": [
+              {
+                "key": "'${CONFIG_FILE_NAME}'",
+                "path": "'${CONFIG_FILE_NAME}'"
+              }
+            ]
+          }
+        },
+        {
+          "name": "nginx-cache",
+          "emptyDir": {}
+        },
+        {
+          "name": "nginx-run",
+          "emptyDir": {}
+        },
+        {
+          "name": "nginx-logs",
+          "emptyDir": {}
+        }
+      ]
+    }
+  }' \
+  --dry-run=client \
+  --output=yaml > ${OUTPUT_FILE}
+
+# Apply the generated YAML
+kubectl apply --filename ${OUTPUT_FILE}
+```
+
+## Step 5: Verify the Deployment
+
+### Check pod status:
+```bash
+kubectl get pods --namespace web -l app=nginx
+```
+
+### Check pod details:
+```bash
+kubectl describe pod nginx-web --namespace web
+```
+
+### Test the health endpoint:
+```bash
+# Start port forwarding in background
+kubectl port-forward nginx-web 8080:8080 --namespace web &
+sleep 5
+
+# Test health endpoint
+curl http://localhost:8080/health
+
+# Stop port forwarding
+pkill -f "kubectl port-forward"
+```
+
+### Check security context:
+```bash
+# Check user ID
+kubectl exec nginx-web --namespace web -- id
+
+# Check nginx processes
+kubectl exec nginx-web --namespace web -- sh -c "ps aux | grep nginx || echo 'ps command not available'"
+
+# Alternative: Check what's running via /proc filesystem
+kubectl exec nginx-web --namespace web -- sh -c "ls -la /proc/*/exe 2>/dev/null | head -10 || echo 'Limited proc access'"
+```
+
+## Troubleshooting
+
+If the pod fails to start, check the logs:
+```bash
+kubectl logs nginx-web --namespace web
+```
+
+If you need to clean up and start over:
+```bash
+kubectl delete pod nginx-web --namespace web
+kubectl delete configmap nginx-config --namespace web
+rm -f nginx.conf ${OUTPUT_FILE}
+```
+

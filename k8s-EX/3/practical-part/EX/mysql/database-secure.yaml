@@ -1,0 +1,114 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  annotations:
+    description: MySQL pod for database exploration,created-by=kubectl-advanced-deployment
+  creationTimestamp: null
+  labels:
+    app: mysql
+    environment: development
+    version: "8.0"
+  name: database
+  namespace: production
+spec:
+  containers:
+  - env:
+    - name: MYSQL_ROOT_PASSWORD
+      value: SecureRootPass123
+    - name: MYSQL_DATABASE
+      value: testdb
+    - name: MYSQL_USER
+      value: appuser
+    - name: MYSQL_PASSWORD
+      value: AppUserPass123
+    - name: ENVIRONMENT
+      value: development
+    image: mysql:8.0
+    livenessProbe:
+      exec:
+        command:
+        - mysqladmin
+        - ping
+        - -h
+        - localhost
+      failureThreshold: 3
+      initialDelaySeconds: 30
+      periodSeconds: 10
+      timeoutSeconds: 5
+    name: database
+    ports:
+    - containerPort: 3306
+      name: mysql
+    readinessProbe:
+      exec:
+        command:
+        - mysql
+        - -h
+        - 127.0.0.1
+        - -e
+        - SELECT 1
+      failureThreshold: 3
+      initialDelaySeconds: 10
+      periodSeconds: 5
+      timeoutSeconds: 3
+    resources:
+      limits:
+        cpu: 500m
+        memory: 512Mi
+      requests:
+        cpu: 250m
+        memory: 256Mi
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+        - ALL
+      runAsGroup: 999
+      runAsUser: 999
+    startupProbe:
+      exec:
+        command:
+        - mysqladmin
+        - ping
+        - -h
+        - localhost
+      failureThreshold: 30
+      initialDelaySeconds: 10
+      periodSeconds: 10
+      timeoutSeconds: 5
+    volumeMounts:
+    - mountPath: /etc/mysql/conf.d
+      name: mysql-config
+    - mountPath: /docker-entrypoint-initdb.d
+      name: mysql-init
+    - mountPath: /var/lib/mysql
+      name: mysql-data
+    - mountPath: /var/log/mysql
+      name: mysql-logs
+    - mountPath: /tmp
+      name: mysql-tmp
+    - mountPath: /var/run/mysqld
+      name: mysql-run
+  dnsPolicy: ClusterFirst
+  restartPolicy: Never
+  securityContext:
+    fsGroup: 999
+    runAsGroup: 999
+    runAsUser: 999
+    seccompProfile:
+      type: RuntimeDefault
+  volumes:
+  - emptyDir: {}
+    name: mysql-config
+  - emptyDir: {}
+    name: mysql-init
+  - name: mysql-data
+    persistentVolumeClaim:
+      claimName: mysql-data-pvc
+  - emptyDir: {}
+    name: mysql-logs
+  - emptyDir: {}
+    name: mysql-tmp
+  - emptyDir: {}
+    name: mysql-run
+status: {}

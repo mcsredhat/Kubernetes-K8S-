@@ -1,0 +1,891 @@
+# ============================================================================
+# 01-namespace.yaml
+# ============================================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: web-volume-demo
+  labels:
+    name: web-volume-demo
+    environment: development
+    team: devops
+  annotations:
+    description: "Namespace for web server volume demonstration"
+spec:
+  finalizers: ["kubernetes"]
+---
+# ============================================================================
+# 02-storage-class.yaml
+# ============================================================================
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: fast-ssd
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "false"
+provisioner: kubernetes.io/aws-ebs  # Change based on your cloud provider
+parameters:
+  type: gp3
+  iops: "3000"
+  throughput: "125"
+  fsType: ext4
+  encrypted: "true"
+reclaimPolicy: Delete
+allowVolumeExpansion: true
+volumeBindingMode: WaitForFirstConsumer
+mountOptions: []
+---
+# ============================================================================
+# 03-persistent-volume.yaml
+# ============================================================================
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: web-content-pv
+  labels:
+    app: web-server
+    type: web-content
+spec:
+  capacity:
+    storage: 5Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: fast-ssd
+  hostPath:
+    path: /tmp/web-content  # For demo purposes - use proper storage in production
+    type: DirectoryOrCreate
+  nfs: 
+  - server: x.x.x.x
+    path: /
+  awsElasticBlockStore: 
+  - volumeID: vol-xxx
+---
+# ============================================================================
+# 04-persistent-volume-claim.yaml  
+# ============================================================================
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: web-content-pvc
+  namespace: web-volume-demo
+  labels:
+    app: web-server
+    component: storage
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: fast-ssd
+  resources:
+    requests:
+      storage: 5Gi
+  selector:
+    matchLabels:
+      app: web-server
+      type: web-content
+
+---
+# ============================================================================
+# 05-configmap.yaml
+# ============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: web-config
+  namespace: web-volume-demo
+  labels:
+    app: web-server
+    component: configuration
+data:
+  # Environment variables
+  server_name: "demo.example.com"
+  max_connections: "1000"
+  log_level: "info"
+  worker_processes: "auto"
+  worker_connections: "1024"
+  
+  # Nginx configuration file
+  nginx.conf: |
+    server {
+        listen 80;
+        server_name demo.example.com;
+        root /usr/share/nginx/html;
+        index index.html index.htm;
+        
+        # Security headers
+        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header X-XSS-Protection "1; mode=block" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Referrer-Policy "no-referrer-when-downgrade" always;
+        add_header Content-Security-Policy "default-src 'self' http: https: data: blob: 'unsafe-inline'" always;
+        
+        # Gzip compression
+        gzip on;
+        gzip_vary on;
+        gzip_min_length 1024;
+        gzip_types text/plain text/css text/xml text/javascript application/javascript application/xml+rss application/json;
+        
+        # Custom log format
+        log_format custom '$remote_addr - $remote_user [$time_local] '
+                         '"$request" $status $body_bytes_sent '
+                         '"$http_referer" "$http_user_agent" '
+                         '$request_time $upstream_response_time';
+        
+        access_log /var/log/nginx/access.log custom;
+        error_log /var/log/nginx/error.log warn;
+        
+        # Health check endpoint
+        location /health {
+            access_log off;
+            return 200 "healthy\n";
+            add_header Content-Type text/plain;
+        }
+        
+        # Readiness check endpoint  
+        location /ready {
+            access_log off;
+            return 200 "ready\n";
+            add_header Content-Type text/plain;
+        }
+        
+        # Metrics endpoint for monitoring
+        location /nginx-status {
+            stub_status on;
+            access_log off;
+            allow 127.0.0.1;
+            allow 10.0.0.0/8;
+            allow 172.16.0.0/12;
+            allow 192.168.0.0/16;
+            deny all;
+        }
+        
+        # Main application
+        location / {
+            try_files $uri $uri/ =404;
+            expires 1h;
+            add_header Cache-Control "public, immutable";
+        }
+        
+        # Static assets with long cache
+        location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg)$ {
+            expires 1y;
+            add_header Cache-Control "public, immutable";
+            add_header Vary "Accept-Encoding";
+        }
+        
+        # API endpoints (if any)
+        location /api/ {
+            proxy_pass http://backend-service:8080/;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_connect_timeout 30s;
+            proxy_send_timeout 30s;
+            proxy_read_timeout 30s;
+        }
+    }
+
+  # Custom HTML content
+  index.html: |
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Kubernetes Volume Demo</title>
+        <style>
+            body {
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                line-height: 1.6;
+                margin: 0;
+                padding: 20px;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                min-height: 100vh;
+            }
+            .container {
+                max-width: 800px;
+                margin: 0 auto;
+                background: rgba(255, 255, 255, 0.1);
+                padding: 30px;
+                border-radius: 15px;
+                backdrop-filter: blur(10px);
+                box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+                border: 1px solid rgba(255, 255, 255, 0.18);
+            }
+            h1 {
+                text-align: center;
+                margin-bottom: 30px;
+                font-size: 2.5em;
+                text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+            }
+            .info-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+                gap: 20px;
+                margin: 30px 0;
+            }
+            .info-card {
+                background: rgba(255, 255, 255, 0.1);
+                padding: 20px;
+                border-radius: 10px;
+                border: 1px solid rgba(255, 255, 255, 0.2);
+            }
+            .info-card h3 {
+                margin-top: 0;
+                color: #ffd700;
+            }
+            .volume-list {
+                list-style: none;
+                padding: 0;
+            }
+            .volume-list li {
+                background: rgba(255, 255, 255, 0.1);
+                margin: 10px 0;
+                padding: 15px;
+                border-radius: 5px;
+                border-left: 4px solid #ffd700;
+            }
+            .status {
+                display: inline-block;
+                padding: 5px 15px;
+                border-radius: 20px;
+                background: #28a745;
+                color: white;
+                font-weight: bold;
+            }
+            .links {
+                text-align: center;
+                margin-top: 30px;
+            }
+            .links a {
+                display: inline-block;
+                margin: 10px;
+                padding: 10px 20px;
+                background: rgba(255, 255, 255, 0.2);
+                color: white;
+                text-decoration: none;
+                border-radius: 25px;
+                border: 1px solid rgba(255, 255, 255, 0.3);
+                transition: all 0.3s ease;
+            }
+            .links a:hover {
+                background: rgba(255, 255, 255, 0.3);
+                transform: translateY(-2px);
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>🚀 Kubernetes Volume Demo</h1>
+            <div class="info-grid">
+                <div class="info-card">
+                    <h3>📊 System Status</h3>
+                    <p><span class="status">RUNNING</span></p>
+                    <p><strong>Pod Name:</strong> <span id="pod-name">Loading...</span></p>
+                    <p><strong>Namespace:</strong> web-volume-demo</p>
+                    <p><strong>Started:</strong> <span id="timestamp"></span></p>
+                </div>
+                <div class="info-card">
+                    <h3>💾 Volume Types</h3>
+                    <ul class="volume-list">
+                        <li><strong>ConfigMap:</strong> /etc/nginx/conf.d</li>
+                        <li><strong>PVC:</strong> /usr/share/nginx/html</li>
+                        <li><strong>EmptyDir:</strong> /tmp (Memory)</li>
+                        <li><strong>Secret:</strong> Environment Variables</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="links">
+                <a href="/health">Health Check</a>
+                <a href="/ready">Ready Check</a>
+                <a href="/nginx-status">Nginx Status</a>
+            </div>
+        </div>
+        
+        <script>
+            // Set timestamp
+            document.getElementById('timestamp').textContent = new Date().toLocaleString();
+            
+            // Try to get pod name from meta endpoint (if available)
+            fetch('/api/pod-info').then(r => r.json()).then(data => {
+                document.getElementById('pod-name').textContent = data.podName || 'demo-pod';
+            }).catch(() => {
+                document.getElementById('pod-name').textContent = 'demo-pod-' + Math.random().toString(36).substr(2, 5);
+            });
+        </script>
+    </body>
+    </html>
+
+---
+# ============================================================================
+# 06-secret.yaml
+# ============================================================================
+apiVersion: v1
+kind: Secret
+metadata:
+  name: web-secret
+  namespace: web-volume-demo
+  labels:
+    app: web-server
+    component: credentials
+type: Opaque
+data:
+  # Base64 encoded values
+  username: YWRtaW4=  # admin
+  password: cGFzc3dvcmQxMjM=  # password123
+  api_key: YWJjZGVmZ2hpams=  # abcdefghijk
+  database_url: cG9zdGdyZXNxbDovL3VzZXI6cGFzc0Bsb2NhbGhvc3Q6NTQzMi9kYg==  # postgresql://user:pass@localhost:5432/db
+stringData:
+  # Plain text values (will be automatically base64 encoded)
+  jwt_secret: "super-secret-jwt-key-change-in-production"
+  encryption_key: "32-char-encryption-key-change-me"
+
+---
+# ============================================================================
+# 07-service-account.yaml
+# ============================================================================
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: web-server-sa
+  namespace: web-volume-demo
+  labels:
+    app: web-server
+    component: rbac
+automountServiceAccountToken: true
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: web-volume-demo
+  name: web-server-role
+  labels:
+    app: web-server
+    component: rbac
+rules:
+# Allow reading configmaps and secrets
+- apiGroups: [""]
+  resources: ["configmaps", "secrets"]
+  verbs: ["get", "list", "watch"]
+# Allow creating events for debugging
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["create"]
+# Allow reading pod information
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: web-server-binding
+  namespace: web-volume-demo
+  labels:
+    app: web-server
+    component: rbac
+subjects:
+- kind: ServiceAccount
+  name: web-server-sa
+  namespace: web-volume-demo
+roleRef:
+  kind: Role
+  name: web-server-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# ============================================================================
+# 08-deployment.yaml (Enhanced version of your original)
+# ============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-server-deployment
+  namespace: web-volume-demo
+  labels:
+    app: web-server
+    version: v1.0
+    environment: development
+  annotations:
+    description: "Web server deployment with comprehensive volume examples"
+    maintainer: "devops-team@company.com"
+    deployment.kubernetes.io/revision: "1"
+spec:
+  replicas: 2
+  revisionHistoryLimit: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app: web-server
+      version: v1.0
+  template:
+    metadata:
+      labels:
+        app: web-server
+        version: v1.0
+        environment: development
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "80"
+        prometheus.io/path: "/nginx-status"
+    spec:
+      serviceAccountName: web-server-sa
+      
+      # Security Context
+      securityContext:
+        runAsUser: 101  # nginx user
+        runAsGroup: 101 # nginx group
+        runAsNonRoot: true
+        fsGroup: 101
+        fsGroupChangePolicy: "OnRootMismatch"
+      
+      # Init Container to setup content
+      initContainers:
+      - name: content-setup
+        image: busybox:1.36
+        command: ['sh', '-c']
+        args:
+        - |
+          echo "Setting up web content..."
+          cp /config/index.html /web-content/
+          echo "<h2>Content initialized at $(date)</h2>" >> /web-content/index.html
+          echo "<p>This content is stored on persistent volume</p>" >> /web-content/index.html
+          echo "Setup complete!"
+        volumeMounts:
+        - name: web-content
+          mountPath: /web-content
+        - name: nginx-config
+          mountPath: /config
+        securityContext:
+          runAsUser: 101
+          runAsGroup: 101
+          runAsNonRoot: true
+          allowPrivilegeEscalation: false
+      
+      containers:
+      - name: web-server
+        image: nginx:1.25-alpine
+        imagePullPolicy: IfNotPresent
+        
+        ports:
+        - name: http
+          containerPort: 80
+          protocol: TCP
+        - name: https  
+          containerPort: 443
+          protocol: TCP
+        
+        # Environment variables from ConfigMap and Secret
+        env:
+        - name: SERVER_NAME
+          valueFrom:
+            configMapKeyRef:
+              name: web-config
+              key: server_name
+        - name: MAX_CONNECTIONS
+          valueFrom:
+            configMapKeyRef:
+              name: web-config
+              key: max_connections
+        - name: USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: web-secret
+              key: username
+        - name: PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: web-secret
+              key: password
+        - name: LOG_LEVEL
+          value: "info"
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        
+        # Import all keys from ConfigMap as environment variables
+        envFrom:
+        - configMapRef:
+            name: web-config
+        - secretRef:
+            name: web-secret
+        
+        # Volume mounts inside the container
+        volumeMounts:
+        # ConfigMap volume - nginx configuration
+        - name: nginx-config
+          mountPath: /etc/nginx/conf.d
+          readOnly: true
+        # Persistent Volume - web content
+        - name: web-content
+          mountPath: /usr/share/nginx/html
+        # EmptyDir (Memory) - temporary storage
+        - name: temp-storage
+          mountPath: /tmp
+        # HostPath volume - logs
+        - name: logs
+          mountPath: /var/log/nginx
+        # Additional volumes for nginx
+        - name: nginx-cache
+          mountPath: /var/cache/nginx
+        - name: nginx-run
+          mountPath: /var/run
+        
+        # Resource limits
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+            ephemeral-storage: "1Gi"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+            ephemeral-storage: "2Gi"
+        
+        # Security Context
+        securityContext:
+          runAsUser: 101
+          runAsGroup: 101
+          runAsNonRoot: true
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: false  # nginx needs to write to some locations
+          capabilities:
+            drop:
+            - ALL
+            add:
+            - NET_BIND_SERVICE
+        
+        # Health Checks
+        startupProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 6
+          successThreshold: 1
+        
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+          successThreshold: 1
+        
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+          successThreshold: 1
+        
+        # Lifecycle hooks
+        lifecycle:
+          preStop:
+            exec:
+              command: ["/bin/sh", "-c", "sleep 10"]
+      
+      # Volume definitions
+      volumes:
+      # ConfigMap volume
+      - name: nginx-config
+        configMap:
+          name: web-config
+          items:
+          - key: nginx.conf
+            path: default.conf
+          - key: index.html
+            path: index.html
+          defaultMode: 0644
+      
+      # Persistent Volume Claim
+      - name: web-content
+        persistentVolumeClaim:
+          claimName: web-content-pvc
+      
+      # Temporary storage (memory-backed)
+      - name: temp-storage
+        emptyDir:
+          medium: Memory
+          sizeLimit: 128Mi
+      
+      # Host path volume for logs
+      - name: logs
+        hostPath:
+          path: /var/log/containers/web-server
+          type: DirectoryOrCreate
+      
+      # Additional EmptyDir volumes for nginx
+      - name: nginx-cache
+        emptyDir:
+          sizeLimit: 100Mi
+      
+      - name: nginx-run
+        emptyDir:
+          sizeLimit: 50Mi
+      
+      # DNS Configuration
+      dnsPolicy: ClusterFirst
+      
+      # Termination Grace Period
+      terminationGracePeriodSeconds: 30
+      
+      # Node Selection (optional)
+      # nodeSelector:
+      #   disktype: ssd
+
+---
+# ============================================================================
+# 09-service.yaml
+# ============================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-server-service
+  namespace: web-volume-demo
+  labels:
+    app: web-server
+    component: service
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"  # For AWS
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "80"
+    prometheus.io/path: "/nginx-status"
+spec:
+  type: ClusterIP
+  selector:
+    app: web-server
+    version: v1.0
+  ports:
+  - name: http
+    port: 80
+    targetPort: http
+    protocol: TCP
+  - name: https
+    port: 443
+    targetPort: https
+    protocol: TCP
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 10800  # 3 hours
+
+---
+# ============================================================================
+# 10-ingress.yaml
+# ============================================================================
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: web-server-ingress
+  namespace: web-volume-demo
+  labels:
+    app: web-server
+    component: ingress
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "30"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "30"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "30"
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      more_set_headers "X-Frame-Options: SAMEORIGIN";
+      more_set_headers "X-Content-Type-Options: nosniff";
+spec:
+  rules:
+  - host: demo.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: web-server-service
+            port:
+              number: 80
+  # Uncomment for TLS
+  # tls:
+  # - hosts:
+  #   - demo.example.com
+  #   secretName: web-server-tls
+
+---
+# ============================================================================
+# 11-hpa.yaml - Horizontal Pod Autoscaler
+# ============================================================================
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: web-server-hpa
+  namespace: web-volume-demo
+  labels:
+    app: web-server
+    component: autoscaling
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: web-server-deployment
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 15
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 10
+        periodSeconds: 60
+
+---
+# ============================================================================
+# 12-pdb.yaml - Pod Disruption Budget
+# ============================================================================
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: web-server-pdb
+  namespace: web-volume-demo
+  labels:
+    app: web-server
+    component: availability
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: web-server
+      version: v1.0
+
+---
+# ============================================================================
+# 13-network-policy.yaml - Network Policy for security
+# ============================================================================
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: web-server-network-policy
+  namespace: web-volume-demo
+  labels:
+    app: web-server
+    component: security
+spec:
+  podSelector:
+    matchLabels:
+      app: web-server
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow ingress from ingress controller
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: ingress-nginx
+    ports:
+    - protocol: TCP
+      port: 80
+    - protocol: TCP
+      port: 443
+  # Allow ingress from monitoring namespace
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    ports:
+    - protocol: TCP
+      port: 80
+  egress:
+  # Allow DNS resolution
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+  # Allow communication within same namespace
+  - to:
+    - podSelector: {}
+    ports:
+    - protocol: TCP
+      port: 80
+
+---
+# ============================================================================
+# 14-servicemonitor.yaml - Prometheus ServiceMonitor (if using Prometheus Operator)
+# ============================================================================
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: web-server-metrics
+  namespace: web-volume-demo
+  labels:
+    app: web-server
+    component: monitoring
+spec:
+  selector:
+    matchLabels:
+      app: web-server
+  endpoints:
+  - port: http
+    path: /nginx-status
+    interval: 30s
+    scrapeTimeout: 10s
+  namespaceSelector:
+    matchNames:
+    - web-volume-demo

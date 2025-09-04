@@ -1,0 +1,84 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: blue-green-app
+  labels:
+    app: blue-green-demo
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0    # No pods unavailable during update
+      maxSurge: 100%       # Double the pods during update (blue-green effect)
+  selector:
+    matchLabels:
+      app: blue-green-demo
+  template:
+    metadata:
+      labels:
+        app: blue-green-demo
+        version: blue
+    spec:
+      containers:
+      - name: app
+        image: nginx:1.20
+        ports:
+        - containerPort: 80
+        env:
+        - name: VERSION
+          value: "blue"
+        - name: COLOR
+          value: "#0066cc"
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        volumeMounts:
+        - name: app-content
+          mountPath: /usr/share/nginx/html
+      volumes:
+      - name: app-content
+        configMap:
+          name: blue-version-content
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: blue-version-content
+data:
+  index.html: |
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Blue-Green Deployment Demo</title>
+        <style>
+            body { background-color: #e6f3ff; color: #0066cc; font-family: Arial, sans-serif; text-align: center; padding: 50px; }
+            .version { font-size: 24px; font-weight: bold; }
+        </style>
+    </head>
+    <body>
+        <h1>🔵 BLUE VERSION</h1>
+        <div class="version">Version: Blue (v1.0)</div>
+        <p>This is the current stable version</p>
+        <p>Pod: <span id="hostname"></span></p>
+        <script>
+            document.getElementById('hostname').textContent = window.location.hostname;
+        </script>
+    </body>
+    </html>

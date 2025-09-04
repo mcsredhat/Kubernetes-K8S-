@@ -1,0 +1,450 @@
+# ============================================================================
+# KUBERNETES POD PROGRESSION - STEPS 5-8
+# Cumulative Learning Progression: Each step builds upon previous steps
+# ============================================================================
+
+# ============================================================================
+# STEP 5: RESOURCE MANAGEMENT - CPU and Memory limits
+# Contains: Basic pod + Ports + Labels + Environment Variables + Resources
+# ============================================================================
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-with-resources
+  namespace: default
+  labels:
+    app: web-server
+    version: v1.0
+    environment: development
+  annotations:
+    description: "Web server pod with resource management"
+    maintainer: "devops-team@company.com"
+spec:
+  containers:
+  - name: web-server
+    image: nginx:1.25
+    ports:
+    - name: http
+      containerPort: 80
+      protocol: TCP
+    - name: https  
+      containerPort: 443
+      protocol: TCP
+    env:
+    - name: SERVER_NAME
+      value: "resource-managed-server"
+    - name: LOG_LEVEL
+      value: "info"
+    - name: PORT
+      value: "80"
+    - name: POD_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.name
+    - name: POD_NAMESPACE
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.namespace
+    # Resource specifications
+    resources:
+      # Resource requests (guaranteed resources)
+      requests:
+        memory: "128Mi"    # 128 Mebibytes
+        cpu: "250m"        # 250 milliCPU (0.25 CPU core)
+      # Resource limits (maximum allowed)
+      limits:
+        memory: "256Mi"    # 256 Mebibytes  
+        cpu: "500m"        # 500 milliCPU (0.5 CPU core)
+
+---
+# ============================================================================
+# STEP 6: CONFIGMAPS AND SECRETS - External configuration
+# Contains: All previous features + ConfigMaps + Secrets
+# ============================================================================
+
+# ConfigMap definition (prerequisite)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: web-config
+data:
+  server_name: "configured-web-server"
+  max_connections: "100"
+  nginx.conf: |
+    server {
+        listen 80;
+        server_name localhost;
+        location / {
+            root /usr/share/nginx/html;
+            index index.html;
+        }
+    }
+
+---
+# Secret definition (prerequisite)
+apiVersion: v1
+kind: Secret
+metadata:
+  name: web-secret
+type: Opaque
+data:
+  # Values are base64 encoded
+  # username = admin (base64: YWRtaW4=)
+  # password = secret123 (base64: c2VjcmV0MTIz)
+  username: YWRtaW4=
+  password: c2VjcmV0MTIz
+
+---
+# Pod using ConfigMap and Secret
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-with-config
+  namespace: default
+  labels:
+    app: web-server
+    version: v1.0
+    environment: development
+  annotations:
+    description: "Web server pod with ConfigMap and Secret"
+    maintainer: "devops-team@company.com"
+spec:
+  containers:
+  - name: web-server
+    image: nginx:1.25
+    ports:
+    - name: http
+      containerPort: 80
+      protocol: TCP
+    - name: https  
+      containerPort: 443
+      protocol: TCP
+    # Environment variables from ConfigMap and Secret
+    env:
+    - name: SERVER_NAME
+      valueFrom:
+        configMapKeyRef:
+          name: web-config
+          key: server_name
+    - name: MAX_CONNECTIONS
+      valueFrom:
+        configMapKeyRef:
+          name: web-config
+          key: max_connections
+    - name: USERNAME
+      valueFrom:
+        secretKeyRef:
+          name: web-secret
+          key: username
+    - name: PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: web-secret
+          key: password
+    - name: LOG_LEVEL
+      value: "info"
+    - name: POD_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.name
+    - name: POD_NAMESPACE
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.namespace
+    # Load all keys from ConfigMap as environment variables
+    envFrom:
+    - configMapRef:
+        name: web-config
+    resources:
+      requests:
+        memory: "128Mi"
+        cpu: "250m"
+      limits:
+        memory: "256Mi"
+        cpu: "500m"
+
+---
+# ============================================================================
+# STEP 7: VOLUME MOUNTS - Persistent and temporary storage
+# Contains: All previous features + Various Volume Types
+# ============================================================================
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-with-volumes
+  namespace: default
+  labels:
+    app: web-server
+    version: v1.0
+    environment: development
+  annotations:
+    description: "Web server pod with volumes"
+    maintainer: "devops-team@company.com"
+spec:
+  containers:
+  - name: web-server
+    image: nginx:1.25
+    ports:
+    - name: http
+      containerPort: 80
+      protocol: TCP
+    - name: https  
+      containerPort: 443
+      protocol: TCP
+    env:
+    - name: SERVER_NAME
+      valueFrom:
+        configMapKeyRef:
+          name: web-config
+          key: server_name
+    - name: MAX_CONNECTIONS
+      valueFrom:
+        configMapKeyRef:
+          name: web-config
+          key: max_connections
+    - name: USERNAME
+      valueFrom:
+        secretKeyRef:
+          name: web-secret
+          key: username
+    - name: PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: web-secret
+          key: password
+    - name: LOG_LEVEL
+      value: "info"
+    - name: POD_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.name
+    - name: POD_NAMESPACE
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.namespace
+    envFrom:
+    - configMapRef:
+        name: web-config
+    # Volume mounts inside the container
+    volumeMounts:
+    - name: nginx-config
+      mountPath: /etc/nginx/conf.d
+      readOnly: true
+    - name: web-content
+      mountPath: /usr/share/nginx/html
+    - name: temp-storage
+      mountPath: /tmp
+    - name: logs
+      mountPath: /var/log/nginx
+    resources:
+      requests:
+        memory: "128Mi"
+        cpu: "250m"
+      limits:
+        memory: "256Mi"
+        cpu: "500m"
+  # Volume definitions
+  volumes:
+  # ConfigMap volume
+  - name: nginx-config
+    configMap:
+      name: web-config
+      items:
+      - key: nginx.conf
+        path: default.conf
+  # Persistent Volume Claim
+  - name: web-content
+    persistentVolumeClaim:
+      claimName: web-content-pvc
+  # Temporary storage (memory-backed)
+  - name: temp-storage
+    emptyDir:
+      medium: Memory
+      sizeLimit: 128Mi
+  # Host path volume
+  - name: logs
+    hostPath:
+      path: /var/log/containers
+      type: DirectoryOrCreate
+
+---
+# ============================================================================
+# STEP 8: HEALTH CHECKS - Liveness and Readiness Probes
+# Contains: All previous features + Health Checks (Probes)
+# ============================================================================
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-with-health-checks
+  namespace: default
+  labels:
+    app: web-server
+    version: v1.0
+    environment: development
+  annotations:
+    description: "Web server pod with health checks"
+    maintainer: "devops-team@company.com"
+spec:
+# Security Context
+  securityContext:
+    runAsUser: 101  # nginx user
+    runAsGroup: 101 # nginx group
+    runAsNonRoot: true
+    fsGroup: 101
+    fsGroupChangePolicy: "OnRootMismatch"
+
+  containers:
+  - name: web-server
+    image: nginx:1.25
+    ports:
+    - name: http
+      containerPort: 80
+      protocol: TCP
+    - name: https  
+      containerPort: 443
+      protocol: TCP
+    env:
+    - name: SERVER_NAME
+      valueFrom:
+        configMapKeyRef:
+          name: web-config
+          key: server_name
+    - name: MAX_CONNECTIONS
+      valueFrom:
+        configMapKeyRef:
+          name: web-config
+          key: max_connections
+    - name: USERNAME
+      valueFrom:
+        secretKeyRef:
+          name: web-secret
+          key: username
+    - name: PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: web-secret
+          key: password
+    - name: LOG_LEVEL
+      value: "info"
+    - name: POD_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.name
+    - name: POD_NAMESPACE
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.namespace
+    envFrom:
+    - configMapRef:
+        name: web-config
+    volumeMounts:
+    - name: nginx-config
+      mountPath: /etc/nginx/conf.d
+      readOnly: true
+    - name: web-content
+      mountPath: /usr/share/nginx/html
+    - name: temp-storage
+      mountPath: /tmp
+    - name: logs
+      mountPath: /var/log/nginx
+    resources:
+      requests:
+        memory: "128Mi"
+        cpu: "250m"
+      limits:
+        memory: "256Mi"
+        cpu: "500m"
+ # Health Checks
+    startupProbe:
+      httpGet:
+        path: /health
+        port: http
+      initialDelaySeconds: 10
+      periodSeconds: 5
+      timeoutSeconds: 3
+      failureThreshold: 6
+      successThreshold: 1
+    # Liveness probe - restarts container if this fails
+    livenessProbe:
+      httpGet:
+        path: /
+        port: http
+        scheme: HTTP
+      initialDelaySeconds: 30    # Wait 30s before first check
+      periodSeconds: 10          # Check every 10s
+      timeoutSeconds: 5          # Timeout after 5s
+      successThreshold: 1        # 1 success = healthy
+      failureThreshold: 3        # 3 failures = restart container
+    # Readiness probe - removes from service if this fails
+    readinessProbe:
+      httpGet:
+        path: /
+        port: http
+        scheme: HTTP
+      initialDelaySeconds: 5     # Wait 5s before first check
+      periodSeconds: 5           # Check every 5s
+      timeoutSeconds: 3          # Timeout after 3s
+      successThreshold: 1        # 1 success = ready
+      failureThreshold: 3        # 3 failures = not ready
+   
+   # Security Context
+   securityContext:
+     runAsUser: 101
+     runAsGroup: 101
+     runAsNonRoot: true
+     allowPrivilegeEscalation: false
+     readOnlyRootFilesystem: false  # nginx needs to write to some locations
+     capabilities:
+       drop:
+       - ALL
+       add:
+       - NET_BIND_SERVICE
+
+  volumes:
+  - name: nginx-config
+    configMap:
+      name: web-config
+      items:
+      - key: nginx.conf
+        path: default.conf
+  - name: web-content
+    persistentVolumeClaim:
+      claimName: web-content-pvc
+  - name: temp-storage
+    emptyDir:
+      medium: Memory
+      sizeLimit: 128Mi
+  - name: logs
+    hostPath:
+      path: /var/log/containers
+      type: DirectoryOrCreate
+
+# ============================================================================
+# DEPLOYMENT COMMANDS FOR STEPS 5-8:
+# ============================================================================
+
+# Create ConfigMap and Secret first:
+# kubectl apply -f configmap.yaml
+# kubectl apply -f secret.yaml
+
+# Apply pod with volumes (ensure PVC exists):
+# kubectl create pvc web-content-pvc --size=1Gi -o yaml --dry-run=client > web-content-pvc.yaml
+# kubectl apply -f <filename>.yaml
+
+# Test health endpoints:
+# kubectl port-forward pod-with-health-checks 8080:80
+# curl http://localhost:8080/
+
+# Monitor resource usage:
+# kubectl top pod <pod-name>
+
+# ============================================================================
+# FEATURES LEARNED IN STEPS 5-8:
+# ============================================================================
+# Step 5: Resource management (requests, limits for CPU and memory)
+# Step 6: External configuration (ConfigMaps for config, Secrets for sensitive data)
+# Step 7: Storage management (volumes, volumeMounts, different volume types)
+# Step 8: Health monitoring (livenessProbe, readinessProbe with HTTP checks)

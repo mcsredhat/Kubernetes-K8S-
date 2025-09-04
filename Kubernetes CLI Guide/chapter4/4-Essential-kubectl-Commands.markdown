@@ -376,7 +376,7 @@ kubectl logs -f my-app-pod
 # Use Ctrl+C to stop following when you've seen enough
 
 # Access logs from specific containers in multi-container pods
-kubectl logs my-app-pod -c sidecar-container
+kubectl logs my-app-pod --container sidecar-container
 
 # When pods have multiple containers, specify which container's logs you want
 # Each container has independent logs and may show different information
@@ -466,13 +466,13 @@ Practice building complex commands by combining the patterns you've learned. Sta
 kubectl get deployments
 
 # Add namespace filtering: get deployments in specific namespace
-kubectl get deployments -n production
+kubectl get deployments --namespace production
 
 # Add label filtering: get specific application deployments
-kubectl get deployments -n production -l app=web-server
+kubectl get deployments --namespace  production -l app=web-server
 
 # Add output formatting: get just the names and replica counts
-kubectl get deployments -n production -l app=web-server -o custom-columns=NAME:.metadata.name,REPLICAS:.spec.replicas
+kubectl get deployments --namespace  production -l app=web-server -o custom-columns=NAME:.metadata.name,REPLICAS:.spec.replicas
 
 # This progression shows how to build complex, precise queries
 # Each step adds capability while maintaining the basic command structure

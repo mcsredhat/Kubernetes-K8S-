@@ -210,7 +210,7 @@ When working with pods that contain multiple containers, you need to specify whi
 
 ```bash
 # For pods with multiple containers, specify the target container
-kubectl exec -it multi-pod -c main-application -- /bin/bash
+kubectl exec -it multi-pod --container main-application -- /bin/bash
 
 # The -c flag specifies which container to connect to
 # Without this flag, kubectl connects to the first container by default

@@ -1,0 +1,717 @@
+# ============================================================================
+# KUBERNETES POD PROGRESSION - STEPS 9-12
+# Cumulative Learning Progression: Each step builds upon previous steps
+# ============================================================================
+
+# ============================================================================
+# STEP 9: INIT CONTAINERS - Pre-processing before main container
+# Contains: All previous features + Init Containers
+# ============================================================================
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-with-init-containers
+  namespace: default
+  labels:
+    app: web-server
+    version: v1.0
+    environment: development
+  annotations:
+    description: "Web server pod with init containers"
+    maintainer: "devops-team@company.com"
+spec:
+  # Init containers run before main containers
+  initContainers:
+  # First init container - download content
+  - name: content-downloader
+    image: busybox:1.35
+    command: ['sh', '-c']
+    args:
+    - |
+      echo "Downloading web content..."
+      echo "<h1>Hello from Init Container!</h1>" > /shared/index.html
+      echo "Content download completed"
+    volumeMounts:
+    - name: shared-content
+      mountPath: /shared
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "100m"
+      limits:
+        memory: "128Mi"
+        cpu: "200m"
+  # Second init container - setup permissions
+  - name: permission-setter
+    image: busybox:1.35
+    command: ['sh', '-c']
+    args:
+    - |
+      echo "Setting up permissions..."
+      chmod -R 755 /shared
+      echo "Permissions set"
+    volumeMounts:
+    - name: shared-content
+      mountPath: /shared
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "100m"
+      limits:
+        memory: "128Mi"
+        cpu: "200m"
+  # Main container starts after all init containers complete
+  containers:
+  - name: web-server
+    image: nginx:1.25
+    ports:
+    - name: http
+      containerPort: 80
+      protocol: TCP
+    - name: https  
+      containerPort: 443
+      protocol: TCP
+    env:
+    - name: SERVER_NAME
+      valueFrom:
+        configMapKeyRef:
+          name: web-config
+          key: server_name
+    - name: MAX_CONNECTIONS
+      valueFrom:
+        configMapKeyRef:
+          name: web-config
+          key: max_connections
+    - name: USERNAME
+      valueFrom:
+        secretKeyRef:
+          name: web-secret
+          key: username
+    - name: PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: web-secret
+          key: password
+    - name: LOG_LEVEL
+      value: "info"
+    - name: POD_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.name
+    - name: POD_NAMESPACE
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.namespace
+    envFrom:
+    - configMapRef:
+        name: web-config
+    volumeMounts:
+    - name: nginx-config
+      mountPath: /etc/nginx/conf.d
+      readOnly: true
+    - name: shared-content
+      mountPath: /usr/share/nginx/html
+    - name: temp-storage
+      mountPath: /tmp
+    - name: logs
+      mountPath: /var/log/nginx
+    livenessProbe:
+      httpGet:
+        path: /
+        port: http
+      initialDelaySeconds: 10
+      periodSeconds: 10
+    readinessProbe:
+      httpGet:
+        path: /
+        port: http
+      initialDelaySeconds: 5
+      periodSeconds: 5
+    resources:
+      requests:
+        memory: "128Mi"
+        cpu: "250m"
+      limits:
+        memory: "256Mi"
+        cpu: "500m"
+  volumes:
+  - name: nginx-config
+    configMap:
+      name: web-config
+      items:
+      - key: nginx.conf
+        path: default.conf
+  - name: shared-content
+    emptyDir: {}
+  - name: temp-storage
+    emptyDir:
+      medium: Memory
+      sizeLimit: 128Mi
+  - name: logs
+    hostPath:
+      path: /var/log/containers
+      type: DirectoryOrCreate
+
+---
+# ============================================================================
+# STEP 10: SECURITY CONTEXT - Security settings
+# Contains: All previous features + Security Contexts
+# ============================================================================
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: secure-pod
+  namespace: default
+  labels:
+    app: web-server
+    version: v1.0
+    environment: development
+  annotations:
+    description: "Secure web server pod"
+    maintainer: "devops-team@company.com"
+spec:
+  # Pod-level security context
+  securityContext:
+    runAsUser: 1000          # Run as user ID 1000
+    runAsGroup: 1000         # Run as group ID 1000
+    runAsNonRoot: true       # Ensure non-root user
+    fsGroup: 1000            # File system group ID
+  initContainers:
+  - name: content-downloader
+    image: busybox:1.35
+    command: ['sh', '-c']
+    args:
+    - |
+      echo "Downloading web content..."
+      echo "<h1>Hello from Secure Init Container!</h1>" > /shared/index.html
+      echo "Content download completed"
+    volumeMounts:
+    - name: shared-content
+      mountPath: /shared
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "100m"
+      limits:
+        memory: "128Mi"
+        cpu: "200m"
+  - name: permission-setter
+    image: busybox:1.35
+    command: ['sh', '-c']
+    args:
+    - |
+      echo "Setting up permissions..."
+      chmod -R 755 /shared
+      echo "Permissions set"
+    volumeMounts:
+    - name: shared-content
+      mountPath: /shared
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "100m"
+      limits:
+        memory: "128Mi"
+        cpu: "200m"
+  containers:
+  - name: web-server
+    image: nginx:1.25
+    ports:
+    - name: http
+      containerPort: 8080    # Non-privileged port
+      protocol: TCP
+    - name: https  
+      containerPort: 8443
+      protocol: TCP
+    env:
+    - name: SERVER_NAME
+      value: "secure-server"
+    - name: LOG_LEVEL
+      value: "info"
+    - name: POD_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.name
+    - name: POD_NAMESPACE
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.namespace
+    # Container-level security context
+    securityContext:
+      allowPrivilegeEscalation: false    # Prevent privilege escalation
+      readOnlyRootFilesystem: true       # Read-only root filesystem
+      capabilities:
+        drop:
+        - ALL                            # Drop all capabilities
+        add:
+        - NET_BIND_SERVICE              # Add only needed capabilities
+    volumeMounts:
+    - name: shared-content
+      mountPath: /usr/share/nginx/html
+    - name: tmp-volume
+      mountPath: /tmp
+    - name: var-cache-nginx
+      mountPath: /var/cache/nginx
+    - name: var-run
+      mountPath: /var/run
+    - name: logs
+      mountPath: /var/log/nginx
+    livenessProbe:
+      httpGet:
+        path: /
+        port: http
+      initialDelaySeconds: 10
+      periodSeconds: 10
+    readinessProbe:
+      httpGet:
+        path: /
+        port: http
+      initialDelaySeconds: 5
+      periodSeconds: 5
+    resources:
+      requests:
+        memory: "128Mi"
+        cpu: "250m"
+      limits:
+        memory: "256Mi"
+        cpu: "500m"
+  # Volumes needed for read-only root filesystem
+  volumes:
+  - name: shared-content
+    emptyDir: {}
+  - name: tmp-volume
+    emptyDir: {}
+  - name: var-cache-nginx
+    emptyDir: {}
+  - name: var-run
+    emptyDir: {}
+  - name: logs
+    hostPath:
+      path: /var/log/containers
+      type: DirectoryOrCreate
+
+---
+# ============================================================================
+# STEP 11: MULTI-CONTAINER POD - Sidecar pattern
+# Contains: All previous features + Multiple Containers (Sidecars)
+# ============================================================================
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: multi-container-pod
+  namespace: default
+  labels:
+    app: web-app
+    version: v1.0
+    environment: development
+  annotations:
+    description: "Multi-container pod with sidecars"
+    maintainer: "devops-team@company.com"
+spec:
+  securityContext:
+    runAsUser: 1000
+    runAsGroup: 1000
+    runAsNonRoot: true
+    fsGroup: 1000
+  initContainers:
+  - name: content-downloader
+    image: busybox:1.35
+    command: ['sh', '-c']
+    args:
+    - |
+      echo "Downloading web content..."
+      echo "<h1>Hello from Multi-Container Init!</h1>" > /shared/index.html
+      echo "Content download completed"
+    volumeMounts:
+    - name: shared-content
+      mountPath: /shared
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "100m"
+      limits:
+        memory: "128Mi"
+        cpu: "200m"
+  containers:
+  # Main application container
+  - name: web-server
+    image: nginx:1.25
+    ports:
+    - name: http
+      containerPort: 8080
+      protocol: TCP
+    env:
+    - name: SERVER_NAME
+      value: "multi-container-server"
+    - name: LOG_LEVEL
+      value: "info"
+    - name: POD_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.name
+    - name: POD_NAMESPACE
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.namespace
+    securityContext:
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      capabilities:
+        drop: ["ALL"]
+        add: ["NET_BIND_SERVICE"]
+    volumeMounts:
+    - name: shared-content
+      mountPath: /usr/share/nginx/html
+    - name: shared-logs
+      mountPath: /var/log/nginx
+    - name: tmp-volume
+      mountPath: /tmp
+    - name: var-cache-nginx
+      mountPath: /var/cache/nginx
+    - name: var-run
+      mountPath: /var/run
+    livenessProbe:
+      httpGet:
+        path: /
+        port: http
+      initialDelaySeconds: 10
+      periodSeconds: 10
+    readinessProbe:
+      httpGet:
+        path: /
+        port: http
+      initialDelaySeconds: 5
+      periodSeconds: 5
+    resources:
+      requests:
+        memory: "128Mi"
+        cpu: "250m"
+      limits:
+        memory: "256Mi"
+        cpu: "500m"
+  
+  # Sidecar container - log processor
+  - name: log-processor
+    image: busybox:1.35
+    command: ['sh', '-c']
+    args:
+    - |
+      while true; do
+        echo "Processing logs at $(date)"
+        if [ -f /logs/access.log ]; then
+          tail -n 10 /logs/access.log
+        fi
+        sleep 60
+      done
+    volumeMounts:
+    - name: shared-logs
+      mountPath: /logs
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "100m"
+      limits:
+        memory: "128Mi"
+        cpu: "200m"
+  
+  # Another sidecar - metrics collector
+  - name: metrics-collector
+    image: busybox:1.35
+    command: ['sh', '-c']
+    args:
+    - |
+      while true; do
+        echo "Collecting metrics at $(date)"
+        echo "CPU: 45%, Memory: 60%" > /shared/metrics.txt
+        sleep 30
+      done
+    volumeMounts:
+    - name: shared-data
+      mountPath: /shared
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "100m"
+      limits:
+        memory: "128Mi"
+        cpu: "200m"
+  
+  volumes:
+  - name: shared-content
+    emptyDir: {}
+  - name: shared-logs
+    emptyDir: {}
+  - name: shared-data
+    emptyDir: {}
+  - name: tmp-volume
+    emptyDir: {}
+  - name: var-cache-nginx
+    emptyDir: {}
+  - name: var-run
+    emptyDir: {}
+
+---
+# ============================================================================
+# STEP 12: NODE SELECTION AND SCHEDULING - Advanced scheduling
+# Contains: All previous features + Node Selection + Affinity + Tolerations
+# ============================================================================
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: scheduled-pod
+  namespace: default
+  labels:
+    app: web-server
+    version: v1.0
+    environment: development
+    tier: frontend
+  annotations:
+    description: "Pod with advanced scheduling"
+    maintainer: "devops-team@company.com"
+spec:
+  securityContext:
+    runAsUser: 1000
+    runAsGroup: 1000
+    runAsNonRoot: true
+    fsGroup: 1000
+  
+  # Simple node selection
+  nodeSelector:
+    kubernetes.io/os: linux
+    node-type: worker
+  
+  # Advanced node affinity
+  affinity:
+    nodeAffinity:
+      # Required node affinity
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+        - matchExpressions:
+          - key: kubernetes.io/arch
+            operator: In
+            values: ["amd64", "arm64"]
+          - key: node-size
+            operator: NotIn
+            values: ["small"]
+      # Preferred node affinity (soft requirement)
+      preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        preference:
+          matchExpressions:
+          - key: zone
+            operator: In
+            values: ["us-west-1a"]
+      - weight: 50
+        preference:
+          matchExpressions:
+          - key: instance-type
+            operator: In
+            values: ["m5.large", "m5.xlarge"]
+    
+    # Pod affinity - prefer to be scheduled near certain pods
+    podAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+            - key: app
+              operator: In
+              values: ["database"]
+          topologyKey: kubernetes.io/hostname
+    
+    # Pod anti-affinity - avoid being scheduled near similar pods
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchLabels:
+              app: web-server
+          topologyKey: kubernetes.io/hostname
+  
+  # Tolerations for node taints
+  tolerations:
+  - key: "dedicated"
+    operator: "Equal"
+    value: "web-servers"
+    effect: "NoSchedule"
+  - key: "node.kubernetes.io/not-ready"
+    operator: "Exists"
+    effect: "NoExecute"
+    tolerationSeconds: 300
+  
+  initContainers:
+  - name: content-downloader
+    image: busybox:1.35
+    command: ['sh', '-c']
+    args:
+    - |
+      echo "Downloading web content for scheduled pod..."
+      echo "<h1>Hello from Scheduled Pod!</h1>" > /shared/index.html
+      echo "Content download completed"
+    volumeMounts:
+    - name: shared-content
+      mountPath: /shared
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "100m"
+      limits:
+        memory: "128Mi"
+        cpu: "200m"
+  
+  containers:
+  # Main application container
+  - name: web-server
+    image: nginx:1.25
+    ports:
+    - name: http
+      containerPort: 8080
+      protocol: TCP
+    env:
+    - name: SERVER_NAME
+      value: "scheduled-server"
+    - name: LOG_LEVEL
+      value: "info"
+    - name: POD_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.name
+    - name: POD_NAMESPACE
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.namespace
+    securityContext:
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      capabilities:
+        drop: ["ALL"]
+        add: ["NET_BIND_SERVICE"]
+    volumeMounts:
+    - name: shared-content
+      mountPath: /usr/share/nginx/html
+    - name: shared-logs
+      mountPath: /var/log/nginx
+    - name: tmp-volume
+      mountPath: /tmp
+    - name: var-cache-nginx
+      mountPath: /var/cache/nginx
+    - name: var-run
+      mountPath: /var/run
+    livenessProbe:
+      httpGet:
+        path: /
+        port: http
+      initialDelaySeconds: 10
+      periodSeconds: 10
+    readinessProbe:
+      httpGet:
+        path: /
+        port: http
+      initialDelaySeconds: 5
+      periodSeconds: 5
+    resources:
+      requests:
+        memory: "128Mi"
+        cpu: "250m"
+      limits:
+        memory: "256Mi"
+        cpu: "500m"
+  
+  # Sidecar container - log processor
+  - name: log-processor
+    image: busybox:1.35
+    command: ['sh', '-c']
+    args:
+    - |
+      while true; do
+        echo "Processing scheduled pod logs at $(date)"
+        if [ -f /logs/access.log ]; then
+          tail -n 10 /logs/access.log
+        fi
+        sleep 60
+      done
+    volumeMounts:
+    - name: shared-logs
+      mountPath: /logs
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "100m"
+      limits:
+        memory: "128Mi"
+        cpu: "200m"
+  
+  # Metrics collector sidecar
+  - name: metrics-collector
+    image: busybox:1.35
+    command: ['sh', '-c']
+    args:
+    - |
+      while true; do
+        echo "Collecting scheduled pod metrics at $(date)"
+        echo "CPU: 45%, Memory: 60%" > /shared/metrics.txt
+        sleep 30
+      done
+    volumeMounts:
+    - name: shared-data
+      mountPath: /shared
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "100m"
+      limits:
+        memory: "128Mi"
+        cpu: "200m"
+  
+  volumes:
+  - name: shared-content
+    emptyDir: {}
+  - name: shared-logs
+    emptyDir: {}
+  - name: shared-data
+    emptyDir: {}
+  - name: tmp-volume
+    emptyDir: {}
+  - name: var-cache-nginx
+    emptyDir: {}
+  - name: var-run
+    emptyDir: {}
+
+# ============================================================================
+# DEPLOYMENT COMMANDS FOR STEPS 9-12:
+# ============================================================================
+
+# Prerequisites (ensure these exist):
+# kubectl create configmap web-config --from-literal=server_name=configured-web-server --from-literal=max_connections=100
+# kubectl create secret generic web-secret --from-literal=username=admin --from-literal=password=secret123
+
+# Check init container logs:
+# kubectl logs <pod-name> -c content-downloader
+# kubectl logs <pod-name> -c permission-setter
+
+# Check security context:
+# kubectl exec -it secure-pod -- id
+# kubectl exec -it secure-pod -- ls -la /
+
+# Monitor multi-container pod:
+# kubectl logs multi-container-pod -c web-server
+# kubectl logs multi-container-pod -c log-processor
+# kubectl logs multi-container-pod -c metrics-collector
+
+# Check pod scheduling:
+# kubectl describe pod scheduled-pod | grep -A 10 "Node:"
+# kubectl get pod scheduled-pod -o wide
+
+# ============================================================================
+# FEATURES LEARNED IN STEPS 9-12:
+# ============================================================================
+# Step 9:  Init containers (setup tasks before main containers start)
+# Step 10: Security contexts (user/group IDs, capabilities, read-only filesystem)
+# Step 11: Multi-container pods (main container + sidecars working together)
+# Step 12: Advanced scheduling (nodeSelector, affinity, anti-affinity, tolerations)
