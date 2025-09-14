@@ -17,50 +17,151 @@ spec:
 # ============================================================================
 # 02-storage-class.yaml
 # ============================================================================
-apiVersion: storage.k8s.io/v1
-kind: StorageClass
+# StorageClass acts like a "blueprint" or "template" that defines different types of storage
+# Think of it like choosing between different tiers of cloud storage (basic, premium, ultra-fast)
+
+apiVersion: storage.k8s.io/v1  # Uses the stable storage API - this has been around since Kubernetes 1.6
+kind: StorageClass            # Tells Kubernetes this is a StorageClass resource, not a Pod or Service
+
 metadata:
-  name: fast-ssd
+  name: fast-ssd              # The name applications will reference when requesting this storage type
+                             # Choose descriptive names that indicate performance characteristics
   annotations:
-    storageclass.kubernetes.io/is-default-class: "false"
-provisioner: kubernetes.io/aws-ebs  # Change based on your cloud provider
-parameters:
-  type: gp3
-  iops: "3000"
-  throughput: "125"
-  fsType: ext4
-  encrypted: "true"
-reclaimPolicy: Delete
-allowVolumeExpansion: true
-volumeBindingMode: WaitForFirstConsumer
-mountOptions: []
----
+    # This annotation controls whether this StorageClass is automatically chosen
+    # when no specific StorageClass is requested in a PersistentVolumeClaim
+    storageclass.kubernetes.io/is-default-class: "false"  # "false" means this won't be used automatically
+                                                          # Set to "true" if you want this as your cluster default
+
+# The provisioner is like telling Kubernetes "which storage system should handle this"
+provisioner: kubernetes.io/aws-ebs  # This built-in provisioner creates AWS EBS volumes
+                                    # Change to kubernetes.io/gce-pd for Google Cloud
+                                    # or kubernetes.io/azure-disk for Azure
+                                    # Each cloud provider has different provisioners
+
+parameters:  # These are the specific settings passed to the storage provisioner
+             # Think of these as the "recipe" for creating the storage volume
+  
+  type: gp3                    # AWS EBS volume type - gp3 is the latest general purpose SSD
+                              # gp3 offers better price/performance than older gp2 volumes
+                              # Other options: gp2, io1, io2, st1, sc1
+  
+  iops: "3000"                # Input/Output Operations Per Second - how many read/write operations
+                              # 3000 IOPS provides good performance for most database workloads
+                              # gp3 allows you to provision IOPS independently of size (unlike gp2)
+  
+  throughput: "125"           # Megabytes per second of sustained data transfer
+                              # 125 MB/s is the baseline for gp3 volumes
+                              # Higher throughput helps with large file operations and backups
+  
+  fsType: ext4                # The filesystem format applied to the volume when first created
+                              # ext4 is reliable and widely supported on Linux
+                              # Other options: xfs, ext3 (xfs often better for large files)
+  
+  encrypted: "true"           # Enables encryption at rest using AWS-managed keys
+                              # Critical for compliance and security in production
+                              # Minimal performance impact with modern hardware
+
+# What happens to the storage when the PersistentVolume is no longer needed
+reclaimPolicy: Delete         # "Delete" removes the underlying storage completely
+                             # "Retain" keeps the storage (you pay for it but data persists)
+                             # "Recycle" is deprecated - don't use this option
+
+# Controls whether volumes can be resized after creation
+allowVolumeExpansion: true   # "true" allows growing volumes without downtime
+                            # Very useful for databases that outgrow initial storage
+                            # Cannot shrink volumes - only expand
+
+# Controls when and where the volume gets created
+volumeBindingMode: WaitForFirstConsumer  # Creates volume only when a Pod actually needs it
+                                        # Ensures volume is created in same availability zone as the Pod
+                                        # Prevents cross-AZ data transfer charges
+                                        # Alternative: "Immediate" creates volume right away
+
+# Additional mount options passed to the filesystem driver
+mountOptions: []            # Empty array means no special mount options
+                           # Could include options like: ["noatime", "nodiratime"] for performance
+                           # Or ["ro"] for read-only mounts
+                           # These are filesystem-specific options---
 # ============================================================================
 # 03-persistent-volume.yaml
 # ============================================================================
-apiVersion: v1
-kind: PersistentVolume
+# A PersistentVolume (PV) is like reserving a specific piece of storage in your cluster
+# Think of it as claiming a particular storage device and making it available for Pods to use
+# This is different from StorageClass, which is just a template - PV is the actual storage
+
+apiVersion: v1              # Uses core Kubernetes API - PVs have been stable since early versions
+kind: PersistentVolume      # This creates an actual storage resource, not just a template
+
 metadata:
-  name: web-content-pv
+  name: web-content-pv      # Unique name for this specific piece of storage
+                           # Once created, this PV exists until manually deleted
   labels:
-    app: web-server
-    type: web-content
+    app: web-server         # Labels help organize and select PVs
+    type: web-content       # Descriptive label indicating what this storage contains
+
 spec:
   capacity:
-    storage: 5Gi
-  accessModes:
-    - ReadWriteOnce
-  persistentVolumeReclaimPolicy: Retain
-  storageClassName: fast-ssd
+    storage: 5Gi           # Total size of this storage volume
+                          # 5 Gibibytes (5 * 1024^3 bytes) - binary measurement
+                         # This is the maximum space available to any Pod using this PV
+  volumeMode: Filesystem 
+  accessModes:             # How many Pods can use this storage and how
+    - ReadWriteOnce        # RWO: Only ONE Pod can mount this volume at a time with read-write access
+                          # Other options: ReadOnlyMany (multiple Pods, read-only)
+                          #                ReadWriteMany (multiple Pods, read-write - rare support)
+                          # Most storage systems only support ReadWriteOnce
+
+  persistentVolumeReclaimPolicy: Retain  # What happens when the PV is no longer claimed
+                                        # "Retain" keeps the data even after PVC is deleted
+                                        # "Delete" removes the underlying storage completely
+                                        # "Recycle" is deprecated (don't use)
+
+  storageClassName: fast-ssd            # Links this PV to the StorageClass we defined earlier
+                                       # This creates a relationship between storage template and actual storage
+                                       # Pods requesting "fast-ssd" storage could get this PV
+
+# IMPORTANT CONCEPTUAL ISSUE: You can only specify ONE storage backend type
+# Your current config tries to use three different storage types simultaneously
+# Let me show you the correct way to configure each option:
+
+# OPTION 1: Using hostPath (local node storage - for development/testing only)
   hostPath:
-    path: /tmp/web-content  # For demo purposes - use proper storage in production
-    type: DirectoryOrCreate
+    path: /tmp/web-content          # Directory on the Kubernetes node's filesystem
+    type: DirectoryOrCreate         # Creates the directory if it doesn't exist
+                                   # WARNING: Data tied to specific node - not portable
+                                   # If Pod moves to different node, it loses access to data
+
+# OPTION 2: Using NFS (Network File System - good for shared storage)
+# UNCOMMENT THIS SECTION AND COMMENT OUT hostPath TO USE NFS:
   nfs: 
-  - server: x.x.x.x
-    path: /
-  awsElasticBlockStore: 
-  - volumeID: vol-xxx
----
+    server: 192.168.1.100         # IP address of your NFS server
+    path: /exports/web-content     # Path on the NFS server to the shared directory
+#                                  # NFS allows ReadWriteMany access mode
+#                                  # Multiple Pods can access the same data simultaneously
+
+# OPTION 3: Using AWS EBS (Elastic Block Store - for production AWS environments)
+# UNCOMMENT THIS SECTION AND COMMENT OUT hostPath TO USE AWS EBS:
+#  awsElasticBlockStore: 
+#    volumeID: vol-0123456789abcdef0  # Existing EBS volume ID from AWS console
+#    fsType: ext4                     # Filesystem type (should match StorageClass)
+#                                    # EBS volumes are tied to specific availability zones
+#                                    # Only supports ReadWriteOnce access mode
+
+# TEACHING MOMENT: Understanding Storage Backend Types
+# 
+# hostPath: Uses local disk on the node - fast but not portable between nodes
+#           Good for: Development, testing, node-specific data like logs
+#           Bad for: Production apps that need to move between nodes
+#
+# NFS: Network-attached storage accessible from any node
+#      Good for: Shared data, content that multiple Pods need to access
+#      Bad for: High-performance databases (network latency)
+#
+# Cloud Block Storage (EBS/GCE-PD/Azure Disk): Managed by cloud provider
+#                                              Good for: Production databases, reliable storage
+#                                              Bad for: Multi-Pod access (usually ReadWriteOnce only)
+#
+# The key insight: Choose your storage backend based on your access patterns and requirements!---
 # ============================================================================
 # 04-persistent-volume-claim.yaml  
 # ============================================================================
@@ -346,6 +447,17 @@ stringData:
 # ============================================================================
 # 07-service-account.yaml
 # ============================================================================
+# RBAC (Role-Based Access Control) in Kubernetes follows the principle of least privilege
+# Think of it like employee access cards - you only get access to areas you need for your job
+
+# ============================================================================
+# WHAT IS A SERVICE ACCOUNT?
+# ============================================================================
+# A ServiceAccount is like an "identity card" for Pods running in Kubernetes
+# - Every Pod runs under a ServiceAccount (default: "default" ServiceAccount)
+# - ServiceAccounts can be assigned specific permissions via RBAC
+# - They're namespace-scoped (each namespace has its own ServiceAccounts)
+
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -353,49 +465,112 @@ metadata:
   namespace: web-volume-demo
   labels:
     app: web-server
-    component: rbac
-automountServiceAccountToken: true
+    component: rbac                    # RBAC = Role-Based Access Control
+                                      # This component manages security and permissions
+  annotations:
+    # Optional: Add description for documentation
+    description: "Service account for web server pods with minimal required permissions"
+    
+# Controls whether Kubernetes automatically mounts the ServiceAccount token into Pods
+automountServiceAccountToken: false    # "true" = automatically inject API credentials
+                                     # "false" = don't mount token (more secure if API access not needed)
+                                     # The token allows Pods to communicate with Kubernetes API
+
+# Optional: You can attach secrets to ServiceAccounts
+# secrets:
+# - name: web-server-secret           # Custom secret containing additional credentials
+#   namespace: web-volume-demo
 
 ---
+# ============================================================================
+# WHAT IS A ROLE?
+# ============================================================================
+# A Role defines WHAT actions are allowed on WHICH resources
+# Think of it like a job description - "Sales Manager can read customer data and create orders"
+# 
+# KEY CONCEPTS:
+# - apiGroups: Which API group the resource belongs to ("" = core API group)
+# - resources: What Kubernetes objects (pods, services, configmaps, etc.)
+# - verbs: What actions (get, list, create, update, delete, etc.)
+
 apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
+kind: Role                            # Role = namespace-scoped permissions
+                                     # ClusterRole = cluster-wide permissions
 metadata:
-  namespace: web-volume-demo
+  namespace: web-volume-demo          # This Role only applies within this namespace
   name: web-server-role
   labels:
     app: web-server
     component: rbac
+  annotations:
+    description: "Minimal permissions for web server operation and debugging"
+
 rules:
-# Allow reading configmaps and secrets
-- apiGroups: [""]
+# Rule 1: Configuration Access
+# WHY: Web servers often need to read their configuration at runtime
+- apiGroups: [""]                    # "" = core API group (pods, services, configmaps, etc.)
   resources: ["configmaps", "secrets"]
-  verbs: ["get", "list", "watch"]
-# Allow creating events for debugging
+  verbs: ["get", "list", "watch"]    # get = read single item
+                                     # list = read multiple items  
+                                     # watch = get notified of changes
+  # Optional: Restrict to specific resources
+  # resourceNames: ["web-config", "web-secrets"]  # Only these specific resources
+
+# Rule 2: Event Creation for Debugging
+# WHY: Applications can create Events to log important information for operators
 - apiGroups: [""]
-  resources: ["events"]
-  verbs: ["create"]
-# Allow reading pod information
+  resources: ["events"] 
+  verbs: ["create"]                  # Only allow creating events, not reading/deleting them
+
+# Rule 3: Pod Self-Discovery
+# WHY: Applications sometimes need to know about their own Pod or sibling Pods
 - apiGroups: [""]
   resources: ["pods"]
-  verbs: ["get", "list"]
+  verbs: ["get", "list"]             # Read-only access to pod information
+  # Note: No "watch" verb - we don't need real-time pod updates
+
+# Rule 4: Service Discovery (OPTIONAL - uncomment if needed)
+# WHY: Applications might need to discover other services dynamically
+# - apiGroups: [""]
+#   resources: ["services", "endpoints"]
+#   verbs: ["get", "list"]
+
+# Rule 5: Metrics Access (OPTIONAL - uncomment if using custom metrics)
+# WHY: For applications that expose custom metrics to monitoring systems
+# - apiGroups: ["metrics.k8s.io"]
+#   resources: ["pods", "nodes"]
+#   verbs: ["get", "list"]
 
 ---
+# ============================================================================
+# WHAT IS A ROLEBINDING?
+# ============================================================================
+# A RoleBinding connects a ServiceAccount (WHO) to a Role (WHAT they can do)
+# Think of it like: "Give Alice (ServiceAccount) the Sales Manager role (Role)"
+
 apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
+kind: RoleBinding                    # RoleBinding = namespace-scoped binding
+                                     # ClusterRoleBinding = cluster-wide binding
 metadata:
   name: web-server-binding
   namespace: web-volume-demo
   labels:
     app: web-server
     component: rbac
+  annotations:
+    description: "Binds web-server ServiceAccount to web-server Role"
+
+# WHO gets the permissions (can be ServiceAccounts, Users, or Groups)
 subjects:
-- kind: ServiceAccount
-  name: web-server-sa
-  namespace: web-volume-demo
-roleRef:
-  kind: Role
-  name: web-server-role
-  apiGroup: rbac.authorization.k8s.io
+- kind: ServiceAccount               # Type of principal getting permissions
+  name: web-server-sa               # Name of the ServiceAccount
+  namespace: web-volume-demo        # Namespace of the ServiceAccount
+
+# WHAT permissions they get
+roleRef:                            # Reference to the Role to bind
+  kind: Role                        # Could be "Role" or "ClusterRole"
+  name: web-server-role            # Name of the Role defined above
+  apiGroup: rbac.authorization.k8s.io  # API group for RBAC resources
 
 ---
 # ============================================================================
@@ -438,7 +613,7 @@ spec:
         prometheus.io/path: "/nginx-status"
     spec:
       serviceAccountName: web-server-sa
-      
+      automountServiceAccountToken: true
       # Security Context
       securityContext:
         runAsUser: 101  # nginx user
@@ -705,89 +880,166 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: web-server-ingress
+  name: secure-multi-path-ingress
   namespace: web-volume-demo
   labels:
     app: web-server
     component: ingress
+    environment: production
   annotations:
-    kubernetes.io/ingress.class: "nginx"
-    nginx.ingress.kubernetes.io/rewrite-target: /
-    nginx.ingress.kubernetes.io/ssl-redirect: "false"
-    nginx.ingress.kubernetes.io/force-ssl-redirect: "false"
+    # SSL Certificate Management
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    
+    # SECURITY: Force HTTPS
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    
+    # Multi-path routing configuration
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+    nginx.ingress.kubernetes.io/use-regex: "true"
     nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
-    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
-    nginx.ingress.kubernetes.io/proxy-connect-timeout: "30"
-    nginx.ingress.kubernetes.io/proxy-send-timeout: "30"
-    nginx.ingress.kubernetes.io/proxy-read-timeout: "30"
+    
+    # Performance settings
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+    
+    # SECURITY: Comprehensive security headers
     nginx.ingress.kubernetes.io/configuration-snippet: |
-      more_set_headers "X-Frame-Options: SAMEORIGIN";
+      more_set_headers "X-Frame-Options: DENY";
       more_set_headers "X-Content-Type-Options: nosniff";
+      more_set_headers "X-XSS-Protection: 1; mode=block";
+      more_set_headers "Strict-Transport-Security: max-age=31536000; includeSubDomains; preload";
+      more_set_headers "Referrer-Policy: strict-origin-when-cross-origin";
+      more_set_headers "Permissions-Policy: camera=(), microphone=(), geolocation=()";
+      more_set_headers "Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'";
+    
+    # SECURITY: Rate limiting
+    nginx.ingress.kubernetes.io/rate-limit-connections: "25"
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+    nginx.ingress.kubernetes.io/rate-limit-rpm: "150"
+
 spec:
+  ingressClassName: nginx
+  
   rules:
-  - host: demo.example.com
+  - host: your-domain.com  # Replace with your actual domain
     http:
       paths:
-      - path: /
-        pathType: Prefix
+      # Main web application
+      - path: /()(.*)
+        pathType: ImplementationSpecific
         backend:
           service:
             name: web-server-service
             port:
               number: 80
-  # Uncomment for TLS
-  # tls:
-  # - hosts:
-  #   - demo.example.com
-  #   secretName: web-server-tls
+      
+      # API backend service
+      - path: /api/(.*)
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: api-service
+            port:
+              number: 8080
+      
+      # Static assets service
+      - path: /static/(.*)
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: static-assets-service
+            port:
+              number: 80
+
+  # SECURITY: TLS encryption
+  tls:
+  - hosts:
+    - your-domain.com
+    secretName: web-server-tls
 
 ---
 # ============================================================================
 # 11-hpa.yaml - Horizontal Pod Autoscaler
 # ============================================================================
-apiVersion: autoscaling/v2
-kind: HorizontalPodAutoscaler
-metadata:
-  name: web-server-hpa
-  namespace: web-volume-demo
-  labels:
-    app: web-server
-    component: autoscaling
-spec:
-  scaleTargetRef:
-    apiVersion: apps/v1
-    kind: Deployment
-    name: web-server-deployment
-  minReplicas: 2
-  maxReplicas: 10
-  metrics:
-  - type: Resource
-    resource:
-      name: cpu
-      target:
-        type: Utilization
-        averageUtilization: 70
-  - type: Resource
-    resource:
-      name: memory
-      target:
-        type: Utilization
-        averageUtilization: 80
-  behavior:
-    scaleUp:
-      stabilizationWindowSeconds: 60
-      policies:
-      - type: Percent
-        value: 100
-        periodSeconds: 15
-    scaleDown:
-      stabilizationWindowSeconds: 300
-      policies:
-      - type: Percent
-        value: 10
-        periodSeconds: 60
 
----
+# Specify the API version for HPA - v2 is the current stable version
+apiVersion: autoscaling/v2
+# Define this as a HorizontalPodAutoscaler resource
+kind: HorizontalPodAutoscaler
+
+# Metadata section contains identifying information about this HPA
+metadata:
+  # Name of this HPA resource - used to reference it in kubectl commands
+  name: web-server-hpa
+  
+  # Namespace where this HPA will be created - must match the target deployment's namespace
+  namespace: web-volume-demo
+  
+  # Labels help organize and select resources - these are optional but recommended
+  labels:
+    app: web-server          # Indicates this belongs to the web-server application
+    component: autoscaling   # Identifies this as an autoscaling component
+
+# Specification section defines how the HPA should behave
+spec:
+  # Target reference - tells HPA which deployment to scale
+  scaleTargetRef:
+    apiVersion: apps/v1              # API version of the target resource
+    kind: Deployment                 # Type of resource to scale (Deployment in this case)
+    name: web-server-deployment      # Name of the specific deployment to scale
+
+  # Minimum number of pod replicas - HPA will never scale below this number
+  minReplicas: 2
+  
+  # Maximum number of pod replicas - HPA will never scale above this number
+  maxReplicas: 10
+
+  # Metrics section defines what triggers scaling decisions
+  metrics:
+  # First metric: CPU utilization
+  - type: Resource                   # This is a resource-based metric (CPU, memory, etc.)
+    resource:
+      name: cpu                      # Monitor CPU usage
+      target:
+        type: Utilization            # Use percentage utilization (not absolute values)
+        averageUtilization: 70       # Scale up when average CPU across all pods exceeds 70%
+
+  # Second metric: Memory utilization  
+  - type: Resource                   # Another resource-based metric
+    resource:
+      name: memory                   # Monitor memory usage
+      target:
+        type: Utilization            # Use percentage utilization
+        averageUtilization: 80       # Scale up when average memory across all pods exceeds 80%
+
+  # Behavior section controls HOW scaling happens (timing and rates)
+  behavior:
+    # Scale-up behavior - when adding more pods
+    scaleUp:
+      # Wait 60 seconds after scaling before making another scale-up decision
+      stabilizationWindowSeconds: 60
+      
+      # Scaling policies define the rate limits for scaling up
+      policies:
+      - type: Percent                # Scale by percentage (not absolute number)
+        value: 100                   # Can double the number of pods (100% increase)
+        periodSeconds: 15            # Every 15 seconds, evaluate for scale-up
+
+    # Scale-down behavior - when removing pods
+    scaleDown:
+      # Wait 300 seconds (5 minutes) after scaling before making another scale-down decision
+      # This prevents rapid scaling down which could cause instability
+      stabilizationWindowSeconds: 300
+      
+      # Scaling policies for scaling down
+      policies:
+      - type: Percent                # Scale by percentage
+        value: 10                    # Can only reduce by 10% of current pods
+        periodSeconds: 60            # Every 60 seconds, evaluate for scale-down
+
 # ============================================================================
 # 12-pdb.yaml - Pod Disruption Budget
 # ============================================================================

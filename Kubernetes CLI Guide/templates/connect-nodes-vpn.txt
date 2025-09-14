@@ -1,0 +1,254 @@
+## Summary of Previous Steps, Issues, and Debug
+
+### Infrastructure Overview
+- **Master Node**: Cloud server (172.31.25.226 private, 44.197.172.197 public) - RHEL 8
+- **Worker Node 1**: Cloud server (172.31.19.44 private, 3.216.125.86 public) - RHEL 8  
+- **Worker Node 2**: Local VMware (192.168.47.131) - RHEL 9
+
+### Issues Encountered
+
+1. **WireGuard Module Missing**: RHEL 8 kernel didn't have WireGuard module
+   - Error: `modprobe: FATAL: Module wireguard not found`
+   - Root cause: Missing kernel module in older RHEL 8 kernel
+
+2. **OpenVPN Complexity**: OpenVPN setup failed due to certificate/configuration issues
+   - Error: Service failed to start with exit code
+
+3. **Network Connectivity**: Local node couldn't reach cloud private IPs directly
+   - Error: `Connection refused` when accessing 172.31.25.226:6443
+
+4. **CNI Plugin Failure**: After successful join, node remained NotReady
+   - Error: `cni plugin not initialized` 
+   - Root cause: Calico CNI couldn't install properly on different subnet
+
+### Successful Workaround Used
+- SSH tunnels for API server communication (port 6443)
+- /etc/hosts mapping for hostname resolution
+- kubeadm join with ignore-preflight-errors
+
+## Complete VPN Solution for Cross-Subnet Kubernetes Cluster
+
+Here's a comprehensive approach using OpenVPN (more reliable than WireGuard on RHEL):
+
+### Step 1: Set Up OpenVPN Server on Master Node
+
+```bash
+# On Master Node (172.31.25.226)
+sudo dnf install epel-release -y
+sudo dnf install openvpn easy-rsa -y
+
+# Set up CA and certificates
+sudo make-cadir /etc/openvpn/easy-rsa
+cd /etc/openvpn/easy-rsa
+
+# Initialize PKI
+sudo ./easyrsa init-pki
+sudo ./easyrsa build-ca nopass
+
+# Generate server certificate
+sudo ./easyrsa gen-req server nopass
+sudo ./easyrsa sign-req server server
+
+# Generate Diffie-Hellman parameters
+sudo ./easyrsa gen-dh
+
+# Generate shared secret key
+sudo openvpn --genkey secret /etc/openvpn/ta.key
+
+# Create server configuration
+sudo tee /etc/openvpn/server/k8s-cluster.conf << 'EOF'
+port 1194
+proto udp
+dev tun
+ca /etc/openvpn/easy-rsa/pki/ca.crt
+cert /etc/openvpn/easy-rsa/pki/issued/server.crt
+key /etc/openvpn/easy-rsa/pki/private/server.key
+dh /etc/openvpn/easy-rsa/pki/dh.pem
+tls-auth /etc/openvpn/ta.key 0
+topology subnet
+server 10.8.0.0 255.255.255.0
+ifconfig-pool-persist /var/log/openvpn/ipp.txt
+push "route 172.31.0.0 255.255.0.0"
+keepalive 10 120
+cipher AES-256-CBC
+persist-key
+persist-tun
+status /var/log/openvpn/status.log
+verb 3
+explicit-exit-notify 1
+EOF
+
+# Configure firewall
+sudo firewall-cmd --permanent --add-port=1194/udp
+sudo firewall-cmd --permanent --add-masquerade
+sudo firewall-cmd --permanent --add-rich-rule='rule family=ipv4 source address=10.8.0.0/24 accept'
+sudo firewall-cmd --reload
+
+# Enable IP forwarding
+echo 'net.ipv4.ip_forward = 1' | sudo tee -a /etc/sysctl.conf
+sudo sysctl -p
+
+# Start OpenVPN server
+sudo systemctl enable openvpn-server@k8s-cluster
+sudo systemctl start openvpn-server@k8s-cluster
+```
+
+### Step 2: Generate Client Certificates
+
+```bash
+# On Master Node - generate certificates for each worker
+cd /etc/openvpn/easy-rsa
+
+# For cloud worker node
+sudo ./easyrsa gen-req cloud-worker nopass
+sudo ./easyrsa sign-req client cloud-worker
+
+# For local worker node  
+sudo ./easyrsa gen-req local-worker nopass
+sudo ./easyrsa sign-req client local-worker
+
+# Create client config template
+sudo tee /etc/openvpn/client-template.ovpn << 'EOF'
+client
+dev tun
+proto udp
+remote MASTER_PUBLIC_IP 1194
+resolv-retry infinite
+nobind
+persist-key
+persist-tun
+remote-cert-tls server
+tls-auth ta.key 1
+cipher AES-256-CBC
+verb 3
+EOF
+```
+
+### Step 3: Set Up Cloud Worker Node VPN
+
+```bash
+# On Cloud Worker Node (172.31.19.44)
+sudo dnf install openvpn -y
+
+# Copy certificates from master
+scp cloud_user@172.31.25.226:/etc/openvpn/easy-rsa/pki/ca.crt /tmp/
+scp cloud_user@172.31.25.226:/etc/openvpn/easy-rsa/pki/issued/cloud-worker.crt /tmp/
+scp cloud_user@172.31.25.226:/etc/openvpn/easy-rsa/pki/private/cloud-worker.key /tmp/
+scp cloud_user@172.31.25.226:/etc/openvpn/ta.key /tmp/
+
+sudo mv /tmp/*.crt /tmp/*.key /tmp/ca.crt /tmp/ta.key /etc/openvpn/client/
+
+# Create client config
+sudo tee /etc/openvpn/client/k8s-cluster.conf << 'EOF'
+client
+dev tun
+proto udp
+remote 172.31.25.226 1194
+resolv-retry infinite
+nobind
+persist-key
+persist-tun
+ca ca.crt
+cert cloud-worker.crt
+key cloud-worker.key
+remote-cert-tls server
+tls-auth ta.key 1
+cipher AES-256-CBC
+verb 3
+EOF
+
+# Start VPN client
+sudo systemctl enable openvpn-client@k8s-cluster
+sudo systemctl start openvpn-client@k8s-cluster
+```
+
+### Step 4: Set Up Local Worker Node VPN
+
+```bash
+# On Local Worker Node (192.168.47.131)
+sudo dnf install openvpn -y
+
+# Copy certificates (replace MASTER_PUBLIC_IP with actual IP)
+scp cloud_user@44.197.172.197:/etc/openvpn/easy-rsa/pki/ca.crt /tmp/
+scp cloud_user@44.197.172.197:/etc/openvpn/easy-rsa/pki/issued/local-worker.crt /tmp/
+scp cloud_user@44.197.172.197:/etc/openvpn/easy-rsa/pki/private/local-worker.key /tmp/
+scp cloud_user@44.197.172.197:/etc/openvpn/ta.key /tmp/
+
+sudo mv /tmp/*.crt /tmp/*.key /tmp/ca.crt /tmp/ta.key /etc/openvpn/client/
+
+# Create client config
+sudo tee /etc/openvpn/client/k8s-cluster.conf << 'EOF'
+client
+dev tun
+proto udp
+remote 44.197.172.197 1194
+resolv-retry infinite
+nobind
+persist-key
+persist-tun
+ca ca.crt
+cert local-worker.crt
+key local-worker.key
+remote-cert-tls server
+tls-auth ta.key 1
+cipher AES-256-CBC
+verb 3
+EOF
+
+# Start VPN client
+sudo systemctl enable openvpn-client@k8s-cluster
+sudo systemctl start openvpn-client@k8s-cluster
+```
+
+### Step 5: Configure Kubernetes with VPN IPs
+
+```bash
+# After VPN is connected, check VPN IPs
+ip addr show tun0
+
+# Example VPN IP assignments:
+# Master: 10.8.0.1
+# Cloud Worker: 10.8.0.2  
+# Local Worker: 10.8.0.3
+
+# Update /etc/hosts on all nodes
+echo "10.8.0.1 k8s-master" | sudo tee -a /etc/hosts
+echo "10.8.0.2 k8s-worker1" | sudo tee -a /etc/hosts  
+echo "10.8.0.3 k8s-worker2" | sudo tee -a /etc/hosts
+```
+
+### Step 6: Initialize Kubernetes Cluster
+
+```bash
+# On Master Node - use VPN IP for API server
+sudo kubeadm init \
+  --apiserver-advertise-address=10.8.0.1 \
+  --pod-network-cidr=192.168.0.0/16 \
+  --apiserver-cert-extra-sans=10.8.0.1,44.197.172.197
+
+# Install CNI plugin
+kubectl apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.24.1/manifests/tigera-operator.yaml
+kubectl apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.24.1/manifests/custom-resources.yaml
+```
+
+### Step 7: Join Worker Nodes
+
+```bash
+# On both worker nodes, use VPN for join
+sudo kubeadm join 10.8.0.1:6443 --token <token> --discovery-token-ca-cert-hash <hash>
+```
+
+### Step 8: Verification
+
+```bash
+# Check VPN connectivity
+ping 10.8.0.1  # From workers to master
+ping 10.8.0.2  # Between workers
+ping 10.8.0.3
+
+# Check cluster status
+kubectl get nodes -o wide
+kubectl get pods --all-namespaces
+```
+
+This VPN approach creates a stable overlay network that survives public IP changes and provides reliable communication between nodes on different subnets.
