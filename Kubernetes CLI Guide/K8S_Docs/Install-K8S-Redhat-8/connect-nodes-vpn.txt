@@ -1,8 +1,8 @@
 ## Summary of Previous Steps, Issues, and Debug
 
 ### Infrastructure Overview
-- **Master Node**: Cloud server (172.31.25.226 private, 44.197.172.197 public) - RHEL 8
-- **Worker Node 1**: Cloud server (172.31.19.44 private, 3.216.125.86 public) - RHEL 8  
+- **Master Node**: Cloud server (172.31.25.226 private, public ip change everytimes) - RHEL 8
+- **Worker Node 1**: Cloud server (172.31.19.44 private, public ip change everytimes) - RHEL 8  
 - **Worker Node 2**: Local VMware (192.168.47.131) - RHEL 9
 
 ### Issues Encountered

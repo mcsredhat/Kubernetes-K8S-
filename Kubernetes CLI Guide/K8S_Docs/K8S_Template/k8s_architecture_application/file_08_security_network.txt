@@ -1,0 +1,222 @@
+# ============================================================================
+# 08-security-network.yaml - Network Security and Traffic Control (CORRECTED)
+# ============================================================================
+# Purpose: Implements network segmentation and traffic policies for security
+# Dependencies: Network policy controller must be enabled (Calico, Cilium, etc.)
+# Features: Ingress/egress filtering, DNS restrictions, monitoring access
+# CRITICAL FIXES:
+# - Fixed namespace selectors to use proper label matching
+# - Corrected ingress rules to work with common ingress controllers
+# - Simplified egress rules to prevent connectivity issues
+# ============================================================================
+
+# Network Policy - Controls traffic flow between pods and external services
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{APP_NAME}}-network-policy
+  namespace: {{NAMESPACE}}
+  labels:
+    app: {{APP_NAME}}
+    app.kubernetes.io/name: {{APP_NAME}}
+    app.kubernetes.io/component: security
+    app.kubernetes.io/part-of: {{APP_NAME}}
+  annotations:
+    description: "Network policy for {{APP_NAME}} with fine-grained access control"
+spec:
+  podSelector:
+    matchLabels:
+      app: {{APP_NAME}}
+      app.kubernetes.io/name: {{APP_NAME}}
+  policyTypes:
+  - Ingress
+  - Egress
+  
+  ingress:
+  # FIXED: Allow traffic from ingress controller (common namespace labels)
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+    ports:
+    - protocol: TCP
+      port: 8080
+  
+  # Alternative ingress controller namespace selector
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          app.kubernetes.io/name: ingress-nginx
+    ports:
+    - protocol: TCP
+      port: 8080
+  
+  # Allow monitoring systems to scrape metrics
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    ports:
+    - protocol: TCP
+      port: 8080
+  
+  # Allow communication within the same application
+  - from:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/part-of: {{APP_NAME}}
+    ports:
+    - protocol: TCP
+      port: 8080
+  
+  # Allow health checks from system components (kubelet, etc.)
+  - from: []
+    ports:
+    - protocol: TCP
+      port: 8080
+  
+  egress:
+  # FIXED: DNS resolution (allow all for simplicity and functionality)
+  - to: []
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+  
+  # Communication with backend services in same namespace
+  - to:
+    - podSelector:
+        matchLabels:
+          app: {{APP_NAME}}-backend
+    ports:
+    - protocol: TCP
+      port: 8080
+  
+  # FIXED: Allow HTTPS outbound (simplified - no destination restrictions)
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 443
+  
+  # FIXED: Allow HTTP outbound (simplified - no destination restrictions)
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 80
+  
+  # Database access (customize based on your database)
+  - to:
+    - podSelector:
+        matchLabels:
+          app: postgres
+    ports:
+    - protocol: TCP
+      port: 5432
+  
+  # Redis access (if using Redis)
+  - to:
+    - podSelector:
+        matchLabels:
+          app: redis
+    ports:
+    - protocol: TCP
+      port: 6379
+
+---
+# Network Policy for Backend Service
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{APP_NAME}}-backend-network-policy
+  namespace: {{NAMESPACE}}
+  labels:
+    app: {{APP_NAME}}-backend
+    app.kubernetes.io/component: security
+spec:
+  podSelector:
+    matchLabels:
+      app: {{APP_NAME}}-backend
+  policyTypes:
+  - Ingress
+  - Egress
+  
+  ingress:
+  # Allow traffic from main application
+  - from:
+    - podSelector:
+        matchLabels:
+          app: {{APP_NAME}}
+    ports:
+    - protocol: TCP
+      port: 8080
+  
+  # Allow monitoring
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    ports:
+    - protocol: TCP
+      port: 8080
+  
+  # Allow direct ingress access
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+    ports:
+    - protocol: TCP
+      port: 8080
+  
+  egress:
+  # DNS resolution
+  - to: []
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+  
+  # External API access
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 80
+
+---
+# FIXED: Simplified monitoring access policy
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{APP_NAME}}-monitoring-access
+  namespace: {{NAMESPACE}}
+  labels:
+    app: {{APP_NAME}}
+    app.kubernetes.io/component: security
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/part-of: {{APP_NAME}}
+  policyTypes:
+  - Ingress
+  ingress:
+  # Allow monitoring from monitoring namespace
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    ports:
+    - protocol: TCP
+      port: 8080
+  
+  # Allow monitoring from kube-system (for metrics-server)
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: TCP
+      port: 8080

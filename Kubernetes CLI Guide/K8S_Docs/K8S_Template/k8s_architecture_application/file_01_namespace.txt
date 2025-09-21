@@ -1,0 +1,91 @@
+# ============================================================================
+# 01-namespace.yaml - Namespace and Resource Management (CORRECTED)
+# ============================================================================
+# Purpose: Creates isolated environment with security policies and resource limits
+# Dependencies: None (must be applied first)
+# Fixes: None required - this file was already correct
+# ============================================================================
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{NAMESPACE}}
+  labels:
+    name: {{NAMESPACE}}
+    environment: {{ENVIRONMENT}}
+    team: {{TEAM}}
+    app.kubernetes.io/managed-by: kubectl
+    # Pod Security Standards - Enforces security policies at namespace level
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/audit: restricted  
+    pod-security.kubernetes.io/warn: restricted
+  annotations:
+    description: "Namespace for {{APP_NAME}} application in {{ENVIRONMENT}} environment"
+    contact: "{{TEAM}}@company.com"
+    created-by: "k8s-template-v2.0"
+spec:
+  finalizers: ["kubernetes"]
+
+---
+# ResourceQuota - Prevents resource overconsumption
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: {{NAMESPACE}}-quota
+  namespace: {{NAMESPACE}}
+  labels:
+    component: resource-management
+    app.kubernetes.io/part-of: {{APP_NAME}}
+spec:
+  hard:
+    # Compute resources
+    requests.cpu: "2000m"      # Total CPU requests cannot exceed 2 cores
+    requests.memory: "4Gi"     # Total memory requests cannot exceed 4GB
+    limits.cpu: "4000m"        # Total CPU limits cannot exceed 4 cores  
+    limits.memory: "8Gi"       # Total memory limits cannot exceed 8GB
+    
+    # Storage resources
+    requests.storage: "50Gi"   # Total storage requests cannot exceed 50GB
+    persistentvolumeclaims: "5" # Maximum 5 PVCs in this namespace
+    
+    # Object count limits
+    pods: "10"                 # Maximum 10 pods
+    services: "5"              # Maximum 5 services
+    secrets: "10"              # Maximum 10 secrets
+    configmaps: "10"           # Maximum 10 configmaps
+    ingresses.networking.k8s.io: "5"
+
+---
+# LimitRange - Pod-level resource constraints
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: {{NAMESPACE}}-limits
+  namespace: {{NAMESPACE}}
+  labels:
+    component: resource-management
+    app.kubernetes.io/part-of: {{APP_NAME}}
+spec:
+  limits:
+  - type: Container
+    default:
+      cpu: 500m
+      memory: 512Mi
+      ephemeral-storage: 1Gi
+    defaultRequest:
+      cpu: 100m
+      memory: 128Mi
+      ephemeral-storage: 500Mi
+    max:
+      cpu: 2000m
+      memory: 2Gi
+      ephemeral-storage: 5Gi
+    min:
+      cpu: 50m
+      memory: 64Mi
+      ephemeral-storage: 100Mi
+  - type: PersistentVolumeClaim
+    max:
+      storage: 20Gi
+    min:
+      storage: 1Gi

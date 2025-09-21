@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kubernetes Application Architecture</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            margin: 0;
+            font-size: 2.5rem;
+            font-weight: 300;
+        }
+        
+        .header p {
+            margin: 10px 0 0 0;
+            opacity: 0.9;
+            font-size: 1.1rem;
+        }
+        
+        .diagram-container {
+            padding: 30px;
+            overflow-x: auto;
+        }
+        
+        .namespace {
+            border: 3px solid #667eea;
+            border-radius: 10px;
+            margin: 20px 0;
+            padding: 20px;
+            position: relative;
+            background: #f8f9ff;
+        }
+        
+        .namespace-title {
+            position: absolute;
+            top: -15px;
+            left: 20px;
+            background: #667eea;
+            color: white;
+            padding: 5px 15px;
+            border-radius: 15px;
+            font-weight: bold;
+            font-size: 14px;
+        }
+        
+        .component-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        
+        .component {
+            background: white;
+            border: 2px solid;
+            border-radius: 8px;
+            padding: 15px;
+            text-align: center;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            transition: transform 0.2s;
+        }
+        
+        .component:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+        }
+        
+        .component h3 {
+            margin: 0 0 10px 0;
+            font-size: 16px;
+        }
+        
+        .component p {
+            margin: 5px 0;
+            font-size: 12px;
+            color: #666;
+        }
+        
+        .file-ref {
+            background: #e3f2fd;
+            color: #1976d2;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 10px;
+            font-weight: bold;
+        }
+        
+        /* Component Types */
+        .security { border-color: #f44336; }
+        .storage { border-color: #ff9800; }
+        .config { border-color: #4caf50; }
+        .compute { border-color: #2196f3; }
+        .network { border-color: #9c27b0; }
+        .monitoring { border-color: #607d8b; }
+        .backup { border-color: #795548; }
+        
+        .security .file-ref { background: #ffebee; color: #c62828; }
+        .storage .file-ref { background: #fff3e0; color: #ef6c00; }
+        .config .file-ref { background: #e8f5e8; color: #2e7d32; }
+        .compute .file-ref { background: #e3f2fd; color: #1976d2; }
+        .network .file-ref { background: #f3e5f5; color: #7b1fa2; }
+        .monitoring .file-ref { background: #eceff1; color: #455a64; }
+        .backup .file-ref { background: #efebe9; color: #5d4037; }
+        
+        .external {
+            background: #fff3cd;
+            border: 2px dashed #856404;
+            color: #856404;
+        }
+        
+        .flow-arrow {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 10px 0;
+            font-size: 24px;
+            color: #667eea;
+        }
+        
+        .legend {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+            margin: 30px 0;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 4px;
+            border: 2px solid;
+        }
+        
+        .deployment-order {
+            background: #e8f5e8;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+        
+        .deployment-order h3 {
+            color: #2e7d32;
+            margin: 0 0 15px 0;
+        }
+        
+        .step {
+            display: flex;
+            align-items: center;
+            margin: 10px 0;
+            padding: 10px;
+            background: white;
+            border-radius: 6px;
+            border-left: 4px solid #4caf50;
+        }
+        
+        .step-number {
+            background: #4caf50;
+            color: white;
+            width: 25px;
+            height: 25px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            margin-right: 15px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Kubernetes Application Architecture</h1>
+            <p>Complete Production-Ready Template Structure</p>
+        </div>
+        
+        <div class="diagram-container">
+            <!-- External Dependencies -->
+            <div class="namespace external">
+                <div class="namespace-title">External Dependencies</div>
+                <div class="component-grid">
+                    <div class="component external">
+                        <h3>🔐 cert-manager</h3>
+                        <p>SSL/TLS certificate management</p>
+                        <p>Required for HTTPS ingress</p>
+                    </div>
+                    <div class="component external">
+                        <h3>🌐 ingress-nginx</h3>
+                        <p>Load balancer and ingress controller</p>
+                        <p>Routes external traffic</p>
+                    </div>
+                    <div class="component external">
+                        <h3>📊 metrics-server</h3>
+                        <p>Resource metrics API</p>
+                        <p>Required for HPA scaling</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flow-arrow">⬇️ Dependencies Must Be Installed First</div>
+
+            <!-- Main Application Namespace -->
+            <div class="namespace">
+                <div class="namespace-title">{{NAMESPACE}} (Application Namespace)</div>
+                
+                <!-- Foundation Layer -->
+                <h4 style="color: #667eea; margin: 20px 0 10px 0;">🏗️ Foundation Layer</h4>
+                <div class="component-grid">
+                    <div class="component security">
+                        <h3>🔒 Namespace</h3>
+                        <p>Isolated environment with security policies</p>
+                        <p>Resource quotas and limits</p>
+                        <div class="file-ref">01-namespace.yaml</div>
+                    </div>
+                    
+                    <div class="component security">
+                        <h3>👤 RBAC</h3>
+                        <p>Service Account, Roles, RoleBindings</p>
+                        <p>Minimal privilege access control</p>
+                        <div class="file-ref">04-rbac.yaml</div>
+                    </div>
+                    
+                    <div class="component storage">
+                        <h3>💾 Storage</h3>
+                        <p>StorageClass, PVC</p>
+                        <p>Persistent data storage with encryption</p>
+                        <div class="file-ref">02-storage.yaml</div>
+                    </div>
+                </div>
+
+                <!-- Configuration Layer -->
+                <h4 style="color: #667eea; margin: 20px 0 10px 0;">⚙️ Configuration Layer</h4>
+                <div class="component-grid">
+                    <div class="component config">
+                        <h3>🗝️ Secrets</h3>
+                        <p>Database credentials, API keys</p>
+                        <p>Encrypted sensitive configuration</p>
+                        <div class="file-ref">03-secrets-config.yaml</div>
+                    </div>
+                    
+                    <div class="component config">
+                        <h3>📄 ConfigMap</h3>
+                        <p>Application settings, Nginx config</p>
+                        <p>Non-sensitive configuration data</p>
+                        <div class="file-ref">03-secrets-config.yaml</div>
+                    </div>
+                </div>
+
+                <!-- Application Layer -->
+                <h4 style="color: #667eea; margin: 20px 0 10px 0;">🚀 Application Layer</h4>
+                <div class="component-grid">
+                    <div class="component compute">
+                        <h3>🏃 Main Deployment</h3>
+                        <p>Primary application pods</p>
+                        <p>Init containers, health checks, security contexts</p>
+                        <div class="file-ref">05-deployment.yaml</div>
+                    </div>
+                    
+                    <div class="component compute">
+                        <h3>🔄 Backend API</h3>
+                        <p>Backend service deployment</p>
+                        <p>Internal API endpoints</p>
+                        <div class="file-ref">05-deployment.yaml</div>
+                    </div>
+                </div>
+
+                <!-- Network Layer -->
+                <h4 style="color: #667eea; margin: 20px 0 10px 0;">🌐 Network Layer</h4>
+                <div class="component-grid">
+                    <div class="component network">
+                        <h3>⚖️ Services</h3>
+                        <p>ClusterIP services for load balancing</p>
+                        <p>Internal service discovery</p>
+                        <div class="file-ref">06-services-ingress.yaml</div>
+                    </div>
+                    
+                    <div class="component network">
+                        <h3>🌍 Ingress</h3>
+                        <p>External access with SSL termination</p>
+                        <p>Rate limiting, security headers</p>
+                        <div class="file-ref">06-services-ingress.yaml</div>
+                    </div>
+                    
+                    <div class="component security">
+                        <h3>🛡️ Network Policy</h3>
+                        <p>Traffic filtering and segmentation</p>
+                        <p>Ingress/egress rules</p>
+                        <div class="file-ref">08-security-network.yaml</div>
+                    </div>
+                </div>
+
+                <!-- Scaling & Availability -->
+                <h4 style="color: #667eea; margin: 20px 0 10px 0;">📈 Scaling & Availability</h4>
+                <div class="component-grid">
+                    <div class="component compute">
+                        <h3>📊 HPA</h3>
+                        <p>Horizontal Pod Autoscaler</p>
+                        <p>CPU/Memory based scaling</p>
+                        <div class="file-ref">07-autoscaling-availability.yaml</div>
+                    </div>
+                    
+                    <div class="component security">
+                        <h3>🛡️ PDB</h3>
+                        <p>Pod Disruption Budget</p>
+                        <p>High availability during maintenance</p>
+                        <div class="file-ref">07-autoscaling-availability.yaml</div>
+                    </div>
+                </div>
+
+                <!-- Backup & Maintenance -->
+                <h4 style="color: #667eea; margin: 20px 0 10px 0;">💾 Backup & Maintenance</h4>
+                <div class="component-grid">
+                    <div class="component backup">
+                        <h3>📸 Volume Snapshots</h3>
+                        <p>Point-in-time data snapshots</p>
+                        <p>Backup and restore capability</p>
+                        <div class="file-ref">10-backup-maintenance.yaml</div>
+                    </div>
+                    
+                    <div class="component backup">
+                        <h3>⏰ Backup CronJob</h3>
+                        <p>Automated daily backups</p>
+                        <p>Data archiving and cleanup</p>
+                        <div class="file-ref">10-backup-maintenance.yaml</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flow-arrow">⬇️ Monitoring Infrastructure</div>
+
+            <!-- Monitoring Namespace -->
+            <div class="namespace">
+                <div class="namespace-title">monitoring (Monitoring Namespace)</div>
+                
+                <div class="component-grid">
+                    <div class="component monitoring">
+                        <h3>📊 Prometheus</h3>
+                        <p>Metrics collection and storage</p>
+                        <p>Alert rules and service discovery</p>
+                        <div class="file-ref">09-monitoring.yaml</div>
+                    </div>
+                    
+                    <div class="component monitoring">
+                        <h3>📈 Grafana</h3>
+                        <p>Visualization dashboards</p>
+                        <p>Application and infrastructure metrics</p>
+                        <div class="file-ref">09-monitoring.yaml</div>
+                    </div>
+                    
+                    <div class="component monitoring">
+                        <h3>🎯 ServiceMonitor</h3>
+                        <p>Prometheus Operator integration</p>
+                        <p>Automated metrics scraping</p>
+                        <div class="file-ref">09-monitoring.yaml</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Legend -->
+            <div class="legend">
+                <h3 style="grid-column: 1/-1; margin: 0 0 15px 0; color: #333;">Component Types Legend</h3>
+                <div class="legend-item">
+                    <div class="legend-color security"></div>
+                    <span>Security & Access Control</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color storage"></div>
+                    <span>Storage & Persistence</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color config"></div>
+                    <span>Configuration Management</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color compute"></div>
+                    <span>Compute & Applications</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color network"></div>
+                    <span>Networking & Load Balancing</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color monitoring"></div>
+                    <span>Monitoring & Observability</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color backup"></div>
+                    <span>Backup & Maintenance</span>
+                </div>
+            </div>
+
+            <!-- Deployment Order -->
+            <div class="deployment-order">
+                <h3>📋 Deployment Order & Dependencies</h3>
+                
+                <div class="step">
+                    <div class="step-number">1</div>
+                    <div>
+                        <strong>Install Prerequisites:</strong>
+                        cert-manager, ingress-nginx, metrics-server, prometheus-operator (optional)
+                    </div>
+                </div>
+                
+                <div class="step">
+                    <div class="step-number">2</div>
+                    <div>
+                        <strong>Foundation:</strong>
+                        01-namespace.yaml → 04-rbac.yaml → 02-storage.yaml
+                    </div>
+                </div>
+                
+                <div class="step">
+                    <div class="step-number">3</div>
+                    <div>
+                        <strong>Configuration:</strong>
+                        03-secrets-config.yaml (Update all default values!)
+                    </div>
+                </div>
+                
+                <div class="step">
+                    <div class="step-number">4</div>
+                    <div>
+                        <strong>Application:</strong>
+                        05-deployment.yaml → 06-services-ingress.yaml
+                    </div>
+                </div>
+                
+                <div class="step">
+                    <div class="step-number">5</div>
+                    <div>
+                        <strong>Scaling & Security:</strong>
+                        07-autoscaling-availability.yaml → 08-security-network.yaml
+                    </div>
+                </div>
+                
+                <div class="step">
+                    <div class="step-number">6</div>
+                    <div>
+                        <strong>Observability:</strong>
+                        09-monitoring.yaml (Creates monitoring namespace and stack)
+                    </div>
+                </div>
+                
+                <div class="step">
+                    <div class="step-number">7</div>
+                    <div>
+                        <strong>Operations:</strong>
+                        10-backup-maintenance.yaml (Backup jobs and snapshots)
+                    </div>
+                </div>
+            </div>
+
+            <!-- Key Features Summary -->
+            <div style="background: #f0f8ff; padding: 20px; border-radius: 10px; margin: 20px 0;">
+                <h3 style="color: #1976d2; margin: 0 0 15px 0;">🎯 Key Features & Benefits</h3>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px;">
+                    <div>
+                        <h4>🔒 Security First</h4>
+                        <ul>
+                            <li>Pod Security Standards</li>
+                            <li>Network policies</li>
+                            <li>RBAC with minimal privileges</li>
+                            <li>Secret encryption</li>
+                        </ul>
+                    </div>
+                    <div>
+                        <h4>📈 Production Ready</h4>
+                        <ul>
+                            <li>Auto-scaling (HPA/VPA)</li>
+                            <li>Health checks & probes</li>
+                            <li>Graceful shutdown</li>
+                            <li>High availability</li>
+                        </ul>
+                    </div>
+                    <div>
+                        <h4>👁️ Full Observability</h4>
+                        <ul>
+                            <li>Prometheus metrics</li>
+                            <li>Grafana dashboards</li>
+                            <li>Structured logging</li>
+                            <li>Alerting rules</li>
+                        </ul>
+                    </div>
+                    <div>
+                        <h4>💾 Data Protection</h4>
+                        <ul>
+                            <li>Automated backups</li>
+                            <li>Volume snapshots</li>
+                            <li>Restore procedures</li>
+                            <li>Data encryption</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

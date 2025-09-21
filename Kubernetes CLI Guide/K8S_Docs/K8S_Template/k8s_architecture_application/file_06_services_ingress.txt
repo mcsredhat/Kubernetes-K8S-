@@ -1,0 +1,164 @@
+# ============================================================================
+# 06-services-ingress.yaml - Network Access and Load Balancing (CORRECTED)
+# ============================================================================
+# Purpose: Exposes applications internally and externally with load balancing
+# Dependencies: Deployment must exist, cert-manager and ingress-nginx required
+# Features: SSL termination, rate limiting, security headers
+# CRITICAL FIXES:
+# - Fixed sessionAffinity configuration (removed deprecated syntax)
+# - Updated Ingress to current networking.k8s.io/v1 API
+# ============================================================================
+
+# Main Application Service - Internal load balancer
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{APP_NAME}}-service
+  namespace: {{NAMESPACE}}
+  labels:
+    app: {{APP_NAME}}
+    app.kubernetes.io/name: {{APP_NAME}}
+    app.kubernetes.io/component: service
+    app.kubernetes.io/part-of: {{APP_NAME}}
+    environment: {{ENVIRONMENT}}
+  annotations:
+    description: "Main service for {{APP_NAME}} application"
+    # Prometheus monitoring
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "80"
+    prometheus.io/path: "/metrics"
+spec:
+  type: ClusterIP
+  selector:
+    app: {{APP_NAME}}
+    app.kubernetes.io/name: {{APP_NAME}}
+    version: v1.0
+  ports:
+  - name: http
+    port: 80
+    targetPort: http
+    protocol: TCP
+  # FIXED: Corrected sessionAffinity configuration
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 10800
+
+---
+# Backend Service - Internal API service
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{APP_NAME}}-backend
+  namespace: {{NAMESPACE}}
+  labels:
+    app: {{APP_NAME}}-backend
+    app.kubernetes.io/name: {{APP_NAME}}-backend
+    app.kubernetes.io/component: api
+    app.kubernetes.io/part-of: {{APP_NAME}}
+  annotations:
+    description: "Backend API service for {{APP_NAME}}"
+spec:
+  selector:
+    app: {{APP_NAME}}-backend
+    app.kubernetes.io/name: {{APP_NAME}}-backend
+  ports:
+  - port: 8080
+    targetPort: 8080
+    name: http
+  type: ClusterIP
+
+---
+# FIXED: Updated Ingress with current networking.k8s.io/v1 API
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{APP_NAME}}-ingress
+  namespace: {{NAMESPACE}}
+  labels:
+    app: {{APP_NAME}}
+    app.kubernetes.io/name: {{APP_NAME}}
+    app.kubernetes.io/component: ingress
+    app.kubernetes.io/part-of: {{APP_NAME}}
+    environment: {{ENVIRONMENT}}
+  annotations:
+    # Ingress controller
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    
+    # SSL/TLS configuration
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/ssl-protocols: "TLSv1.2 TLSv1.3"
+    
+    # Enhanced security headers
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      more_set_headers "X-Frame-Options: DENY";
+      more_set_headers "X-Content-Type-Options: nosniff";
+      more_set_headers "X-XSS-Protection: 1; mode=block";
+      more_set_headers "Strict-Transport-Security: max-age=31536000; includeSubDomains; preload";
+      more_set_headers "Referrer-Policy: strict-origin-when-cross-origin";
+      more_set_headers "Permissions-Policy: geolocation=(), microphone=(), camera=()";
+    
+    # Rate limiting
+    nginx.ingress.kubernetes.io/limit-rps: "5"
+    nginx.ingress.kubernetes.io/limit-connections: "20"
+    nginx.ingress.kubernetes.io/limit-req-status-code: "429"
+    
+    # Performance optimizations
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-buffering: "on"
+    
+    # CORS configuration
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "https://{{DOMAIN}}"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, OPTIONS"
+
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: {{DOMAIN}}
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: {{APP_NAME}}-service
+            port:
+              number: 80
+  tls:
+  - hosts:
+    - {{DOMAIN}}
+    secretName: {{APP_NAME}}-tls
+
+---
+# Backend Ingress (Optional)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{APP_NAME}}-backend-ingress
+  namespace: {{NAMESPACE}}
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: api.{{DOMAIN}}
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: {{APP_NAME}}-backend
+            port:
+              number: 8080
+  tls:
+  - hosts:
+    - api.{{DOMAIN}}
+    secretName: {{APP_NAME}}-backend-tls

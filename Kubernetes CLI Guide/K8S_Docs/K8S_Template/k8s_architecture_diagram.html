@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kubernetes Architecture Layers</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #2c3e50, #3498db);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            margin: 0;
+            font-size: 2.5em;
+            font-weight: 300;
+        }
+        
+        .diagram-container {
+            padding: 40px;
+            background: #f8f9fa;
+        }
+        
+        .layer {
+            margin-bottom: 20px;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease;
+        }
+        
+        .layer:hover {
+            transform: translateY(-5px);
+        }
+        
+        .layer-header {
+            padding: 20px 30px;
+            color: white;
+            font-weight: bold;
+            font-size: 1.3em;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .layer-number {
+            background: rgba(255,255,255,0.2);
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+        }
+        
+        .layer-content {
+            background: white;
+            padding: 25px 30px;
+            border-left: 5px solid;
+        }
+        
+        .layer-7 .layer-header { background: linear-gradient(135deg, #e74c3c, #c0392b); }
+        .layer-7 .layer-content { border-left-color: #e74c3c; }
+        
+        .layer-6 .layer-header { background: linear-gradient(135deg, #9b59b6, #8e44ad); }
+        .layer-6 .layer-content { border-left-color: #9b59b6; }
+        
+        .layer-5 .layer-header { background: linear-gradient(135deg, #3498db, #2980b9); }
+        .layer-5 .layer-content { border-left-color: #3498db; }
+        
+        .layer-4 .layer-header { background: linear-gradient(135deg, #1abc9c, #16a085); }
+        .layer-4 .layer-content { border-left-color: #1abc9c; }
+        
+        .layer-3 .layer-header { background: linear-gradient(135deg, #f39c12, #e67e22); }
+        .layer-3 .layer-content { border-left-color: #f39c12; }
+        
+        .layer-2 .layer-header { background: linear-gradient(135deg, #2ecc71, #27ae60); }
+        .layer-2 .layer-content { border-left-color: #2ecc71; }
+        
+        .layer-1 .layer-header { background: linear-gradient(135deg, #34495e, #2c3e50); }
+        .layer-1 .layer-content { border-left-color: #34495e; }
+        
+        .components {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin: 15px 0;
+        }
+        
+        .component {
+            background: #f8f9fa;
+            padding: 12px 16px;
+            border-radius: 8px;
+            border-left: 3px solid #3498db;
+            font-size: 0.9em;
+        }
+        
+        .component strong {
+            color: #2c3e50;
+        }
+        
+        .connections {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 15px 0;
+            position: relative;
+        }
+        
+        .arrow {
+            width: 0;
+            height: 0;
+            border-left: 15px solid transparent;
+            border-right: 15px solid transparent;
+            border-top: 20px solid #bdc3c7;
+            margin: 0 10px;
+        }
+        
+        .connection-label {
+            position: absolute;
+            right: 30px;
+            background: #3498db;
+            color: white;
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-size: 0.8em;
+            font-weight: bold;
+        }
+        
+        .flow-diagram {
+            background: white;
+            padding: 30px;
+            margin: 30px 0;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        
+        .flow-step {
+            display: flex;
+            align-items: center;
+            margin: 20px 0;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #3498db;
+        }
+        
+        .step-number {
+            background: #3498db;
+            color: white;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 15px;
+            font-weight: bold;
+            flex-shrink: 0;
+        }
+        
+        .legend {
+            background: white;
+            padding: 25px;
+            margin-top: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        
+        .legend h3 {
+            margin-top: 0;
+            color: #2c3e50;
+        }
+        
+        .legend-items {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+        }
+        
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 4px;
+            margin-right: 10px;
+        }
+        
+        @media (max-width: 768px) {
+            body { padding: 10px; }
+            .diagram-container { padding: 20px; }
+            .components { grid-template-columns: 1fr; }
+            .legend-items { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Kubernetes Architecture: 7-Layer Model</h1>
+            <p>Interactive visualization showing how each layer builds upon the previous one</p>
+        </div>
+        
+        <div class="diagram-container">
+            <!-- Layer 7: Application Layer -->
+            <div class="layer layer-7">
+                <div class="layer-header">
+                    <span>Layer 7: Application Layer</span>
+                    <div class="layer-number">7</div>
+                </div>
+                <div class="layer-content">
+                    <p><strong>Your Business Logic & Applications</strong></p>
+                    <div class="components">
+                        <div class="component"><strong>Microservices:</strong> Business logic containers</div>
+                        <div class="component"><strong>Web Applications:</strong> Frontend UIs and APIs</div>
+                        <div class="component"><strong>Databases:</strong> MySQL, PostgreSQL, MongoDB</div>
+                        <div class="component"><strong>Message Queues:</strong> RabbitMQ, Kafka</div>
+                        <div class="component"><strong>Custom Apps:</strong> Your specific business solutions</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="connections">
+                <div class="arrow"></div>
+                <div class="connection-label">Depends on Platform Services</div>
+            </div>
+            
+            <!-- Layer 6: Platform Services -->
+            <div class="layer layer-6">
+                <div class="layer-header">
+                    <span>Layer 6: Platform Services Layer</span>
+                    <div class="layer-number">6</div>
+                </div>
+                <div class="layer-content">
+                    <p><strong>Production-Ready Utilities & Services</strong></p>
+                    <div class="components">
+                        <div class="component"><strong>Monitoring:</strong> Prometheus, Grafana</div>
+                        <div class="component"><strong>Logging:</strong> ELK Stack, Fluentd</div>
+                        <div class="component"><strong>Service Mesh:</strong> Istio, Linkerd</div>
+                        <div class="component"><strong>CI/CD:</strong> ArgoCD, Tekton, Jenkins</div>
+                        <div class="component"><strong>Security:</strong> OPA Gatekeeper, Falco</div>
+                        <div class="component"><strong>Backup:</strong> Velero, Kasten</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="connections">
+                <div class="arrow"></div>
+                <div class="connection-label">Operates on K8s Resources</div>
+            </div>
+            
+            <!-- Layer 5: Kubernetes Resource Layer -->
+            <div class="layer layer-5">
+                <div class="layer-header">
+                    <span>Layer 5: Kubernetes Resource Layer</span>
+                    <div class="layer-number">5</div>
+                </div>
+                <div class="layer-content">
+                    <p><strong>Kubernetes Building Blocks & Blueprints</strong></p>
+                    <div class="components">
+                        <div class="component"><strong>Workloads:</strong> Deployments, StatefulSets, DaemonSets</div>
+                        <div class="component"><strong>Core Objects:</strong> Pods, Services, ConfigMaps, Secrets</div>
+                        <div class="component"><strong>Networking:</strong> Ingress, NetworkPolicies</div>
+                        <div class="component"><strong>Storage:</strong> PVs, PVCs, StorageClasses</div>
+                        <div class="component"><strong>Scaling:</strong> HPA, VPA, Jobs, CronJobs</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="connections">
+                <div class="arrow"></div>
+                <div class="connection-label">Managed by Data Plane</div>
+            </div>
+            
+            <!-- Layer 4: Kubernetes Data Plane -->
+            <div class="layer layer-4">
+                <div class="layer-header">
+                    <span>Layer 4: Kubernetes Data Plane Layer</span>
+                    <div class="layer-number">4</div>
+                </div>
+                <div class="layer-content">
+                    <p><strong>Node-Level Kubernetes Components</strong></p>
+                    <div class="components">
+                        <div class="component"><strong>kubelet:</strong> Node agent managing pods</div>
+                        <div class="component"><strong>kube-proxy:</strong> Network proxy for services</div>
+                        <div class="component"><strong>CNI:</strong> Container Network Interface</div>
+                        <div class="component"><strong>CSI:</strong> Container Storage Interface</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="connections">
+                <div class="arrow"></div>
+                <div class="connection-label">Controlled by Control Plane</div>
+            </div>
+            
+            <!-- Layer 3: Kubernetes Control Plane -->
+            <div class="layer layer-3">
+                <div class="layer-header">
+                    <span>Layer 3: Kubernetes Control Plane Layer</span>
+                    <div class="layer-number">3</div>
+                </div>
+                <div class="layer-content">
+                    <p><strong>The Brain - Decision Making Components</strong></p>
+                    <div class="components">
+                        <div class="component"><strong>API Server:</strong> Frontend for all cluster operations</div>
+                        <div class="component"><strong>etcd:</strong> Distributed key-value store</div>
+                        <div class="component"><strong>Controller Manager:</strong> Maintains desired state</div>
+                        <div class="component"><strong>Scheduler:</strong> Assigns pods to nodes</div>
+                        <div class="component"><strong>Cloud Controller:</strong> Cloud provider integration</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="connections">
+                <div class="arrow"></div>
+                <div class="connection-label">Runs on Container Runtime</div>
+            </div>
+            
+            <!-- Layer 2: Container Runtime -->
+            <div class="layer layer-2">
+                <div class="layer-header">
+                    <span>Layer 2: Container Runtime Layer</span>
+                    <div class="layer-number">2</div>
+                </div>
+                <div class="layer-content">
+                    <p><strong>Container Execution Engine</strong></p>
+                    <div class="components">
+                        <div class="component"><strong>Container Runtimes:</strong> Docker, containerd, CRI-O</div>
+                        <div class="component"><strong>Image Management:</strong> Pull, store, manage images</div>
+                        <div class="component"><strong>Container Isolation:</strong> cgroups, namespaces</div>
+                        <div class="component"><strong>Resource Management:</strong> CPU, memory limits</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="connections">
+                <div class="arrow"></div>
+                <div class="connection-label">Requires Infrastructure</div>
+            </div>
+            
+            <!-- Layer 1: Infrastructure -->
+            <div class="layer layer-1">
+                <div class="layer-header">
+                    <span>Layer 1: Infrastructure Layer</span>
+                    <div class="layer-number">1</div>
+                </div>
+                <div class="layer-content">
+                    <p><strong>Foundation - Physical & Virtual Resources</strong></p>
+                    <div class="components">
+                        <div class="component"><strong>Compute:</strong> Physical/Virtual machines (nodes)</div>
+                        <div class="component"><strong>Storage:</strong> Local disks, SAN, cloud storage</div>
+                        <div class="component"><strong>Networking:</strong> Switches, routers, load balancers</div>
+                        <div class="component"><strong>Cloud Resources:</strong> EC2, VMs, managed services</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Flow Diagram -->
+            <div class="flow-diagram">
+                <h3 style="text-align: center; color: #2c3e50; margin-bottom: 30px;">Application Deployment Flow</h3>
+                
+                <div class="flow-step">
+                    <div class="step-number">1</div>
+                    <div>
+                        <strong>Developer creates application code</strong> (Layer 7)<br>
+                        <small>Writes microservice, packages as Docker image</small>
+                    </div>
+                </div>
+                
+                <div class="flow-step">
+                    <div class="step-number">2</div>
+                    <div>
+                        <strong>Defines Kubernetes resources</strong> (Layer 5)<br>
+                        <small>Creates Deployment, Service, ConfigMap YAML files</small>
+                    </div>
+                </div>
+                
+                <div class="flow-step">
+                    <div class="step-number">3</div>
+                    <div>
+                        <strong>Submits to API Server</strong> (Layer 3)<br>
+                        <small>kubectl apply sends resources to control plane</small>
+                    </div>
+                </div>
+                
+                <div class="flow-step">
+                    <div class="step-number">4</div>
+                    <div>
+                        <strong>Scheduler assigns pods to nodes</strong> (Layer 3)<br>
+                        <small>Finds best nodes based on resources and constraints</small>
+                    </div>
+                </div>
+                
+                <div class="flow-step">
+                    <div class="step-number">5</div>
+                    <div>
+                        <strong>kubelet receives pod specs</strong> (Layer 4)<br>
+                        <small>Node agent gets instructions from control plane</small>
+                    </div>
+                </div>
+                
+                <div class="flow-step">
+                    <div class="step-number">6</div>
+                    <div>
+                        <strong>Container runtime starts containers</strong> (Layer 2)<br>
+                        <small>Pulls images and creates running containers</small>
+                    </div>
+                </div>
+                
+                <div class="flow-step">
+                    <div class="step-number">7</div>
+                    <div>
+                        <strong>Application runs on infrastructure</strong> (Layer 1)<br>
+                        <small>Containers consume CPU, memory, storage, network</small>
+                    </div>
+                </div>
+                
+                <div class="flow-step">
+                    <div class="step-number">8</div>
+                    <div>
+                        <strong>Platform services monitor and manage</strong> (Layer 6)<br>
+                        <small>Prometheus collects metrics, logs are aggregated, traffic is managed</small>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Legend -->
+            <div class="legend">
+                <h3>Communication Patterns</h3>
+                <div class="legend-items">
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: linear-gradient(135deg, #3498db, #2980b9);"></div>
+                        <span><strong>Downward:</strong> Instructions flow down from control plane</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: linear-gradient(135deg, #2ecc71, #27ae60);"></div>
+                        <span><strong>Upward:</strong> Status reports flow up to control plane</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: linear-gradient(135deg, #f39c12, #e67e22);"></div>
+                        <span><strong>Horizontal:</strong> Components within same layer communicate</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: linear-gradient(135deg, #9b59b6, #8e44ad);"></div>
+                        <span><strong>Dependencies:</strong> Each layer depends on layers below</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Add interactive features
+        document.querySelectorAll('.layer').forEach(layer => {
+            layer.addEventListener('click', function() {
+                // Toggle expanded view
+                const content = this.querySelector('.layer-content');
+                if (content.style.display === 'none') {
+                    content.style.display = 'block';
+                } else {
+                    // content.style.display = 'none';
+                }
+            });
+        });
+        
+        // Smooth scrolling for better UX
+        document.querySelectorAll('.layer').forEach(layer => {
+            layer.addEventListener('mouseenter', function() {
+                this.style.boxShadow = '0 8px 25px rgba(0,0,0,0.15)';
+            });
+            
+            layer.addEventListener('mouseleave', function() {
+                this.style.boxShadow = '0 4px 15px rgba(0,0,0,0.1)';
+            });
+        });
+    </script>
+</body>
+</html>

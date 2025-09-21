@@ -1,0 +1,86 @@
+# ============================================================================
+# 04-rbac.yaml - Role-Based Access Control and Security (CORRECTED)
+# ============================================================================
+# Purpose: Creates service accounts and defines minimal required permissions
+# Dependencies: Namespace must exist
+# Security: Implements principle of least privilege
+# Fixes: None required - this file was already correct
+# ============================================================================
+
+# Service Account - Identity for application pods
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{APP_NAME}}-sa
+  namespace: {{NAMESPACE}}
+  labels:
+    app: {{APP_NAME}}
+    app.kubernetes.io/name: {{APP_NAME}}
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/part-of: {{APP_NAME}}
+    environment: {{ENVIRONMENT}}
+  annotations:
+    description: "Service account for {{APP_NAME}} with minimal required permissions"
+    # AWS specific - uncomment if using IAM Roles for Service Accounts
+    # eks.amazonaws.com/role-arn: arn:aws:iam::ACCOUNT-ID:role/{{APP_NAME}}-role
+    # GCP specific - uncomment if using Workload Identity
+    # iam.gke.io/gcp-service-account: {{APP_NAME}}@{{PROJECT_ID}}.iam.gserviceaccount.com
+automountServiceAccountToken: true
+
+---
+# Role - Defines what actions can be performed
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: {{NAMESPACE}}
+  name: {{APP_NAME}}-role
+  labels:
+    app: {{APP_NAME}}
+    app.kubernetes.io/name: {{APP_NAME}}
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/part-of: {{APP_NAME}}
+rules:
+# Configuration access (read-only)
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get", "list", "watch"]
+# Event logging (create only)
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["create", "patch"]
+# Pod information access (read-only for monitoring)
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list", "watch"]
+# Service discovery (read-only)
+- apiGroups: [""]
+  resources: ["services", "endpoints"]
+  verbs: ["get", "list", "watch"]
+# Lease management for leader election (if needed)
+- apiGroups: ["coordination.k8s.io"]
+  resources: ["leases"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+---
+# RoleBinding - Connects ServiceAccount to Role
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{APP_NAME}}-binding
+  namespace: {{NAMESPACE}}
+  labels:
+    app: {{APP_NAME}}
+    app.kubernetes.io/name: {{APP_NAME}}
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/part-of: {{APP_NAME}}
+subjects:
+- kind: ServiceAccount
+  name: {{APP_NAME}}-sa
+  namespace: {{NAMESPACE}}
+roleRef:
+  kind: Role
+  name: {{APP_NAME}}-role
+  apiGroup: rbac.authorization.k8s.io
