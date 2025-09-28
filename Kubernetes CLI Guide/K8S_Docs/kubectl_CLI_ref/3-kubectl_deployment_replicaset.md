@@ -11,11 +11,11 @@ kubectl create deployment <name> --image=nginx --port=80      # With exposed por
 
 # Advanced deployment creation with dry-run
 kubectl create deployment webapp \
-  --image=nginx:1.21 \
+  --image=nginx:1.21-alpine \
   --replicas=3 \
   --port=80 \
-  --dry-run=client \
-  -o yaml > webapp-deployment.yaml
+  --namespace=production \
+  --dry-run=client -o yaml > webapp-base.yaml
 
 # Deployment from YAML with configuration comparison
 kubectl apply -f deployment.yaml              # Apply deployment configuration
@@ -25,9 +25,9 @@ kubectl create -f deployment.yaml             # Create new deployment (fails if 
 
 # Deployment management operations
 kubectl delete deployment <name>              # Delete deployment
-kubectl get deployments                       # List all deployments
-kubectl get deployments -o wide               # Extended deployment information
-kubectl describe deployment <name>            # Detailed deployment information
+kubectl get deployments.apps --namespace=dev                       # List all deployments
+kubectl get deployments --namespace=dev  -o wide            # Extended deployment information
+kubectl describe deployment <name> --namespace=dev          # Detailed deployment information
 ```
 
 ## Deployment Scaling Operations
@@ -125,6 +125,7 @@ kubectl get pods -l <replicaset-selector>                     # Pods managed by 
 kubectl describe replicaset <rs-name> | grep -A 20 "Pod Template"  # Pod template details
 kubectl get rs -o custom-columns=NAME:.metadata.name,DESIRED:.spec.replicas,CURRENT:.status.replicas,READY:.status.readyReplicas,SELECTOR:.spec.selector.matchLabels
 
+
 # ReplicaSet selector analysis
 kubectl get rs <rs-name> -o jsonpath='{.spec.selector.matchLabels}'  # Selector labels
 kubectl get pods --selector="$(kubectl get rs <rs-name> -o jsonpath='{.spec.selector.matchLabels}' | tr -d '{}')"  # Matching pods
@@ -147,12 +148,8 @@ kubectl describe deployment <name> | grep -A 10 "StrategyType"  # Strategy detai
 kubectl patch deployment <name> -p '{"spec":{"strategy":{"type":"Recreate"}}}'  # Change to Recreate strategy
 
 # Resource and constraint analysis
-kubectl get deployment <name> -o custom-columns=\
-NAME:.metadata.name,\
-REPLICAS:.status.readyReplicas/.spec.replicas,\
-STRATEGY:.spec.strategy.type,\
-MAX-SURGE:.spec.strategy.rollingUpdate.maxSurge,\
-MAX-UNAVAILABLE:.spec.strategy.rollingUpdate.maxUnavailable
+kubectl get deployments.apps --namespace=dev -o yaml
+kubectl get deployments.apps -n dev -o custom-columns=NAME:.metadata.name,NAMESPACE:.metadata.namespace,READY_REPLICAS:.status.readyReplicas,MAX_SURGE:.spec.strategy.rollingUpdate.maxSurge,PORT:.spec.template.spec.containers[*].ports[*].containerPort,RESTART-POLICY:.spec.template.spec.restartPolicy,REASON:.status.conditions[*].reason
 
 # Pod template and specification analysis
 kubectl get deployment <name> -o jsonpath='{.spec.template.spec.containers[*].image}'  # Container images

@@ -3,13 +3,12 @@
 # ============================================================================
 # Purpose: Deploys the main application with enhanced security and reliability
 # Dependencies: Namespace, RBAC, ConfigMap, Secret, PVC must exist
-# Features: Security contexts, health checks, resource limits, graceful shutdown
-# ALL CRITICAL FIXES APPLIED:
-# - Fixed all volume mount configurations and volume definitions
-# - Corrected init container volume mounts
-# - Added proper nginx config volume mount
-# - Fixed static content handling with proper volume names
-# - Added missing template variables with defaults
+# FIXES APPLIED:
+# - Fixed replica count to use template variable with default
+# - Corrected volume mounting for static content serving
+# - Fixed init container to properly set up nginx content directory
+# - Standardized resource requests/limits
+# - Resolved volume name conflicts
 # ============================================================================
 
 apiVersion: apps/v1
@@ -29,7 +28,8 @@ metadata:
     description: "Main {{APP_NAME}} deployment with enhanced security and monitoring"
     deployment.kubernetes.io/revision: "1"
 spec:
-  replicas: 3  # Default replicas, override with {{REPLICAS}} if defined
+  # FIXED: Use template variable with default value
+  replicas: {{REPLICAS:=3}}
   revisionHistoryLimit: 3
   progressDeadlineSeconds: 600
   strategy:
@@ -102,7 +102,7 @@ spec:
           matchLabels:
             app: {{APP_NAME}}
       
-      # CORRECTED: Fixed init containers with proper volume mounts
+      # FIXED: Corrected init container to properly set up nginx content
       initContainers:
       - name: setup
         image: busybox:1.36
@@ -111,26 +111,26 @@ spec:
         - |
           set -e
           echo "=== {{APP_NAME}} Initialization Started ==="
-          echo "Environment: {{ENVIRONMENT}}"
-          echo "Namespace: {{NAMESPACE}}"
           
-          # Create directories with proper permissions
-          mkdir -p /app-data/logs /app-data/cache /app-data/uploads
+          # Create directories with proper permissions for nginx
+          mkdir -p /usr/share/nginx/html/logs /usr/share/nginx/html/cache /usr/share/nginx/html/uploads
           
-          # Copy static content if available
+          # Copy static content to nginx document root
           if [ -f /static-source/index.html ]; then
-            cp /static-source/index.html /app-data/
-            echo "Copied index.html successfully"
+            cp /static-source/index.html /usr/share/nginx/html/
+            echo "Copied index.html to nginx document root"
+          else
+            echo "Warning: index.html not found in static source"
           fi
           
-          # Set proper permissions
-          chown -R 101:101 /app-data
-          chmod -R 755 /app-data
+          # Set proper ownership for nginx user
+          chown -R 101:101 /usr/share/nginx/html
+          chmod -R 755 /usr/share/nginx/html
           
           echo "=== Initialization completed ==="
         volumeMounts:
-        - name: app-data
-          mountPath: /app-data
+        - name: nginx-html
+          mountPath: /usr/share/nginx/html
         - name: static-content
           mountPath: /static-source
           readOnly: true
@@ -152,7 +152,8 @@ spec:
       
       containers:
       - name: {{APP_NAME}}
-        image: nginx:1.25-alpine  # Default image, override with {{IMAGE}} if needed
+        # FIXED: Use template variable with default
+        image: {{IMAGE:=nginx:1.25-alpine}}
         imagePullPolicy: IfNotPresent
         
         ports:
@@ -190,14 +191,16 @@ spec:
         - secretRef:
             name: {{APP_NAME}}-secret
         
-        # CORRECTED: Fixed volume mounts with proper volume names matching volumes section
+        # FIXED: Corrected volume mounts for proper nginx serving
         volumeMounts:
         - name: nginx-config
           mountPath: /etc/nginx/nginx.conf
           subPath: nginx.conf
           readOnly: true
-        - name: app-data
+        - name: nginx-html
           mountPath: /usr/share/nginx/html
+        - name: app-data
+          mountPath: /data
         - name: tmp-storage
           mountPath: /tmp
         - name: var-cache-nginx
@@ -205,7 +208,7 @@ spec:
         - name: var-log-nginx
           mountPath: /var/log/nginx
         
-        # Resource limits
+        # FIXED: Standardized resource limits
         resources:
           requests:
             memory: "256Mi"
@@ -270,7 +273,7 @@ spec:
                 nginx -s quit
                 sleep 15
       
-      # CORRECTED: Complete and properly named volume definitions
+      # FIXED: Corrected volume definitions with proper naming and purpose
       volumes:
       - name: nginx-config
         configMap:
@@ -284,6 +287,11 @@ spec:
         configMap:
           name: {{APP_NAME}}-static
           defaultMode: 0644
+      
+      # FIXED: Separate volumes for nginx html and persistent data
+      - name: nginx-html
+        emptyDir:
+          sizeLimit: 1Gi
       
       - name: app-data
         persistentVolumeClaim:
@@ -303,7 +311,7 @@ spec:
           sizeLimit: 100Mi
 
 ---
-# Backend Deployment (Optional) - CORRECTED
+# Backend Deployment - CORRECTED with consistent naming
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -315,7 +323,8 @@ metadata:
     app.kubernetes.io/component: api
     app.kubernetes.io/part-of: {{APP_NAME}}
 spec:
-  replicas: 2  # Default backend replicas
+  # FIXED: Use template variable with default
+  replicas: {{BACKEND_REPLICAS:=2}}
   selector:
     matchLabels:
       app: {{APP_NAME}}-backend
@@ -335,10 +344,12 @@ spec:
         fsGroup: 1000
       containers:
       - name: backend
-        image: node:18-alpine  # Default backend image, override with {{BACKEND_IMAGE}}
+        # FIXED: Use template variable with default
+        image: {{BACKEND_IMAGE:=node:18-alpine}}
         ports:
         - name: http
           containerPort: 8080
+        # FIXED: Standardized resource limits
         resources:
           requests:
             memory: "128Mi"
@@ -356,7 +367,7 @@ spec:
           readOnlyRootFilesystem: true
           capabilities:
             drop: ["ALL"]
-        # Add health checks
+        # Health checks
         livenessProbe:
           httpGet:
             path: /health

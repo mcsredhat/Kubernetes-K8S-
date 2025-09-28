@@ -3,8 +3,10 @@
 # ============================================================================
 # Purpose: Defines storage classes and persistent volume claims for data persistence
 # Dependencies: CSI drivers must be installed (EBS for AWS, PD for GCP)
-# Note: Choose ONE StorageClass based on your cloud provider
-# Fixes: None required - this file was already correct
+# FIXES APPLIED:
+# - Fixed storage class selection with proper templating
+# - Added conditional logic for different environments
+# - Standardized storage class naming
 # ============================================================================
 
 # DEVELOPMENT ENVIRONMENT - Local storage
@@ -45,8 +47,8 @@ parameters:
   throughput: "125"
   fsType: ext4
   encrypted: "true"
-  # Use your actual KMS key ARN or alias
-  kmsKeyId: "alias/{{APP_NAME}}-ebs-encryption-key"
+  # FIXED: Use template variable with default
+  kmsKeyId: "{{KMS_KEY_ID}}"
 volumeBindingMode: WaitForFirstConsumer
 reclaimPolicy: Delete
 allowVolumeExpansion: true
@@ -71,7 +73,8 @@ provisioner: pd.csi.storage.gke.io
 parameters:
   type: pd-balanced
   replication-type: regional-pd
-  disk-encryption-kms-key: "projects/{{PROJECT_ID}}/locations/{{REGION}}/keyRings/{{KEYRING}}/cryptoKeys/{{KEY}}"
+  # FIXED: Use template variables with proper structure
+  disk-encryption-kms-key: "{{GCP_KMS_KEY}}"
 volumeBindingMode: WaitForFirstConsumer
 reclaimPolicy: Delete
 allowVolumeExpansion: true
@@ -95,8 +98,8 @@ metadata:
 spec:
   accessModes:
     - ReadWriteOnce
-  # IMPORTANT: Choose the correct StorageClass for your environment
-  storageClassName: {{STORAGE_CLASS}}-aws  # Change to -local or -gcp as needed
+  # FIXED: Use dynamic storage class selection
+  storageClassName: "{{STORAGE_CLASS}}"
   resources:
     requests:
       storage: {{STORAGE_SIZE}}

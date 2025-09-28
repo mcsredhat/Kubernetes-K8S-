@@ -1,0 +1,98 @@
+# ============================================================================
+# values-template.yaml - Template Variable Definitions
+# ============================================================================
+# Purpose: Centralized configuration for all template variables used across manifests
+# Usage: Replace {{VARIABLE}} placeholders with actual values before deployment
+# Instructions: Copy this file to values.yaml and customize for your environment
+# ============================================================================
+
+# BASIC APPLICATION CONFIGURATION
+# ============================================================================
+APP_NAME: "myapp"                    # Application name (lowercase, no spaces)
+NAMESPACE: "myapp-prod"              # Kubernetes namespace
+ENVIRONMENT: "production"            # Environment (development/staging/production)
+TEAM: "platform"                     # Team responsible for the application
+DOMAIN: "myapp.example.com"          # Primary domain for the application
+
+# SCALING CONFIGURATION
+# ============================================================================
+REPLICAS: "3"                        # Main application replicas
+BACKEND_REPLICAS: "2"                # Backend service replicas
+MAX_REPLICAS: "20"                   # Maximum replicas for HPA
+BACKEND_MAX_REPLICAS: "10"           # Maximum backend replicas for HPA
+
+# CONTAINER IMAGES
+# ============================================================================
+IMAGE: "nginx:1.25-alpine"           # Main application container image
+BACKEND_IMAGE: "node:18-alpine"      # Backend service container image
+
+# STORAGE CONFIGURATION
+# ============================================================================
+STORAGE_CLASS: "myapp-storage-aws"   # Storage class name (without suffix)
+STORAGE_SIZE: "20Gi"                 # Persistent volume size
+
+# CLOUD PROVIDER SPECIFIC SETTINGS
+# ============================================================================
+
+# AWS Configuration
+KMS_KEY_ID: "alias/myapp-ebs-key"    # AWS KMS key for EBS encryption
+
+# GCP Configuration  
+GCP_KMS_KEY: "projects/myproject/locations/us-central1/keyRings/myring/cryptoKeys/mykey"
+PROJECT_ID: "my-gcp-project"         # GCP Project ID
+REGION: "us-central1"                # GCP Region
+KEYRING: "myapp-keyring"             # GCP Key Ring name
+KEY: "myapp-encryption-key"          # GCP Key name
+
+# SECURITY CONFIGURATION
+# ============================================================================
+# CRITICAL: These are example values - CHANGE ALL PASSWORDS IN PRODUCTION!
+
+# Database credentials
+DATABASE_USERNAME: "myapp_user"
+DATABASE_PASSWORD: "CHANGE-THIS-SECURE-PASSWORD-123!"
+
+# API and application secrets
+API_KEY: "CHANGE-THIS-API-KEY-abc123def456"
+JWT_SECRET: "CHANGE-THIS-32-CHAR-JWT-SECRET-KEY!"
+ENCRYPTION_KEY: "CHANGE-THIS-32-CHARACTER-ENCRYPTION-KEY!"
+
+# Connection strings (update with actual values)
+DATABASE_URL: "postgresql://myapp_user:CHANGE-PASSWORD@postgres.myapp-prod.svc.cluster.local:5432/myapp_db?sslmode=require"
+REDIS_URL: "redis://:CHANGE-REDIS-PASSWORD@redis.myapp-prod.svc.cluster.local:6379/0"
+
+# Monitoring credentials
+GRAFANA_ADMIN_PASSWORD: "CHANGE-THIS-GRAFANA-ADMIN-PASSWORD!"
+
+# EXAMPLE ENVIRONMENT-SPECIFIC VALUES
+# ============================================================================
+
+# Development Environment
+# APP_NAME: "myapp"
+# NAMESPACE: "myapp-dev"
+# ENVIRONMENT: "development"
+# DOMAIN: "myapp-dev.example.com"
+# REPLICAS: "1"
+# BACKEND_REPLICAS: "1"
+# STORAGE_CLASS: "myapp-storage-local"
+# STORAGE_SIZE: "5Gi"
+
+# Staging Environment
+# APP_NAME: "myapp"
+# NAMESPACE: "myapp-staging"
+# ENVIRONMENT: "staging"
+# DOMAIN: "myapp-staging.example.com"
+# REPLICAS: "2"
+# BACKEND_REPLICAS: "1"
+# STORAGE_CLASS: "myapp-storage-aws"
+# STORAGE_SIZE: "10Gi"
+
+# Production Environment
+# APP_NAME: "myapp"
+# NAMESPACE: "myapp-prod"
+# ENVIRONMENT: "production"
+# DOMAIN: "myapp.example.com"
+# REPLICAS: "3"
+# BACKEND_REPLICAS: "2"
+# STORAGE_CLASS: "myapp-storage-aws"
+# STORAGE_SIZE: "50Gi"
