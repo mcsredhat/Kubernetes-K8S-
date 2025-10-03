@@ -1,10 +1,8 @@
 # ============================================================================
-# 04-rbac.yaml - Role-Based Access Control and Security (CORRECTED)
+# 04-rbac-enhanced.yaml - RBAC with Backup/Rollback Permissions
 # ============================================================================
-# Purpose: Creates service accounts and defines minimal required permissions
-# Dependencies: Namespace must exist
-# Security: Implements principle of least privilege
-# Fixes: None required - this file was already correct
+# Purpose: Enhanced RBAC including permissions for backup and rollback operations
+# Changes from original: Added deployment scaling, configmap updates, snapshots
 # ============================================================================
 
 # Service Account - Identity for application pods
@@ -20,7 +18,7 @@ metadata:
     app.kubernetes.io/part-of: {{APP_NAME}}
     environment: {{ENVIRONMENT}}
   annotations:
-    description: "Service account for {{APP_NAME}} with minimal required permissions"
+    description: "Service account for {{APP_NAME}} with backup/rollback permissions"
     # AWS specific - uncomment if using IAM Roles for Service Accounts
     # eks.amazonaws.com/role-arn: arn:aws:iam::ACCOUNT-ID:role/{{APP_NAME}}-role
     # GCP specific - uncomment if using Workload Identity
@@ -28,7 +26,7 @@ metadata:
 automountServiceAccountToken: true
 
 ---
-# Role - Defines what actions can be performed
+# Role - Enhanced with backup and rollback permissions
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
@@ -39,30 +37,68 @@ metadata:
     app.kubernetes.io/name: {{APP_NAME}}
     app.kubernetes.io/component: rbac
     app.kubernetes.io/part-of: {{APP_NAME}}
+  annotations:
+    description: "Enhanced role with backup and rollback capabilities"
 rules:
+# ==================== APPLICATION PERMISSIONS ====================
 # Configuration access (read-only)
 - apiGroups: [""]
   resources: ["configmaps"]
   verbs: ["get", "list", "watch"]
+
+# Secrets access (read-only)
 - apiGroups: [""]
   resources: ["secrets"]
   verbs: ["get", "list", "watch"]
+
 # Event logging (create only)
 - apiGroups: [""]
   resources: ["events"]
   verbs: ["create", "patch"]
+
 # Pod information access (read-only for monitoring)
 - apiGroups: [""]
   resources: ["pods"]
   verbs: ["get", "list", "watch"]
+
 # Service discovery (read-only)
 - apiGroups: [""]
   resources: ["services", "endpoints"]
   verbs: ["get", "list", "watch"]
-# Lease management for leader election (if needed)
+
+# Lease management for leader election
 - apiGroups: ["coordination.k8s.io"]
   resources: ["leases"]
   verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+# ==================== BACKUP/ROLLBACK PERMISSIONS ====================
+# ConfigMap updates for backup registry
+- apiGroups: [""]
+  resources: ["configmaps"]
+  resourceNames: ["{{APP_NAME}}-backup-registry"]
+  verbs: ["update", "patch"]
+
+# Deployment scaling for rollback operations
+- apiGroups: ["apps"]
+  resources: ["deployments"]
+  resourceNames: ["{{APP_NAME}}-deployment", "{{APP_NAME}}-backend"]
+  verbs: ["get", "patch", "update"]
+
+# Deployment scale subresource (required for kubectl scale)
+- apiGroups: ["apps"]
+  resources: ["deployments/scale"]
+  resourceNames: ["{{APP_NAME}}-deployment", "{{APP_NAME}}-backend"]
+  verbs: ["get", "patch", "update"]
+
+# Volume snapshot management
+- apiGroups: ["snapshot.storage.k8s.io"]
+  resources: ["volumesnapshots"]
+  verbs: ["create", "get", "list", "delete"]
+
+# PVC access for backup operations
+- apiGroups: [""]
+  resources: ["persistentvolumeclaims"]
+  verbs: ["get", "list"]
 
 ---
 # RoleBinding - Connects ServiceAccount to Role
@@ -76,6 +112,8 @@ metadata:
     app.kubernetes.io/name: {{APP_NAME}}
     app.kubernetes.io/component: rbac
     app.kubernetes.io/part-of: {{APP_NAME}}
+  annotations:
+    description: "Binds {{APP_NAME}}-sa to {{APP_NAME}}-role with backup permissions"
 subjects:
 - kind: ServiceAccount
   name: {{APP_NAME}}-sa

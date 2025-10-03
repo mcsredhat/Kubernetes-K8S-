@@ -36,7 +36,8 @@ kubectl get events --field-selector type=Warning --since=1h --no-headers | wc -l
 kubectl get nodes                                         # List all nodes with basic info
 kubectl get nodes -o wide                                 # Detailed node information
 kubectl get nodes --show-labels                          # Node labels and roles
-kubectl get nodes -o custom-columns=NAME:.metadata.name,STATUS:.status.conditions[?(@.type==\"Ready\")].status,ROLES:.metadata.labels,VERSION:.status.nodeInfo.kubeletVersion,OS:.status.nodeInfo.osImage
+kubectl get nodes -o yaml
+kubectl get nodes -o custom-columns=NAME:.metadata.name,STATUS:.status.conditions[?(@.type==\"Ready\")].status,ROLES:.metadata.labels,VERSION:.status.nodeInfo.kubeletVersion,OS:.status.nodeInfo.osImage,IMAGE:.status.images[*].names
 
 # Detailed node analysis
 kubectl describe node <node-name>                        # Comprehensive node information
