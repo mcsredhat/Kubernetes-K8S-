@@ -5,7 +5,7 @@ These commands support automated workflows, CI/CD integration, and GitOps practi
 ## Modern kubectl Diff and Configuration Management
 ```bash
 # Configuration diffing and comparison
-kubectl diff -f deployment.yaml                         # Show differences before applying
+kubectl diff -f deployment.yaml  # Show differences before applying
 kubectl diff -k ./kustomize/                           # Diff with Kustomize configuration
 kubectl diff -f manifest.yaml --server-side            # Server-side diff
 kubectl diff -R -f ./manifests/                        # Recursive directory diff

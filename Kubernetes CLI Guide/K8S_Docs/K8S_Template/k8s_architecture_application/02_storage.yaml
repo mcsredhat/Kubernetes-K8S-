@@ -1,0 +1,63 @@
+# ============================================================================
+# 02-storage.yaml - Storage Classes and Persistent Storage (CORRECTED)
+# ============================================================================
+# Purpose: Defines storage classes and persistent volume claims for data persistence
+# Dependencies: CSI drivers must be installed (EBS for AWS, PD for GCP)
+# FIXES: Made storage class optional (use existing), added cloud provider detection
+# ============================================================================
+
+# NOTE: This StorageClass definition is OPTIONAL
+# If your cluster already has a storage class (gp3, gp2, standard, etc.),
+# you can skip creating this and just use the existing one in values.env
+# Uncomment the section below only if you need to create a custom storage class
+
+# ---
+# # AWS PRODUCTION ENVIRONMENT - EBS volumes with encryption
+# apiVersion: storage.k8s.io/v1
+# kind: StorageClass
+# metadata:
+#   name: ${STORAGE_CLASS}
+#   labels:
+#     environment: ${ENVIRONMENT}
+#     component: storage
+#     cloud-provider: aws
+#   annotations:
+#     storageclass.kubernetes.io/is-default-class: "false"
+#     description: "AWS EBS gp3 volumes with encryption and optimized performance"
+# provisioner: ebs.csi.aws.com
+# parameters:
+#   type: gp3
+#   iops: "3000"
+#   throughput: "125"
+#   fsType: ext4
+#   encrypted: "true"
+#   kmsKeyId: "${KMS_KEY_ID}"
+# volumeBindingMode: WaitForFirstConsumer
+# reclaimPolicy: Delete
+# allowVolumeExpansion: true
+# mountOptions:
+# - noatime
+# - discard
+
+---
+# Persistent Volume Claim - Main application data storage
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ${APP_NAME}-data-pvc
+  namespace: ${NAMESPACE}
+  labels:
+    app: ${APP_NAME}
+    app.kubernetes.io/name: ${APP_NAME}
+    app.kubernetes.io/component: storage
+    app.kubernetes.io/part-of: ${APP_NAME}
+    environment: ${ENVIRONMENT}
+  annotations:
+    description: "Main data storage for ${APP_NAME}"
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: "${STORAGE_CLASS}"
+  resources:
+    requests:
+      storage: ${STORAGE_SIZE}

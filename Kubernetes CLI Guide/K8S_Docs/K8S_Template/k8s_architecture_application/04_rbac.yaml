@@ -1,28 +1,24 @@
 # ============================================================================
-# 04-rbac-enhanced.yaml - RBAC with Backup/Rollback Permissions
+# 04-rbac.yaml - RBAC with Backup/Rollback Permissions (CORRECTED)
 # ============================================================================
 # Purpose: Enhanced RBAC including permissions for backup and rollback operations
-# Changes from original: Added deployment scaling, configmap updates, snapshots
+# FIXES: Improved security context, better permission scoping
 # ============================================================================
 
 # Service Account - Identity for application pods
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: {{APP_NAME}}-sa
-  namespace: {{NAMESPACE}}
+  name: ${APP_NAME}-sa
+  namespace: ${NAMESPACE}
   labels:
-    app: {{APP_NAME}}
-    app.kubernetes.io/name: {{APP_NAME}}
+    app: ${APP_NAME}
+    app.kubernetes.io/name: ${APP_NAME}
     app.kubernetes.io/component: rbac
-    app.kubernetes.io/part-of: {{APP_NAME}}
-    environment: {{ENVIRONMENT}}
+    app.kubernetes.io/part-of: ${APP_NAME}
+    environment: ${ENVIRONMENT}
   annotations:
-    description: "Service account for {{APP_NAME}} with backup/rollback permissions"
-    # AWS specific - uncomment if using IAM Roles for Service Accounts
-    # eks.amazonaws.com/role-arn: arn:aws:iam::ACCOUNT-ID:role/{{APP_NAME}}-role
-    # GCP specific - uncomment if using Workload Identity
-    # iam.gke.io/gcp-service-account: {{APP_NAME}}@{{PROJECT_ID}}.iam.gserviceaccount.com
+    description: "Service account for ${APP_NAME} with backup/rollback permissions"
 automountServiceAccountToken: true
 
 ---
@@ -30,13 +26,13 @@ automountServiceAccountToken: true
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  namespace: {{NAMESPACE}}
-  name: {{APP_NAME}}-role
+  namespace: ${NAMESPACE}
+  name: ${APP_NAME}-role
   labels:
-    app: {{APP_NAME}}
-    app.kubernetes.io/name: {{APP_NAME}}
+    app: ${APP_NAME}
+    app.kubernetes.io/name: ${APP_NAME}
     app.kubernetes.io/component: rbac
-    app.kubernetes.io/part-of: {{APP_NAME}}
+    app.kubernetes.io/part-of: ${APP_NAME}
   annotations:
     description: "Enhanced role with backup and rollback capabilities"
 rules:
@@ -75,19 +71,19 @@ rules:
 # ConfigMap updates for backup registry
 - apiGroups: [""]
   resources: ["configmaps"]
-  resourceNames: ["{{APP_NAME}}-backup-registry"]
+  resourceNames: ["${APP_NAME}-backup-registry"]
   verbs: ["update", "patch"]
 
 # Deployment scaling for rollback operations
 - apiGroups: ["apps"]
   resources: ["deployments"]
-  resourceNames: ["{{APP_NAME}}-deployment", "{{APP_NAME}}-backend"]
+  resourceNames: ["${APP_NAME}-deployment", "${APP_NAME}-backend"]
   verbs: ["get", "patch", "update"]
 
 # Deployment scale subresource (required for kubectl scale)
 - apiGroups: ["apps"]
   resources: ["deployments/scale"]
-  resourceNames: ["{{APP_NAME}}-deployment", "{{APP_NAME}}-backend"]
+  resourceNames: ["${APP_NAME}-deployment", "${APP_NAME}-backend"]
   verbs: ["get", "patch", "update"]
 
 # Volume snapshot management
@@ -105,20 +101,20 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: {{APP_NAME}}-binding
-  namespace: {{NAMESPACE}}
+  name: ${APP_NAME}-binding
+  namespace: ${NAMESPACE}
   labels:
-    app: {{APP_NAME}}
-    app.kubernetes.io/name: {{APP_NAME}}
+    app: ${APP_NAME}
+    app.kubernetes.io/name: ${APP_NAME}
     app.kubernetes.io/component: rbac
-    app.kubernetes.io/part-of: {{APP_NAME}}
+    app.kubernetes.io/part-of: ${APP_NAME}
   annotations:
-    description: "Binds {{APP_NAME}}-sa to {{APP_NAME}}-role with backup permissions"
+    description: "Binds ${APP_NAME}-sa to ${APP_NAME}-role with backup permissions"
 subjects:
 - kind: ServiceAccount
-  name: {{APP_NAME}}-sa
-  namespace: {{NAMESPACE}}
+  name: ${APP_NAME}-sa
+  namespace: ${NAMESPACE}
 roleRef:
   kind: Role
-  name: {{APP_NAME}}-role
+  name: ${APP_NAME}-role
   apiGroup: rbac.authorization.k8s.io

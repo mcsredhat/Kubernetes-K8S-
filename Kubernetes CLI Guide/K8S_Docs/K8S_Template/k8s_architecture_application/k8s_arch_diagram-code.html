@@ -1,0 +1,1540 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kubernetes Application Architecture</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            margin: 0;
+            font-size: 2.5rem;
+            font-weight: 300;
+        }
+        
+        .header p {
+            margin: 10px 0 0 0;
+            opacity: 0.9;
+            font-size: 1.1rem;
+        }
+        
+        .diagram-container {
+            padding: 30px;
+            overflow-x: auto;
+        }
+        
+        .namespace {
+            border: 3px solid #667eea;
+            border-radius: 10px;
+            margin: 20px 0;
+            padding: 20px;
+            position: relative;
+            background: #f8f9ff;
+        }
+        
+        .namespace-title {
+            position: absolute;
+            top: -15px;
+            left: 20px;
+            background: #667eea;
+            color: white;
+            padding: 5px 15px;
+            border-radius: 15px;
+            font-weight: bold;
+            font-size: 14px;
+        }
+        
+        .component-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        
+        .component {
+            background: white;
+            border: 2px solid;
+            border-radius: 8px;
+            padding: 15px;
+            text-align: center;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            transition: transform 0.2s;
+            cursor: pointer;
+        }
+        
+        .component:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+        }
+        
+        .component h3 {
+            margin: 0 0 10px 0;
+            font-size: 16px;
+        }
+        
+        .component p {
+            margin: 5px 0;
+            font-size: 12px;
+            color: #666;
+        }
+        
+        .file-ref {
+            background: #e3f2fd;
+            color: #1976d2;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 10px;
+            font-weight: bold;
+        }
+        
+        /* Component Types */
+        .security { border-color: #f44336; }
+        .storage { border-color: #ff9800; }
+        .config { border-color: #4caf50; }
+        .compute { border-color: #2196f3; }
+        .network { border-color: #9c27b0; }
+        .monitoring { border-color: #607d8b; }
+        .backup { border-color: #795548; }
+        
+        .security .file-ref { background: #ffebee; color: #c62828; }
+        .storage .file-ref { background: #fff3e0; color: #ef6c00; }
+        .config .file-ref { background: #e8f5e8; color: #2e7d32; }
+        .compute .file-ref { background: #e3f2fd; color: #1976d2; }
+        .network .file-ref { background: #f3e5f5; color: #7b1fa2; }
+        .monitoring .file-ref { background: #eceff1; color: #455a64; }
+        .backup .file-ref { background: #efebe9; color: #5d4037; }
+        
+        .external {
+            background: #fff3cd;
+            border: 2px dashed #856404;
+            color: #856404;
+            cursor: default;
+        }
+        
+        .flow-arrow {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 10px 0;
+            font-size: 24px;
+            color: #667eea;
+        }
+        
+        .legend {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+            margin: 30px 0;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 4px;
+            border: 2px solid;
+        }
+        
+        .deployment-order {
+            background: #e8f5e8;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+        
+        .deployment-order h3 {
+            color: #2e7d32;
+            margin: 0 0 15px 0;
+        }
+        
+        .step {
+            display: flex;
+            align-items: center;
+            margin: 10px 0;
+            padding: 10px;
+            background: white;
+            border-radius: 6px;
+            border-left: 4px solid #4caf50;
+        }
+        
+        .step-number {
+            background: #4caf50;
+            color: white;
+            width: 25px;
+            height: 25px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            margin-right: 15px;
+            font-size: 14px;
+        }
+
+        /* Modal Styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            animation: fadeIn 0.3s;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .modal-content {
+            background-color: #1e1e1e;
+            margin: 5% auto;
+            padding: 0;
+            border-radius: 10px;
+            width: 90%;
+            max-width: 1000px;
+            max-height: 80vh;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            animation: slideDown 0.3s;
+        }
+
+        @keyframes slideDown {
+            from { transform: translateY(-50px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        .modal-header {
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 10px 10px 0 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-header h2 {
+            margin: 0;
+            font-size: 1.5rem;
+        }
+
+        .close {
+            color: white;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .close:hover {
+            transform: scale(1.2);
+        }
+
+        .modal-body {
+            padding: 20px;
+            max-height: 60vh;
+            overflow-y: auto;
+        }
+
+        .code-container {
+            background: #1e1e1e;
+            border-radius: 5px;
+            position: relative;
+        }
+
+        .code-header {
+            background: #2d2d2d;
+            padding: 10px 15px;
+            border-radius: 5px 5px 0 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .code-title {
+            color: #9cdcfe;
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        .copy-btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 5px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: background 0.3s;
+        }
+
+        .copy-btn:hover {
+            background: #764ba2;
+        }
+
+        .copy-btn.copied {
+            background: #4caf50;
+        }
+
+        pre {
+            margin: 0;
+            padding: 15px;
+            color: #d4d4d4;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.5;
+            overflow-x: auto;
+        }
+
+        code {
+            color: #d4d4d4;
+        }
+
+        /* Syntax highlighting */
+        .keyword { color: #569cd6; }
+        .string { color: #ce9178; }
+        .number { color: #b5cea8; }
+        .comment { color: #6a9955; }
+        .property { color: #9cdcfe; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Kubernetes Application Architecture</h1>
+            <p>Complete Production-Ready Template Structure - Click components to view code</p>
+        </div>
+        
+        <div class="diagram-container">
+            <!-- External Dependencies -->
+            <div class="namespace external">
+                <div class="namespace-title">External Dependencies</div>
+                <div class="component-grid">
+                    <div class="component external" onclick="showCode('certmanager')" style="cursor: pointer;">
+                        <h3>🔒 cert-manager</h3>
+                        <p>SSL/TLS certificate management</p>
+                        <p>Required for HTTPS ingress</p>
+                    </div>
+                    <div class="component external" onclick="showCode('ingressnginx')" style="cursor: pointer;">
+                        <h3>🌐 ingress-nginx</h3>
+                        <p>Load balancer and ingress controller</p>
+                        <p>Routes external traffic</p>
+                    </div>
+                    <div class="component external" onclick="showCode('metricsserver')" style="cursor: pointer;">
+                        <h3>📊 metrics-server</h3>
+                        <p>Resource metrics API</p>
+                        <p>Required for HPA scaling</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flow-arrow">⬇️ Dependencies Must Be Installed First</div>
+
+            <!-- Main Application Namespace -->
+            <div class="namespace">
+                <div class="namespace-title">{{NAMESPACE}} (Application Namespace)</div>
+                
+                <!-- Foundation Layer -->
+                <h4 style="color: #667eea; margin: 20px 0 10px 0;">🗝️ Foundation Layer</h4>
+                <div class="component-grid">
+                    <div class="component security" onclick="showCode('namespace')">
+                        <h3>🔒 Namespace</h3>
+                        <p>Isolated environment with security policies</p>
+                        <p>Resource quotas and limits</p>
+                        <div class="file-ref">01-namespace.yaml</div>
+                    </div>
+                    
+                    <div class="component security" onclick="showCode('rbac')">
+                        <h3>👤 RBAC</h3>
+                        <p>Service Account, Roles, RoleBindings</p>
+                        <p>Minimal privilege access control</p>
+                        <div class="file-ref">04-rbac.yaml</div>
+                    </div>
+                    
+                    <div class="component storage" onclick="showCode('storage')">
+                        <h3>💾 Storage</h3>
+                        <p>StorageClass, PVC</p>
+                        <p>Persistent data storage with encryption</p>
+                        <div class="file-ref">02-storage.yaml</div>
+                    </div>
+                </div>
+
+                <!-- Configuration Layer -->
+                <h4 style="color: #667eea; margin: 20px 0 10px 0;">⚙️ Configuration Layer</h4>
+                <div class="component-grid">
+                    <div class="component config" onclick="showCode('secrets')">
+                        <h3>🗝️ Secrets</h3>
+                        <p>Database credentials, API keys</p>
+                        <p>Encrypted sensitive configuration</p>
+                        <div class="file-ref">03-secrets-config.yaml</div>
+                    </div>
+                    
+                    <div class="component config" onclick="showCode('configmap')">
+                        <h3>📄 ConfigMap</h3>
+                        <p>Application settings, Nginx config</p>
+                        <p>Non-sensitive configuration data</p>
+                        <div class="file-ref">03-secrets-config.yaml</div>
+                    </div>
+                </div>
+
+                <!-- Application Layer -->
+                <h4 style="color: #667eea; margin: 20px 0 10px 0;">🚀 Application Layer</h4>
+                <div class="component-grid">
+                    <div class="component compute" onclick="showCode('deployment')">
+                        <h3>🏃 Main Deployment</h3>
+                        <p>Primary application pods</p>
+                        <p>Init containers, health checks, security contexts</p>
+                        <div class="file-ref">05-deployment.yaml</div>
+                    </div>
+                    
+                    <div class="component compute" onclick="showCode('backend')">
+                        <h3>🔄 Backend API</h3>
+                        <p>Backend service deployment</p>
+                        <p>Internal API endpoints</p>
+                        <div class="file-ref">05-deployment.yaml</div>
+                    </div>
+                </div>
+
+                <!-- Network Layer -->
+                <h4 style="color: #667eea; margin: 20px 0 10px 0;">🌐 Network Layer</h4>
+                <div class="component-grid">
+                    <div class="component network" onclick="showCode('service')">
+                        <h3>⚖️ Services</h3>
+                        <p>ClusterIP services for load balancing</p>
+                        <p>Internal service discovery</p>
+                        <div class="file-ref">06-services-ingress.yaml</div>
+                    </div>
+                    
+                    <div class="component network" onclick="showCode('ingress')">
+                        <h3>🌍 Ingress</h3>
+                        <p>External access with SSL termination</p>
+                        <p>Rate limiting, security headers</p>
+                        <div class="file-ref">06-services-ingress.yaml</div>
+                    </div>
+                    
+                    <div class="component security" onclick="showCode('networkpolicy')">
+                        <h3>🛡️ Network Policy</h3>
+                        <p>Traffic filtering and segmentation</p>
+                        <p>Ingress/egress rules</p>
+                        <div class="file-ref">08-security-network.yaml</div>
+                    </div>
+                </div>
+
+                <!-- Scaling & Availability -->
+                <h4 style="color: #667eea; margin: 20px 0 10px 0;">📈 Scaling & Availability</h4>
+                <div class="component-grid">
+                    <div class="component compute" onclick="showCode('hpa')">
+                        <h3>📊 HPA</h3>
+                        <p>Horizontal Pod Autoscaler</p>
+                        <p>CPU/Memory based scaling</p>
+                        <div class="file-ref">07-autoscaling-availability.yaml</div>
+                    </div>
+                    
+                    <div class="component security" onclick="showCode('pdb')">
+                        <h3>🛡️ PDB</h3>
+                        <p>Pod Disruption Budget</p>
+                        <p>High availability during maintenance</p>
+                        <div class="file-ref">07-autoscaling-availability.yaml</div>
+                    </div>
+                </div>
+
+                <!-- Backup & Maintenance -->
+                <h4 style="color: #667eea; margin: 20px 0 10px 0;">💾 Backup & Maintenance</h4>
+                <div class="component-grid">
+                    <div class="component backup" onclick="showCode('snapshot')">
+                        <h3>📸 Volume Snapshots</h3>
+                        <p>Point-in-time data snapshots</p>
+                        <p>Backup and restore capability</p>
+                        <div class="file-ref">10-backup-maintenance.yaml</div>
+                    </div>
+                    
+                    <div class="component backup" onclick="showCode('cronjob')">
+                        <h3>⏰ Backup CronJob</h3>
+                        <p>Automated daily backups</p>
+                        <p>Data archiving and cleanup</p>
+                        <div class="file-ref">10-backup-maintenance.yaml</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flow-arrow">⬇️ Monitoring Infrastructure</div>
+
+            <!-- Monitoring Namespace -->
+            <div class="namespace">
+                <div class="namespace-title">monitoring (Monitoring Namespace)</div>
+                
+                <div class="component-grid">
+                    <div class="component monitoring" onclick="showCode('prometheus')">
+                        <h3>📊 Prometheus</h3>
+                        <p>Metrics collection and storage</p>
+                        <p>Alert rules and service discovery</p>
+                        <div class="file-ref">09-monitoring.yaml</div>
+                    </div>
+                    
+                    <div class="component monitoring" onclick="showCode('grafana')">
+                        <h3>📈 Grafana</h3>
+                        <p>Visualization dashboards</p>
+                        <p>Application and infrastructure metrics</p>
+                        <div class="file-ref">09-monitoring.yaml</div>
+                    </div>
+                    
+                    <div class="component monitoring" onclick="showCode('servicemonitor')">
+                        <h3>🎯 ServiceMonitor</h3>
+                        <p>Prometheus Operator integration</p>
+                        <p>Automated metrics scraping</p>
+                        <div class="file-ref">09-monitoring.yaml</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Legend -->
+            <div class="legend">
+                <h3 style="grid-column: 1/-1; margin: 0 0 15px 0; color: #333;">Component Types Legend</h3>
+                <div class="legend-item">
+                    <div class="legend-color security"></div>
+                    <span>Security & Access Control</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color storage"></div>
+                    <span>Storage & Persistence</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color config"></div>
+                    <span>Configuration Management</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color compute"></div>
+                    <span>Compute & Applications</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color network"></div>
+                    <span>Networking & Load Balancing</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color monitoring"></div>
+                    <span>Monitoring & Observability</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color backup"></div>
+                    <span>Backup & Maintenance</span>
+                </div>
+            </div>
+
+            <!-- Deployment Order -->
+            <div class="deployment-order">
+                <h3>📋 Deployment Order & Dependencies</h3>
+                
+                <div class="step">
+                    <div class="step-number">1</div>
+                    <div>
+                        <strong>Install Prerequisites:</strong>
+                        cert-manager, ingress-nginx, metrics-server, prometheus-operator (optional)
+                    </div>
+                </div>
+                
+                <div class="step">
+                    <div class="step-number">2</div>
+                    <div>
+                        <strong>Foundation:</strong>
+                        01-namespace.yaml → 04-rbac.yaml → 02-storage.yaml
+                    </div>
+                </div>
+                
+                <div class="step">
+                    <div class="step-number">3</div>
+                    <div>
+                        <strong>Configuration:</strong>
+                        03-secrets-config.yaml (Update all default values!)
+                    </div>
+                </div>
+                
+                <div class="step">
+                    <div class="step-number">4</div>
+                    <div>
+                        <strong>Application:</strong>
+                        05-deployment.yaml → 06-services-ingress.yaml
+                    </div>
+                </div>
+                
+                <div class="step">
+                    <div class="step-number">5</div>
+                    <div>
+                        <strong>Scaling & Security:</strong>
+                        07-autoscaling-availability.yaml → 08-security-network.yaml
+                    </div>
+                </div>
+                
+                <div class="step">
+                    <div class="step-number">6</div>
+                    <div>
+                        <strong>Observability:</strong>
+                        09-monitoring.yaml (Creates monitoring namespace and stack)
+                    </div>
+                </div>
+                
+                <div class="step">
+                    <div class="step-number">7</div>
+                    <div>
+                        <strong>Operations:</strong>
+                        10-backup-maintenance.yaml (Backup jobs and snapshots)
+                    </div>
+                </div>
+            </div>
+
+            <!-- Key Features Summary -->
+            <div style="background: #f0f8ff; padding: 20px; border-radius: 10px; margin: 20px 0;">
+                <h3 style="color: #1976d2; margin: 0 0 15px 0;">🎯 Key Features & Benefits</h3>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px;">
+                    <div>
+                        <h4>🔐 Security First</h4>
+                        <ul>
+                            <li>Pod Security Standards</li>
+                            <li>Network policies</li>
+                            <li>RBAC with minimal privileges</li>
+                            <li>Secret encryption</li>
+                        </ul>
+                    </div>
+                    <div>
+                        <h4>📈 Production Ready</h4>
+                        <ul>
+                            <li>Auto-scaling (HPA/VPA)</li>
+                            <li>Health checks & probes</li>
+                            <li>Graceful shutdown</li>
+                            <li>High availability</li>
+                        </ul>
+                    </div>
+                    <div>
+                        <h4>👁️ Full Observability</h4>
+                        <ul>
+                            <li>Prometheus metrics</li>
+                            <li>Grafana dashboards</li>
+                            <li>Structured logging</li>
+                            <li>Alerting rules</li>
+                        </ul>
+                    </div>
+                    <div>
+                        <h4>💾 Data Protection</h4>
+                        <ul>
+                            <li>Automated backups</li>
+                            <li>Volume snapshots</li>
+                            <li>Restore procedures</li>
+                            <li>Data encryption</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal -->
+    <div id="codeModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalTitle">Component Code</h2>
+                <span class="close" onclick="closeModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="code-container">
+                    <div class="code-header">
+                        <span class="code-title" id="codeTitle">YAML Configuration</span>
+                        <button class="copy-btn" onclick="copyCode()">Copy Code</button>
+                    </div>
+                    <pre><code id="codeContent"></code></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const codeExamples = {
+            certmanager: {
+                title: '🔒 cert-manager Installation & Configuration',
+                file: 'cert-manager-install.yaml',
+                code: `# Install cert-manager using kubectl
+# kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.13.0/cert-manager.yaml
+
+# Or using Helm:
+# helm repo add jetstack https://charts.jetstack.io
+# helm repo update
+# helm install cert-manager jetstack/cert-manager --namespace cert-manager --create-namespace --version v1.13.0 --set installCRDs=true
+
+---
+# ClusterIssuer for Let's Encrypt Production
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+spec:
+  acme:
+    # ACME server URL for Let's Encrypt production
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: admin@example.com  # CHANGE THIS to your email
+    privateKeySecretRef:
+      name: letsencrypt-prod
+    solvers:
+    - http01:
+        ingress:
+          class: nginx
+---
+# ClusterIssuer for Let's Encrypt Staging (for testing)
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-staging
+spec:
+  acme:
+    server: https://acme-staging-v02.api.letsencrypt.org/directory
+    email: admin@example.com  # CHANGE THIS to your email
+    privateKeySecretRef:
+      name: letsencrypt-staging
+    solvers:
+    - http01:
+        ingress:
+          class: nginx
+---
+# Example Certificate resource (optional - usually created automatically by Ingress)
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: myapp-cert
+  namespace: myapp
+spec:
+  secretName: myapp-tls
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  dnsNames:
+  - myapp.example.com
+  - www.myapp.example.com`
+            },
+            ingressnginx: {
+                title: '🌐 ingress-nginx Installation & Configuration',
+                file: 'ingress-nginx-install.yaml',
+                code: `# Install ingress-nginx using kubectl
+# kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.8.1/deploy/static/provider/cloud/deploy.yaml
+
+# Or using Helm:
+# helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
+# helm repo update
+# helm install ingress-nginx ingress-nginx/ingress-nginx --namespace ingress-nginx --create-namespace
+
+---
+# Custom ConfigMap for ingress-nginx controller
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ingress-nginx-controller
+  namespace: ingress-nginx
+data:
+  # Security headers
+  enable-modsecurity: "true"
+  enable-owasp-modsecurity-crs: "true"
+  
+  # Performance tuning
+  worker-processes: "auto"
+  max-worker-connections: "65536"
+  
+  # Timeouts
+  proxy-connect-timeout: "10"
+  proxy-send-timeout: "60"
+  proxy-read-timeout: "60"
+  
+  # Body size limits
+  proxy-body-size: "50m"
+  
+  # SSL settings
+  ssl-protocols: "TLSv1.2 TLSv1.3"
+  ssl-ciphers: "ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384"
+  
+  # Rate limiting
+  limit-req-status-code: "429"
+  
+  # Logging
+  log-format-upstream: '$remote_addr - $remote_user [$time_local] "$request" $status $body_bytes_sent "$http_referer" "$http_user_agent" $request_length $request_time [$proxy_upstream_name] [$proxy_alternative_upstream_name] $upstream_addr $upstream_response_length $upstream_response_time $upstream_status $req_id'
+---
+# Service for ingress-nginx (LoadBalancer type)
+apiVersion: v1
+kind: Service
+metadata:
+  name: ingress-nginx-controller
+  namespace: ingress-nginx
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"  # For AWS
+    service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled: "true"
+spec:
+  type: LoadBalancer
+  externalTrafficPolicy: Local
+  ports:
+  - name: http
+    port: 80
+    targetPort: http
+    protocol: TCP
+  - name: https
+    port: 443
+    targetPort: https
+    protocol: TCP
+  selector:
+    app.kubernetes.io/name: ingress-nginx
+    app.kubernetes.io/component: controller`
+            },
+            metricsserver: {
+                title: '📊 metrics-server Installation & Configuration',
+                file: 'metrics-server-install.yaml',
+                code: `# Install metrics-server using kubectl
+# kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+
+# Or using Helm:
+# helm repo add metrics-server https://kubernetes-sigs.github.io/metrics-server/
+# helm repo update
+# helm install metrics-server metrics-server/metrics-server --namespace kube-system
+
+---
+# Metrics Server Deployment (custom configuration)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: metrics-server
+  namespace: kube-system
+  labels:
+    k8s-app: metrics-server
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      k8s-app: metrics-server
+  template:
+    metadata:
+      labels:
+        k8s-app: metrics-server
+    spec:
+      serviceAccountName: metrics-server
+      containers:
+      - name: metrics-server
+        image: registry.k8s.io/metrics-server/metrics-server:v0.6.4
+        imagePullPolicy: IfNotPresent
+        args:
+        - --cert-dir=/tmp
+        - --secure-port=4443
+        - --kubelet-preferred-address-types=InternalIP,ExternalIP,Hostname
+        - --kubelet-use-node-status-port
+        - --metric-resolution=15s
+        # Uncomment for self-signed certificates (development only)
+        # - --kubelet-insecure-tls
+        ports:
+        - name: https
+          containerPort: 4443
+          protocol: TCP
+        livenessProbe:
+          httpGet:
+            path: /livez
+            port: https
+            scheme: HTTPS
+          periodSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: https
+            scheme: HTTPS
+          periodSeconds: 10
+          failureThreshold: 3
+        resources:
+          requests:
+            cpu: 100m
+            memory: 200Mi
+          limits:
+            cpu: 500m
+            memory: 500Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 1000
+        volumeMounts:
+        - name: tmp-dir
+          mountPath: /tmp
+      volumes:
+      - name: tmp-dir
+        emptyDir: {}
+      priorityClassName: system-cluster-critical
+---
+# Service for metrics-server
+apiVersion: v1
+kind: Service
+metadata:
+  name: metrics-server
+  namespace: kube-system
+  labels:
+    k8s-app: metrics-server
+spec:
+  selector:
+    k8s-app: metrics-server
+  ports:
+  - name: https
+    port: 443
+    protocol: TCP
+    targetPort: https
+---
+# ServiceAccount for metrics-server
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: metrics-server
+  namespace: kube-system
+  labels:
+    k8s-app: metrics-server
+---
+# ClusterRole for metrics-server
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: system:metrics-server
+  labels:
+    k8s-app: metrics-server
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - nodes/metrics
+  verbs:
+  - get
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  - nodes
+  verbs:
+  - get
+  - list
+  - watch
+---
+# ClusterRoleBinding for metrics-server
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: system:metrics-server
+  labels:
+    k8s-app: metrics-server
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:metrics-server
+subjects:
+- kind: ServiceAccount
+  name: metrics-server
+  namespace: kube-system
+---
+# APIService for metrics API
+apiVersion: apiregistration.k8s.io/v1
+kind: APIService
+metadata:
+  name: v1beta1.metrics.k8s.io
+  labels:
+    k8s-app: metrics-server
+spec:
+  service:
+    name: metrics-server
+    namespace: kube-system
+  group: metrics.k8s.io
+  version: v1beta1
+  insecureSkipTLSVerify: true
+  groupPriorityMinimum: 100
+  versionPriority: 100`
+            },
+            namespace: {
+                title: '🔒 Namespace Configuration',
+                file: '01-namespace.yaml',
+                code: `apiVersion: v1
+kind: Namespace
+metadata:
+  name: myapp
+  labels:
+    name: myapp
+    environment: production
+    app.kubernetes.io/name: myapp
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: myapp-quota
+  namespace: myapp
+spec:
+  hard:
+    requests.cpu: "10"
+    requests.memory: 20Gi
+    limits.cpu: "20"
+    limits.memory: 40Gi
+    persistentvolumeclaims: "10"
+    services.loadbalancers: "2"
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: myapp-limitrange
+  namespace: myapp
+spec:
+  limits:
+  - max:
+      cpu: "2"
+      memory: 4Gi
+    min:
+      cpu: 100m
+      memory: 128Mi
+    default:
+      cpu: 500m
+      memory: 512Mi
+    defaultRequest:
+      cpu: 200m
+      memory: 256Mi
+    type: Container`
+            },
+            rbac: {
+                title: '👤 RBAC Configuration',
+                file: '04-rbac.yaml',
+                code: `apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: myapp-sa
+  namespace: myapp
+  labels:
+    app: myapp
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: myapp-role
+  namespace: myapp
+spec:
+  rules:
+  - apiGroups: [""]
+    resources: ["configmaps", "secrets"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: myapp-rolebinding
+  namespace: myapp
+spec:
+  roleRef:
+    apiGroup: rbac.authorization.k8s.io
+    kind: Role
+    name: myapp-role
+  subjects:
+  - kind: ServiceAccount
+    name: myapp-sa
+    namespace: myapp`
+            },
+            storage: {
+                title: '💾 Storage Configuration',
+                file: '02-storage.yaml',
+                code: `apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: myapp-ssd
+provisioner: kubernetes.io/aws-ebs
+parameters:
+  type: gp3
+  encrypted: "true"
+  fsType: ext4
+allowVolumeExpansion: true
+volumeBindingMode: WaitForFirstConsumer
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: myapp-data
+  namespace: myapp
+  labels:
+    app: myapp
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: myapp-ssd
+  resources:
+    requests:
+      storage: 10Gi`
+            },
+            secrets: {
+                title: '🗝️ Secrets Configuration',
+                file: '03-secrets-config.yaml',
+                code: `apiVersion: v1
+kind: Secret
+metadata:
+  name: myapp-secrets
+  namespace: myapp
+type: Opaque
+stringData:
+  DB_HOST: "postgres.example.com"
+  DB_PORT: "5432"
+  DB_NAME: "myapp_db"
+  DB_USER: "myapp_user"
+  DB_PASSWORD: "CHANGE_ME_STRONG_PASSWORD"
+  API_KEY: "CHANGE_ME_API_KEY"
+  JWT_SECRET: "CHANGE_ME_JWT_SECRET"
+  REDIS_PASSWORD: "CHANGE_ME_REDIS_PASSWORD"`
+            },
+            configmap: {
+                title: '📄 ConfigMap Configuration',
+                file: '03-secrets-config.yaml',
+                code: `apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: myapp-config
+  namespace: myapp
+data:
+  APP_ENV: "production"
+  LOG_LEVEL: "info"
+  PORT: "8080"
+  CACHE_TTL: "3600"
+  MAX_CONNECTIONS: "100"
+  nginx.conf: |
+    server {
+        listen 80;
+        server_name myapp.example.com;
+        
+        location / {
+            proxy_pass http://localhost:8080;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+        }
+    }`
+            },
+            deployment: {
+                title: '🏃 Main Deployment',
+                file: '05-deployment.yaml',
+                code: `apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: myapp
+  namespace: myapp
+  labels:
+    app: myapp
+    version: v1
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: myapp
+  template:
+    metadata:
+      labels:
+        app: myapp
+        version: v1
+    spec:
+      serviceAccountName: myapp-sa
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+      - name: myapp
+        image: myapp:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8080
+          name: http
+        env:
+        - name: DB_HOST
+          valueFrom:
+            secretKeyRef:
+              name: myapp-secrets
+              key: DB_HOST
+        - name: APP_ENV
+          valueFrom:
+            configMapKeyRef:
+              name: myapp-config
+              key: APP_ENV
+        resources:
+          requests:
+            cpu: 200m
+            memory: 256Mi
+          limits:
+            cpu: 1000m
+            memory: 512Mi
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5`
+            },
+            backend: {
+                title: '🔄 Backend API Deployment',
+                file: '05-deployment.yaml',
+                code: `apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: myapp-backend
+  namespace: myapp
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: myapp-backend
+  template:
+    metadata:
+      labels:
+        app: myapp-backend
+    spec:
+      containers:
+      - name: backend
+        image: myapp-backend:latest
+        ports:
+        - containerPort: 3000
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 256Mi`
+            },
+            service: {
+                title: '⚖️ Service Configuration',
+                file: '06-services-ingress.yaml',
+                code: `apiVersion: v1
+kind: Service
+metadata:
+  name: myapp-service
+  namespace: myapp
+  labels:
+    app: myapp
+spec:
+  type: ClusterIP
+  selector:
+    app: myapp
+  ports:
+  - name: http
+    port: 80
+    targetPort: 8080
+    protocol: TCP
+  sessionAffinity: ClientIP`
+            },
+            ingress: {
+                title: '🌍 Ingress Configuration',
+                file: '06-services-ingress.yaml',
+                code: `apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: myapp-ingress
+  namespace: myapp
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - myapp.example.com
+    secretName: myapp-tls
+  rules:
+  - host: myapp.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: myapp-service
+            port:
+              number: 80`
+            },
+            networkpolicy: {
+                title: '🛡️ Network Policy',
+                file: '08-security-network.yaml',
+                code: `apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: myapp-netpol
+  namespace: myapp
+spec:
+  podSelector:
+    matchLabels:
+      app: myapp
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+    ports:
+    - protocol: TCP
+      port: 8080
+  egress:
+  - to:
+    - namespaceSelector: {}
+    ports:
+    - protocol: TCP
+      port: 5432
+    - protocol: TCP
+      port: 6379`
+            },
+            hpa: {
+                title: '📊 Horizontal Pod Autoscaler',
+                file: '07-autoscaling-availability.yaml',
+                code: `apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: myapp-hpa
+  namespace: myapp
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: myapp
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80`
+            },
+            pdb: {
+                title: '🛡️ Pod Disruption Budget',
+                file: '07-autoscaling-availability.yaml',
+                code: `apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: myapp-pdb
+  namespace: myapp
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: myapp`
+            },
+            snapshot: {
+                title: '📸 Volume Snapshot',
+                file: '10-backup-maintenance.yaml',
+                code: `apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshot
+metadata:
+  name: myapp-snapshot
+  namespace: myapp
+spec:
+  volumeSnapshotClassName: csi-snapclass
+  source:
+    persistentVolumeClaimName: myapp-data`
+            },
+            cronjob: {
+                title: '⏰ Backup CronJob',
+                file: '10-backup-maintenance.yaml',
+                code: `apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: myapp-backup
+  namespace: myapp
+spec:
+  schedule: "0 2 * * *"
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+          - name: backup
+            image: backup-tool:latest
+            command:
+            - /bin/sh
+            - -c
+            - |
+              echo "Starting backup..."
+              # Backup commands here
+              echo "Backup completed"
+            volumeMounts:
+            - name: data
+              mountPath: /data
+          volumes:
+          - name: data
+            persistentVolumeClaim:
+              claimName: myapp-data`
+            },
+            prometheus: {
+                title: '📊 Prometheus Configuration',
+                file: '09-monitoring.yaml',
+                code: `apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: monitoring
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+    
+    scrape_configs:
+    - job_name: 'kubernetes-pods'
+      kubernetes_sd_configs:
+      - role: pod
+      relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+        action: keep
+        regex: true`
+            },
+            grafana: {
+                title: '📈 Grafana Configuration',
+                file: '09-monitoring.yaml',
+                code: `apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana
+  namespace: monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: grafana
+  template:
+    metadata:
+      labels:
+        app: grafana
+    spec:
+      containers:
+      - name: grafana
+        image: grafana/grafana:latest
+        ports:
+        - containerPort: 3000
+        env:
+        - name: GF_SECURITY_ADMIN_PASSWORD
+          value: "admin"
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi`
+            },
+            servicemonitor: {
+                title: '🎯 ServiceMonitor',
+                file: '09-monitoring.yaml',
+                code: `apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: myapp-monitor
+  namespace: myapp
+  labels:
+    app: myapp
+spec:
+  selector:
+    matchLabels:
+      app: myapp
+  endpoints:
+  - port: http
+    path: /metrics
+    interval: 30s`
+            }
+        };
+
+        function showCode(component) {
+            const modal = document.getElementById('codeModal');
+            const modalTitle = document.getElementById('modalTitle');
+            const codeTitle = document.getElementById('codeTitle');
+            const codeContent = document.getElementById('codeContent');
+            
+            const example = codeExamples[component];
+            if (example) {
+                modalTitle.textContent = example.title;
+                codeTitle.textContent = example.file;
+                codeContent.textContent = example.code;
+                modal.style.display = 'block';
+            }
+        }
+
+        function closeModal() {
+            const modal = document.getElementById('codeModal');
+            modal.style.display = 'none';
+        }
+
+        function copyCode() {
+            const codeContent = document.getElementById('codeContent');
+            const text = codeContent.textContent;
+            
+            navigator.clipboard.writeText(text).then(() => {
+                const btn = document.querySelector('.copy-btn');
+                const originalText = btn.textContent;
+                btn.textContent = '✓ Copied!';
+                btn.classList.add('copied');
+                
+                setTimeout(() => {
+                    btn.textContent = originalText;
+                    btn.classList.remove('copied');
+                }, 2000);
+            });
+        }
+
+        // Close modal when clicking outside
+        window.onclick = function(event) {
+            const modal = document.getElementById('codeModal');
+            if (event.target === modal) {
+                closeModal();
+            }
+        }
+
+        // Close modal with Escape key
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Escape') {
+                closeModal();
+            }
+        });
+    </script>
+</body>
+</html>

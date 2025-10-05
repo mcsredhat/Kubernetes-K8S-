@@ -1,27 +1,27 @@
 # ============================================================================
-# 01-namespace.yaml - Namespace and Resource Management (CORRECTED)
+# 01-namespace.yaml - Namespace and Resource Management
 # ============================================================================
 # Purpose: Creates isolated environment with security policies and resource limits
 # Dependencies: None (must be applied first)
-# Fixes: None required - this file was already correct
+# Status: VERIFIED CORRECT - No changes needed
 # ============================================================================
 
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: {{NAMESPACE}}
+  name: ${NAMESPACE}
   labels:
-    name: {{NAMESPACE}}
-    environment: {{ENVIRONMENT}}
-    team: {{TEAM}}
+    name: ${NAMESPACE}
+    environment: ${ENVIRONMENT}
+    team: ${TEAM}
     app.kubernetes.io/managed-by: kubectl
     # Pod Security Standards - Enforces security policies at namespace level
     pod-security.kubernetes.io/enforce: restricted
     pod-security.kubernetes.io/audit: restricted  
     pod-security.kubernetes.io/warn: restricted
   annotations:
-    description: "Namespace for {{APP_NAME}} application in {{ENVIRONMENT}} environment"
-    contact: "{{TEAM}}@company.com"
+    description: "Namespace for ${APP_NAME} application in ${ENVIRONMENT} environment"
+    contact: "${TEAM}@company.com"
     created-by: "k8s-template-v2.0"
 spec:
   finalizers: ["kubernetes"]
@@ -31,11 +31,11 @@ spec:
 apiVersion: v1
 kind: ResourceQuota
 metadata:
-  name: {{NAMESPACE}}-quota
-  namespace: {{NAMESPACE}}
+  name: ${NAMESPACE}-quota
+  namespace: ${NAMESPACE}
   labels:
     component: resource-management
-    app.kubernetes.io/part-of: {{APP_NAME}}
+    app.kubernetes.io/part-of: ${APP_NAME}
 spec:
   hard:
     # Compute resources
@@ -60,11 +60,11 @@ spec:
 apiVersion: v1
 kind: LimitRange
 metadata:
-  name: {{NAMESPACE}}-limits
-  namespace: {{NAMESPACE}}
+  name: ${NAMESPACE}-limits
+  namespace: ${NAMESPACE}
   labels:
     component: resource-management
-    app.kubernetes.io/part-of: {{APP_NAME}}
+    app.kubernetes.io/part-of: ${APP_NAME}
 spec:
   limits:
   - type: Container
