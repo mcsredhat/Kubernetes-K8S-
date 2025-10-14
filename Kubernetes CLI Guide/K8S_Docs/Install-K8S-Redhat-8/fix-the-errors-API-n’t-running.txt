@@ -1,0 +1,26 @@
+This error is because **`kubectl` is trying to connect to `localhost:8080`**, but the API server isn’t running on this node, or the kubeconfig isn’t set.
+
+On worker nodes (like `8f87d0b9661c`), by default:
+
+* There is **no `/etc/kubernetes/admin.conf`**.
+* `kubectl` has no valid configuration to contact the control-plane.
+* That’s why you get `connection refused`.
+
+### How to fix:
+1.# On the worker node
+mkdir -p $HOME/.kube/config
+chmod 644 $HOME/.kube/config
+ls -la $HOME/.kube/config
+
+
+2. **Use the kubeconfig from the control-plane node**:
+
+```bash
+# On master node (control-plane)
+scp /etc/kubernetes/admin.conf cloud_user@8f87d0b9661c:/home/cloud_user/.kube/config
+
+3.# On the worker node
+export KUBECONFIG=$HOME/.kube/config
+kubectl get nodes -o wide
+```
+

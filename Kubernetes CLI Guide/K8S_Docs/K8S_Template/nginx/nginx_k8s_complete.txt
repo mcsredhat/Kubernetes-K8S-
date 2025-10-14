@@ -1,0 +1,1385 @@
+# ============================================================================
+# NGINX Front-End Kubernetes Deployment - Production Ready (Fully Commented)
+# ============================================================================
+#
+# PURPOSE: This manifest deploys NGINX as a reverse proxy/load balancer
+#          in front of Node.js API services with production-ready features.
+#
+# DEPLOYMENT ARCHITECTURE:
+# - NGINX acts as reverse proxy to Node.js API backend
+# - Auto-scaling based on CPU usage (HPA)
+# - External access via Ingress with TLS/SSL
+# - Rate limiting and security headers
+# - Health checks and monitoring endpoints
+# - High availability with PodDisruptionBudget
+#
+# FLOW: Internet → Ingress → NGINX Service → NGINX Pods → Node.js API Service → Node.js Pods → MongoDB
+#
+# DEPLOYMENT ORDER:
+# 1. Namespace → 2. ResourceQuota → 3. LimitRange → 4. ConfigMap
+# 5. Deployment → 6. Service → 7. HPA → 8. Ingress → 9. PDB
+#
+# ============================================================================
+
+---
+# ============================================================================
+# PART 1: NAMESPACE
+# ============================================================================
+# TASK: Create a logical partition for all application resources
+#
+# WHAT IT DOES:
+# - Creates namespace "mgdb-ns" for MongoDB, NGINX, and Node.js
+# - Provides resource isolation and organization
+# - Enables namespace-scoped RBAC and network policies
+# - Applies pod security standards
+#
+# WHY IT'S NEEDED:
+# - Groups related resources together (MongoDB + NGINX + Node.js)
+# - Isolates from other applications in cluster
+# - Allows per-namespace resource quotas
+# - Simplifies management and access control
+#
+# REUSE NOTE:
+# - If you already deployed MongoDB manifest, this namespace exists
+# - You can skip this section OR apply it again (idempotent)
+# - kubectl apply is safe for existing resources
+#
+# POD SECURITY STANDARDS:
+# - baseline: Prevents known privilege escalations
+# - Blocks privileged containers, hostPath (with exceptions), etc.
+#
+# ============================================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mgdb-ns
+  # Shared namespace for MongoDB, NGINX, and Node.js
+  labels:
+    name: mgdb-ns
+    environment: production
+      # Production environment identifier
+    team: platform-team
+      # Team responsible for this namespace
+    app.kubernetes.io/managed-by: kubectl
+      # Standard Kubernetes label
+    pod-security.kubernetes.io/enforce: baseline
+      # Enforce baseline pod security standard
+      # Prevents: privileged containers, hostPath volumes (some), root user (some)
+    pod-security.kubernetes.io/audit: baseline
+      # Audit violations (logs non-compliant pods)
+    pod-security.kubernetes.io/warn: baseline
+      # Warn about violations in kubectl output
+  annotations:
+    description: "Namespace for full-stack application: MongoDB, Node.js API, NGINX"
+    contact: "platform-team@company.com"
+    created-by: "k8s-nginx-template-v1.0"
+spec:
+  finalizers: ["kubernetes"]
+    # Prevents deletion until all resources are removed
+
+---
+# ============================================================================
+# PART 2: RESOURCEQUOTA
+# ============================================================================
+# TASK: Limit total resource consumption in namespace
+#
+# WHAT IT DOES:
+# - Sets hard limits on CPU, memory, storage, and object counts
+# - Prevents resource exhaustion in shared clusters
+# - Enforces cost control and fair sharing
+#
+# WHY IT'S NEEDED:
+# - Protects cluster from resource overconsumption
+# - Prevents one namespace from starving others
+# - Enables predictable billing and capacity planning
+#
+# QUOTA BREAKDOWN:
+# - CPU: 2 CPUs requested, 4 CPUs limit (for all pods combined)
+# - Memory: 4Gi requested, 8Gi limit
+# - Storage: 100Gi total for all PVCs
+# - Objects: 10 pods, 5 services, 10 secrets, etc.
+#
+# NOTE: If you applied MongoDB manifest, this exists. Safe to reapply.
+#
+# ============================================================================
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: mgdb-ns-quota
+  namespace: mgdb-ns
+  labels:
+    component: resource-management
+    app.kubernetes.io/part-of: fullstack-app
+spec:
+  hard:
+    # ===== CPU & MEMORY =====
+    requests.cpu: "2000m"
+      # Total CPU requests across all pods: 2 CPUs
+      # MongoDB: 250m, NGINX: 200m (2 replicas = 200m), Node.js: ~1550m
+    requests.memory: "4Gi"
+      # Total memory requests: 4 GiB
+      # MongoDB: 256Mi, NGINX: 256Mi (2 replicas = 256Mi), Node.js: ~3.5Gi
+    limits.cpu: "4000m"
+      # Total CPU limits: 4 CPUs
+    limits.memory: "8Gi"
+      # Total memory limits: 8 GiB
+    
+    # ===== STORAGE =====
+    requests.storage: "100Gi"
+      # Total storage for all PVCs
+    persistentvolumeclaims: "5"
+      # Max 5 PVCs in namespace
+    
+    # ===== OBJECT COUNTS =====
+    pods: "10"
+      # Max 10 pods (MongoDB: 1, NGINX: 2-10 with HPA, Node.js: varies)
+    services: "5"
+      # Max 5 services (MongoDB: 2, NGINX: 1, Node.js: 1)
+    secrets: "10"
+      # Max 10 secrets (credentials, TLS certs)
+    configmaps: "10"
+      # Max 10 ConfigMaps (configs for MongoDB, NGINX, Node.js)
+    count/ingresses.networking.k8s.io: "5"
+      # Max 5 Ingress resources
+
+---
+# ============================================================================
+# PART 3: LIMITRANGE
+# ============================================================================
+# TASK: Set default, min, and max resource limits per container/PVC
+#
+# WHAT IT DOES:
+# - Enforces per-container resource boundaries
+# - Provides defaults if pod doesn't specify resources
+# - Prevents pods from requesting too much/too little
+#
+# WHY IT'S NEEDED:
+# - Prevents misconfigured pods from consuming too many resources
+# - Ensures minimum resource allocation for stability
+# - Provides safe defaults to reduce configuration errors
+#
+# RELATIONSHIP WITH RESOURCEQUOTA:
+# - LimitRange: Per-container limits
+# - ResourceQuota: Namespace-wide limits
+# - Both must be satisfied
+#
+# NOTE: If you applied MongoDB manifest, this exists. Safe to reapply.
+#
+# ============================================================================
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: mgdb-ns-limits
+  namespace: mgdb-ns
+  labels:
+    component: resource-management
+    app.kubernetes.io/part-of: fullstack-app
+spec:
+  limits:
+  
+  # ===== CONTAINER LIMITS =====
+  - type: Container
+    default:
+      # Default limits (if not specified)
+      cpu: 500m
+        # Default CPU limit: 0.5 CPU
+      memory: 512Mi
+        # Default memory limit: 512 MiB
+      ephemeral-storage: 1Gi
+        # Default ephemeral storage limit
+    
+    defaultRequest:
+      # Default requests (if not specified)
+      cpu: 250m
+        # Default CPU request: 0.25 CPU
+      memory: 256Mi
+        # Default memory request: 256 MiB
+      ephemeral-storage: 500Mi
+    
+    max:
+      # Maximum container can request
+      cpu: 2000m
+        # Max 2 CPUs per container
+      memory: 2Gi
+        # Max 2 GiB per container
+      ephemeral-storage: 5Gi
+    
+    min:
+      # Minimum container must request
+      cpu: 50m
+        # Min 0.05 CPU
+      memory: 64Mi
+        # Min 64 MiB
+      ephemeral-storage: 100Mi
+  
+  # ===== PVC LIMITS =====
+  - type: PersistentVolumeClaim
+    max:
+      storage: 50Gi
+        # Max 50Gi per PVC
+    min:
+      storage: 1Gi
+        # Min 1Gi per PVC
+
+---
+# ============================================================================
+# PART 4: CONFIGMAP - NGINX Configuration
+# ============================================================================
+# TASK: Store NGINX configuration file
+#
+# WHAT IT DOES:
+# - Contains complete nginx.conf file
+# - Configures NGINX as reverse proxy to Node.js API
+# - Sets up rate limiting, health checks, and security
+# - Mounted as file in NGINX pod
+#
+# WHY IT'S NEEDED:
+# - Externalizes configuration from container image
+# - Allows configuration changes without rebuilding image
+# - Enables different configs per environment
+# - Follows 12-factor app principles
+#
+# KEY FEATURES:
+# - Runs on port 8080 (unprivileged port, doesn't require root)
+# - Rate limiting: 10 req/s general, 30 req/s API
+# - Health check endpoint: /health
+# - Reverse proxy to Node.js: node-api-service.mgdb-ns.svc.cluster.local:3000
+# - DNS resolver: Uses Kubernetes DNS (10.96.0.10)
+# - Proper headers: X-Real-IP, X-Forwarded-For, etc.
+#
+# ============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-config
+  namespace: mgdb-ns
+  labels:
+    app: nginx-frontend
+    component: configuration
+data:
+  # Key: nginx.conf
+  # Value: Complete NGINX configuration
+  nginx.conf: |
+    # ===== USER & PROCESS SETTINGS =====
+    user root;
+      # Run NGINX worker processes as root user
+      # Note: Master process needs root for port 80, but we use 8080 (unprivileged)
+      # Alternative: user nginx; (if not binding to privileged ports)
+    
+    worker_processes auto;
+      # auto: One worker per CPU core
+      # Alternative: Set specific number (e.g., 4)
+    
+    error_log stderr warn;
+      # Log errors to stderr (captured by Kubernetes)
+      # Level: warn (debug, info, notice, warn, error, crit)
+    
+    pid /tmp/nginx.pid;
+      # PID file location (writable in /tmp)
+      # Default /var/run/nginx.pid requires root
+    
+    # ===== EVENTS BLOCK =====
+    events {
+      worker_connections 1024;
+        # Max simultaneous connections per worker
+        # Total capacity: worker_processes × worker_connections
+        # Example: 4 workers × 1024 = 4096 concurrent connections
+    }
+    
+    # ===== HTTP BLOCK =====
+    http {
+      include /etc/nginx/mime.types;
+        # Include MIME type definitions
+      default_type application/octet-stream;
+        # Default MIME type if unknown
+      
+      # ===== LOGGING FORMAT =====
+      log_format main '$remote_addr - $remote_user [$time_local] "$request" '
+                      '$status $body_bytes_sent "$http_referer" '
+                      '"$http_user_agent" "$http_x_forwarded_for"';
+        # Custom log format with client IP, request, status, etc.
+      
+      access_log /dev/stdout main;
+        # Log access to stdout (captured by Kubernetes)
+      
+      # ===== PERFORMANCE SETTINGS =====
+      sendfile on;
+        # Efficient file transfer (zero-copy)
+      tcp_nopush on;
+        # Send headers in one packet (with sendfile)
+      tcp_nodelay on;
+        # Disable Nagle's algorithm (low latency)
+      keepalive_timeout 65;
+        # Keep connections alive for 65 seconds
+      types_hash_max_size 2048;
+        # Hash table size for MIME types
+      client_max_body_size 20M;
+        # Max request body size: 20 MB
+        # Important for file uploads
+      
+      # ===== DNS RESOLVER =====
+      resolver 10.96.0.10 valid=10s ipv6=off;
+        # Kubernetes DNS server (kube-dns/CoreDNS)
+        # 10.96.0.10: Default Kubernetes DNS ClusterIP
+        # valid=10s: Cache DNS results for 10 seconds
+        # ipv6=off: Disable IPv6 resolution
+      resolver_timeout 5s;
+        # DNS query timeout: 5 seconds
+      
+      # ===== RATE LIMITING =====
+      limit_req_zone $binary_remote_addr zone=general:10m rate=10r/s;
+        # General rate limit: 10 requests/second per IP
+        # $binary_remote_addr: Client IP (binary format, saves memory)
+        # zone=general:10m: 10MB memory for tracking IPs (~160k IPs)
+      
+      limit_req_zone $binary_remote_addr zone=api:10m rate=30r/s;
+        # API rate limit: 30 requests/second per IP
+        # Separate zone for API endpoints (more generous)
+      
+      # ===== SERVER BLOCK =====
+      server {
+        listen 8080 default_server;
+          # Listen on port 8080 (unprivileged port)
+          # default_server: Default server for this port
+          # Port 8080 doesn't require root privileges
+        
+        server_name _;
+          # Catch-all server name (matches any hostname)
+        
+        # ===== HEALTH CHECK ENDPOINT =====
+        location /health {
+          access_log off;
+            # Don't log health checks (reduces noise)
+          return 200 'OK';
+            # Return HTTP 200 with body "OK"
+          add_header Content-Type text/plain;
+            # Set content type header
+          # Used by Kubernetes liveness/readiness probes
+        }
+        
+        # ===== METRICS ENDPOINT =====
+        location /metrics {
+          access_log off;
+          return 200 'metrics';
+          add_header Content-Type text/plain;
+          # Placeholder for Prometheus metrics
+          # In production, use nginx-prometheus-exporter or similar
+        }
+        
+        # ===== MAIN PROXY LOCATION =====
+        location / {
+          # Apply API rate limiting
+          limit_req zone=api burst=50 nodelay;
+            # zone=api: Use API rate limit (30 req/s)
+            # burst=50: Allow bursts up to 50 requests
+            # nodelay: Process burst requests immediately (don't delay)
+          
+          # Set backend service (Node.js API)
+          set $backend "node-api-service.mgdb-ns.svc.cluster.local:3000";
+            # DNS name: <service-name>.<namespace>.svc.cluster.local
+            # Port: 3000 (Node.js API port)
+            # set $backend: Variable for dynamic resolution
+          
+          proxy_pass http://$backend;
+            # Forward request to Node.js backend
+            # http://: Protocol
+            # $backend: Variable containing service DNS name
+          
+          # ===== PROXY HEADERS =====
+          proxy_set_header Host $host;
+            # Forward original Host header
+          proxy_set_header X-Real-IP $remote_addr;
+            # Client's real IP address
+          proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            # Chain of proxy IPs
+          proxy_set_header X-Forwarded-Proto $scheme;
+            # Original protocol (http/https)
+          proxy_set_header X-Forwarded-Host $host;
+            # Original hostname
+          proxy_set_header X-Forwarded-Port $server_port;
+            # Original port
+          
+          # ===== PROXY TIMEOUTS =====
+          proxy_connect_timeout 60s;
+            # Timeout for connecting to backend: 60 seconds
+          proxy_send_timeout 60s;
+            # Timeout for sending request to backend: 60 seconds
+          proxy_read_timeout 60s;
+            # Timeout for reading response from backend: 60 seconds
+          
+          # ===== PROXY BUFFERING =====
+          proxy_buffering on;
+            # Enable response buffering (improves performance)
+          proxy_buffer_size 4k;
+            # Buffer size for response headers: 4 KB
+          proxy_buffers 8 4k;
+            # 8 buffers of 4 KB each for response body
+        }
+        
+        # ===== DENY HIDDEN FILES =====
+        location ~ /\. {
+          deny all;
+            # Deny access to hidden files (.git, .env, etc.)
+          access_log off;
+            # Don't log denied requests
+          log_not_found off;
+            # Don't log 404 errors
+        }
+      }
+    }
+
+---
+# ============================================================================
+# PART 5: DEPLOYMENT - NGINX Pods
+# ============================================================================
+# TASK: Deploy and manage NGINX pods
+#
+# WHAT IT DOES:
+# - Creates 2 NGINX replicas (pods)
+# - Manages pod lifecycle (restart if crash)
+# - Handles rolling updates (zero downtime)
+# - Mounts configuration from ConfigMap
+#
+# WHY IT'S NEEDED:
+# - Provides high availability (2+ replicas)
+# - Enables zero-downtime deployments
+# - Automatically restarts failed pods
+# - Manages desired state (always 2 replicas)
+#
+# KEY FEATURES:
+# - RollingUpdate strategy (one pod at a time)
+# - Health checks: liveness, readiness, startup
+# - Read-only root filesystem (security)
+# - Runs as root (needed for NGINX, but secure with RO filesystem)
+# - tmpfs volumes for temporary files
+#
+# SECURITY NOTES:
+# - runAsUser: 0 (root) - NGINX needs root for some operations
+# - readOnlyRootFilesystem: false - NGINX needs to write to /tmp
+# - NET_BIND_SERVICE capability - allows binding to port 8080
+# - All other capabilities dropped
+#
+# ============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-frontend-deployment
+  namespace: mgdb-ns
+  labels:
+    app: nginx-frontend
+    version: "1.0.0"
+      # Version label for tracking releases
+    component: frontend
+      # Component type: frontend (vs backend, database)
+spec:
+  # ===== REPLICA CONFIGURATION =====
+  replicas: 2
+    # Start with 2 NGINX pods
+    # HPA will scale between 2-10 based on CPU usage
+  
+  # ===== UPDATE STRATEGY =====
+  strategy:
+    type: RollingUpdate
+      # RollingUpdate: Gradually replace old pods with new ones
+      # Alternative: Recreate (delete all, then create new)
+    rollingUpdate:
+      maxSurge: 1
+        # Max 1 extra pod during update (3 total during update)
+        # maxSurge: Extra pods allowed above desired count
+      maxUnavailable: 0
+        # Keep all pods available during update (zero downtime)
+        # maxUnavailable: Max pods that can be down during update
+  
+  # ===== POD SELECTION =====
+  selector:
+    matchLabels:
+      app: nginx-frontend
+      # Deployment manages pods with this label
+  
+  # ===== POD TEMPLATE =====
+  template:
+    metadata:
+      labels:
+        app: nginx-frontend
+          # Must match selector
+        version: "1.0.0"
+        component: frontend
+    
+    spec:
+      # ===== SERVICE ACCOUNT =====
+      serviceAccountName: default
+        # Use default ServiceAccount (no special permissions needed)
+        # Alternative: Create custom ServiceAccount for RBAC
+      
+      # ===== CONTAINERS =====
+      containers:
+      - name: nginx
+          # Container name
+        
+        image: nginx:stable-alpine
+          # Docker image: NGINX stable version on Alpine Linux
+          # Alpine: Lightweight (5 MB vs 130 MB for debian)
+          # stable: Production-ready version
+        
+        imagePullPolicy: IfNotPresent
+          # Pull image only if not cached locally
+          # Alternatives: Always, Never
+        
+        # ===== COMMAND & ARGS =====
+        command:
+        - /usr/sbin/nginx
+          # Path to NGINX binary
+        args:
+        - -g
+        - daemon off;
+          # -g: Set global directive
+          # daemon off: Run NGINX in foreground (required for containers)
+        
+        # ===== PORTS =====
+        ports:
+        - name: http
+            # Port name (referenced by Service and probes)
+          containerPort: 8080
+            # NGINX listens on port 8080 inside container
+          protocol: TCP
+        
+        # ===== RESOURCE LIMITS =====
+        resources:
+          requests:
+            cpu: 100m
+              # Request 0.1 CPU (100 millicores)
+            memory: 128Mi
+              # Request 128 MiB memory
+          limits:
+            cpu: 200m
+              # Limit: 0.2 CPU (200 millicores)
+            memory: 256Mi
+              # Limit: 256 MiB memory
+        
+        # ===== LIVENESS PROBE =====
+        livenessProbe:
+          # Checks if container is alive
+          # If fails: Kubernetes restarts container
+          httpGet:
+            path: /health
+              # Health check endpoint
+            port: http
+              # Port name (8080)
+          initialDelaySeconds: 10
+            # Wait 10s before first check
+          periodSeconds: 10
+            # Check every 10 seconds
+          timeoutSeconds: 5
+            # Fail if no response in 5 seconds
+          failureThreshold: 3
+            # Restart after 3 consecutive failures
+        
+        # ===== READINESS PROBE =====
+        readinessProbe:
+          # Checks if container is ready to receive traffic
+          # If fails: Remove from Service endpoints
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 5
+            # Wait 5s before first check
+          periodSeconds: 5
+            # Check every 5 seconds
+          timeoutSeconds: 3
+            # Fail if no response in 3 seconds
+          failureThreshold: 2
+            # Remove from Service after 2 failures
+        
+        # ===== STARTUP PROBE =====
+        startupProbe:
+          # Checks if application has started
+          # Protects slow-starting containers
+          # Disables liveness/readiness until startup succeeds
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 0
+            # Start checking immediately
+          periodSeconds: 5
+            # Check every 5 seconds
+          failureThreshold: 30
+            # Allow up to 150 seconds to start (5s × 30)
+        
+        # ===== VOLUME MOUNTS =====
+        volumeMounts:
+        - name: nginx-config
+            # Volume name (references volumes section)
+          mountPath: /etc/nginx/nginx.conf
+            # Where to mount inside container
+          subPath: nginx.conf
+            # Mount only nginx.conf file (not entire directory)
+            # Preserves other files in /etc/nginx/
+          readOnly: true
+            # Mount as read-only (config shouldn't change at runtime)
+        
+        - name: tmp
+            # Temporary filesystem
+          mountPath: /tmp
+            # Mount at /tmp
+            # NGINX writes temporary files here
+        
+        # ===== CONTAINER SECURITY CONTEXT =====
+        securityContext:
+          allowPrivilegeEscalation: false
+            # Prevent gaining more privileges
+          readOnlyRootFilesystem: false
+            # false: Root filesystem is writable
+            # NGINX needs to write to some directories
+            # In production, consider true with more tmpfs mounts
+          runAsNonRoot: false
+            # false: Allows running as root
+            # NGINX requires root for some operations
+          runAsUser: 0
+            # Run as user ID 0 (root)
+          capabilities:
+            drop:
+            - ALL
+              # Drop all Linux capabilities
+            add:
+            - NET_BIND_SERVICE
+              # Add NET_BIND_SERVICE capability
+              # Allows binding to privileged ports (<1024)
+              # Required for port 80 (though we use 8080)
+      
+      # ===== VOLUMES =====
+      volumes:
+      - name: nginx-config
+          # Volume name (referenced by volumeMounts)
+        configMap:
+          name: nginx-config
+            # Reference ConfigMap created earlier
+          defaultMode: 0644
+            # File permissions: rw-r--r--
+      
+      - name: tmp
+          # Temporary filesystem
+        emptyDir:
+          medium: Memory
+            # Store in RAM (tmpfs)
+            # Alternative: "" (disk-backed)
+          sizeLimit: 512Mi
+            # Max size: 512 MiB
+            # Prevents filling up memory
+      
+      # ===== RESTART POLICY =====
+      restartPolicy: Always
+        # Always restart container if it fails
+        # Alternatives: OnFailure, Never
+      
+      # ===== TERMINATION GRACE PERIOD =====
+      terminationGracePeriodSeconds: 30
+        # Wait 30s for graceful shutdown
+        # 1. Send SIGTERM
+        # 2. Wait up to 30s
+        # 3. Send SIGKILL if still running
+      
+      # ===== DNS POLICY =====
+      dnsPolicy: ClusterFirst
+        # Use Kubernetes cluster DNS first
+        # Enables service discovery (node-api-service.mgdb-ns.svc.cluster.local)
+        # Alternatives: Default, ClusterFirstWithHostNet, None
+
+---
+# ============================================================================
+# PART 6: SERVICE - NGINX ClusterIP
+# ============================================================================
+# TASK: Expose NGINX pods within cluster
+#
+# WHAT IT DOES:
+# - Creates stable internal endpoint for NGINX
+# - Load balances traffic across NGINX pods
+# - Provides DNS name: nginx-frontend-service.mgdb-ns.svc.cluster.local
+# - Routes traffic from Ingress to NGINX pods
+#
+# WHY IT'S NEEDED:
+# - Pod IPs change when pods restart
+# - Service provides stable IP and DNS name
+# - Load balances across multiple NGINX replicas
+# - Integrates with Ingress for external access
+#
+# SERVICE TYPE:
+# - ClusterIP: Internal only (not accessible from outside cluster)
+# - Ingress will route external traffic to this Service
+#
+# PORT MAPPING:
+# - Service port 80 → Pod port 8080
+# - Ingress → Service:80 → Pod:8080
+#
+# ============================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-frontend-service
+    # Service name (used in DNS and Ingress)
+  namespace: mgdb-ns
+  labels:
+    app: nginx-frontend
+    component: frontend
+spec:
+  type: ClusterIP
+    # Internal service only (cluster IP)
+    # Alternatives: NodePort, LoadBalancer, ExternalName
+  
+  selector:
+    app: nginx-frontend
+    # Route traffic to pods with label "app: nginx-frontend"
+    # Service automatically discovers matching pods
+  
+  ports:
+  - port: 80
+      # Service port (what clients connect to)
+      # Ingress will connect to port 80
+    targetPort: 8080
+      # Pod port (where traffic is routed)
+      # NGINX container listens on 8080
+    protocol: TCP
+    name: http
+      # Port name
+  
+  sessionAffinity: None
+    # None: Round-robin load balancing
+    # ClientIP: Sticky sessions (same client → same pod)
+
+---
+# ============================================================================
+# PART 7: HORIZONTALPODAUTOSCALER (HPA)
+# ============================================================================
+# TASK: Automatically scale NGINX pods based on CPU usage
+#
+# WHAT IT DOES:
+# - Monitors CPU utilization of NGINX pods
+# - Scales replicas between 2-10 based on load
+# - Target: Keep CPU at ~50% utilization
+# - Automatic scale up/down with stabilization windows
+#
+# WHY IT'S NEEDED:
+# - Handles traffic spikes automatically
+# - Reduces costs during low traffic (scale down to 2)
+# - Maintains performance during high traffic (scale up to 10)
+# - Provides automatic capacity management
+#
+# HOW IT WORKS:
+# 1. Metrics server measures pod CPU usage
+# 2. HPA calculates: desiredReplicas = currentReplicas × (currentCPU / targetCPU)
+# 3. If CPU > 50%: Scale up
+# 4. If CPU < 50%: Scale down
+# 5. Respects stabilization windows to avoid flapping
+#
+# EXAMPLE:
+# - 2 pods at 80% CPU → Scale up to 4 pods (2 × 80/50 = 3.2 → 4)
+# - 4 pods at 30% CPU → Scale down to 3 pods (4 × 30/50 = 2.4 → 3)
+#
+# REQUIREMENTS:
+# - Metrics Server must be installed: kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+# - Pods must have resource requests defined
+#
+# ============================================================================
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: nginx-frontend-hpa
+  namespace: mgdb-ns
+  labels:
+    app: nginx-frontend
+    component: autoscaling
+spec:
+  # ===== TARGET DEPLOYMENT =====
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+      # Scale a Deployment (not StatefulSet, ReplicaSet, etc.)
+    name: nginx-frontend-deployment
+      # Name of Deployment to scale
+  
+  # ===== REPLICA BOUNDS =====
+  minReplicas: 2
+    # Minimum replicas: 2
+    # Never scale below 2 (for high availability)
+  maxReplicas: 10
+    # Maximum replicas: 10
+    # Never scale above 10 (cost control)
+  
+  # ===== METRICS =====
+  metrics:
+  - type: Resource
+      # Metric type: Resource (CPU, memory)
+      # Alternatives: Pods, Object, External
+    resource:
+      name: cpu
+        # Monitor CPU utilization
+      target:
+        type: Utilization
+          # Utilization: Percentage of requested CPU
+          # Alternative: AverageValue (absolute value)
+        averageUtilization: 50
+          # Target: 50% CPU utilization
+          # Scale up if average CPU > 50%
+          # Scale down if average CPU < 50%
+  
+  # ===== SCALING BEHAVIOR =====
+  behavior:
+    # ===== SCALE DOWN BEHAVIOR =====
+    scaleDown:
+      stabilizationWindowSeconds: 300
+        # Wait 300s (5 minutes) before scaling down
+        # Prevents flapping (rapid scale up/down)
+        # Ensures CPU is consistently low before scaling down
+      policies:
+      - type: Percent
+          # Scale down by percentage
+        value: 50
+          # Scale down by 50% of current replicas
+        periodSeconds: 60
+          # Every 60 seconds
+        # Example: 10 pods → 5 pods → 3 pods → 2 pods (over ~3 minutes)
+    
+    # ===== SCALE UP BEHAVIOR =====
+    scaleUp:
+      stabilizationWindowSeconds: 0
+        # Scale up immediately (no stabilization window)
+        # Respond quickly to traffic spikes
+      policies:
+      - type: Percent
+          # Scale up by percentage
+        value: 100
+          # Double the number of replicas
+        periodSeconds: 30
+          # Every 30 seconds
+        # Example: 2 pods → 4 pods → 8 pods (if CPU remains high)
+      
+      - type: Pods
+          # Scale up by absolute number of pods
+        value: 2
+          # Add 2 pods at a time
+        periodSeconds: 30
+          # Every 30 seconds
+        # Example: 2 pods → 4 pods → 6 pods → 8 pods
+      
+      selectPolicy: Max
+        # Max: Use the policy that scales up the most
+        # Chooses between Percent (double) and Pods (add 2)
+        # Alternative: Min (most conservative), Disabled
+
+---
+# ============================================================================
+# PART 8: INGRESS - External HTTP/HTTPS Access
+# ============================================================================
+# TASK: Route external HTTP/HTTPS traffic to NGINX Service
+#
+# WHAT IT DOES:
+# - Exposes application to internet via domain name
+# - Terminates TLS/SSL (HTTPS encryption)
+# - Routes traffic to NGINX Service
+# - Provides SSL certificate via cert-manager
+#
+# WHY IT'S NEEDED:
+# - Services are internal only (ClusterIP)
+# - Ingress provides external access with domain name
+# - Handles SSL/TLS termination (HTTPS)
+# - Single entry point for external traffic
+#
+# FLOW:
+# Internet (HTTPS) → Ingress Controller → NGINX Service → NGINX Pods → Node.js
+#
+# REQUIREMENTS:
+# 1. Ingress Controller must be installed:
+#    kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/cloud/deploy.yaml
+# 2. cert-manager for TLS certificates:
+#    kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.13.0/cert-manager.yaml
+# 3. DNS record pointing to Ingress IP:
+#    farajassulai.mygamesonline.org → <INGRESS_EXTERNAL_IP>
+#
+# TLS/SSL:
+# - cert-manager automatically provisions Let's Encrypt certificate
+# - Certificate stored in Secret: nginx-frontend-tls-secret
+# - Auto-renewal before expiration
+#
+# ============================================================================
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: nginx-frontend-ingress
+  namespace: mgdb-ns
+  labels:
+    app: nginx-frontend
+    component: ingress
+  annotations:
+    # ===== CERT-MANAGER ANNOTATION =====
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+      # Use Let's Encrypt production issuer
+      # cert-manager will automatically request and renew certificate
+      # Alternative: letsencrypt-staging (for testing)
+    
+    # ===== NGINX INGRESS ANNOTATIONS =====
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+      # Redirect HTTP to HTTPS automatically
+      # HTTP request → 301 redirect → HTTPS
+    
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+      # Rate limit: 100 requests per second per IP
+      # Additional protection layer (NGINX also has rate limiting)
+    
+    # OPTIONAL ANNOTATIONS (commented out, add as needed):
+    # nginx.ingress.kubernetes.io/proxy-body-size: "20m"
+    #   # Max request body size: 20 MB
+    # nginx.ingress.kubernetes.io/proxy-connect-timeout: "60"
+    #   # Backend connection timeout: 60 seconds
+    # nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+    #   # Backend read timeout: 60 seconds
+    # nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    #   # Force HTTPS redirect (stricter than ssl-redirect)
+spec:
+  # ===== INGRESS CLASS =====
+  ingressClassName: nginx
+    # Use NGINX Ingress Controller
+    # Alternative: traefik, haproxy, etc.
+    # Must match installed Ingress Controller
+  
+  # ===== TLS CONFIGURATION =====
+  tls:
+  - hosts:
+    - farajassulai.mygamesonline.org
+        # Domain name for certificate
+        # Must match DNS record
+    secretName: nginx-frontend-tls-secret
+      # Secret where certificate will be stored
+      # cert-manager creates this automatically
+      # Contains: tls.crt (certificate) and tls.key (private key)
+  
+  # ===== ROUTING RULES =====
+  rules:
+  - host: farajassulai.mygamesonline.org
+      # Domain name for this application
+      # Requests to this domain → route to NGINX Service
+    http:
+      paths:
+      - path: /
+          # URL path pattern
+          # / = match all paths (root and subdirectories)
+        pathType: Prefix
+          # Prefix: Match path and all subpaths
+          # Alternatives: Exact (exact match only), ImplementationSpecific
+        backend:
+          service:
+            name: nginx-frontend-service
+              # Route to this Service
+            port:
+              number: 80
+                # Service port (not pod port)
+                # Ingress → Service:80 → Pod:8080
+
+---
+# ============================================================================
+# PART 9: PODDISRUPTIONBUDGET (PDB)
+# ============================================================================
+# TASK: Ensure minimum number of pods available during disruptions
+#
+# WHAT IT DOES:
+# - Prevents voluntary disruptions from taking down all pods
+# - Ensures at least 1 NGINX pod is always running
+# - Protects against simultaneous pod evictions
+#
+# WHY IT'S NEEDED:
+# - Maintains availability during cluster operations:
+#   - Node drain (kubectl drain)
+#   - Node upgrade
+#   - Cluster autoscaling
+#   - Manual pod deletion
+# - Prevents complete service outage
+# - Kubernetes respects PDB when evicting pods
+#
+# VOLUNTARY vs INVOLUNTARY DISRUPTIONS:
+# - Voluntary: kubectl drain, cluster upgrades (PDB protects)
+# - Involuntary: Node failure, kernel panic (PDB cannot protect)
+#
+# HOW IT WORKS:
+# 1. Admin runs: kubectl drain node-1
+# 2. Kubernetes checks PDB for nginx-frontend
+# 3. If evicting pod would violate PDB (< 1 available): Wait
+# 4. When another pod is ready: Evict old pod
+# 5. Ensures minAvailable (1) is always maintained
+#
+# CONFIGURATION OPTIONS:
+# - minAvailable: Minimum pods that must be available (absolute or percentage)
+# - maxUnavailable: Maximum pods that can be unavailable (absolute or percentage)
+# - This manifest uses minAvailable: 1 (at least 1 pod always running)
+#
+# ============================================================================
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: nginx-frontend-pdb
+  namespace: mgdb-ns
+  labels:
+    app: nginx-frontend
+    component: availability
+spec:
+  minAvailable: 1
+    # At least 1 pod must be available at all times
+    # Alternative: minAvailable: "50%" (percentage of replicas)
+    # Alternative: maxUnavailable: 1 (at most 1 pod can be down)
+  
+  selector:
+    matchLabels:
+      app: nginx-frontend
+      # PDB applies to pods with this label
+      # Must match Deployment pod labels
+
+# ============================================================================
+# END OF MANIFEST - ADDITIONAL RESOURCES (OPTIONAL)
+# ============================================================================
+#
+# The following resources are optional but recommended for production:
+#
+# 1. NETWORKPOLICY: Restrict pod-to-pod communication
+# 2. SERVICEMONITOR: Prometheus metrics collection
+# 3. CERTIFICATE: Explicit cert-manager Certificate resource
+# 4. CLUSTERISSUER: Let's Encrypt certificate issuer
+#
+# These are documented below for reference.
+# ============================================================================
+
+---
+# ============================================================================
+# OPTIONAL: NETWORKPOLICY - Network Segmentation
+# ============================================================================
+# TASK: Restrict network traffic to/from NGINX pods
+#
+# WHAT IT DOES:
+# - Implements network-level firewall rules
+# - Allows traffic only from specific sources
+# - Denies all other traffic by default
+#
+# WHY IT'S NEEDED:
+# - Defense in depth (additional security layer)
+# - Limits blast radius if pod is compromised
+# - Implements zero-trust networking
+#
+# REQUIREMENTS:
+# - Network plugin with NetworkPolicy support (Calico, Cilium, Weave)
+# - Default CNI (kubenet, flannel) doesn't support NetworkPolicy
+#
+# UNCOMMENT TO USE:
+#
+# apiVersion: networking.k8s.io/v1
+# kind: NetworkPolicy
+# metadata:
+#   name: nginx-frontend-netpol
+#   namespace: mgdb-ns
+#   labels:
+#     app: nginx-frontend
+# spec:
+#   podSelector:
+#     matchLabels:
+#       app: nginx-frontend
+#       # Apply to NGINX pods
+#   
+#   policyTypes:
+#   - Ingress
+#     # Control incoming traffic
+#   - Egress
+#     # Control outgoing traffic
+#   
+#   ingress:
+#   - from:
+#     - namespaceSelector:
+#         matchLabels:
+#           name: ingress-nginx
+#       # Allow traffic from Ingress Controller namespace
+#     ports:
+#     - protocol: TCP
+#       port: 8080
+#       # Allow traffic to port 8080 only
+#   
+#   egress:
+#   - to:
+#     - podSelector:
+#         matchLabels:
+#           app: node-api
+#       # Allow traffic to Node.js API pods
+#     ports:
+#     - protocol: TCP
+#       port: 3000
+#   
+#   - to:
+#     - namespaceSelector:
+#         matchLabels:
+#           name: kube-system
+#       podSelector:
+#         matchLabels:
+#           k8s-app: kube-dns
+#       # Allow DNS queries
+#     ports:
+#     - protocol: UDP
+#       port: 53
+
+---
+# ============================================================================
+# OPTIONAL: SERVICEMONITOR - Prometheus Metrics
+# ============================================================================
+# TASK: Configure Prometheus to scrape NGINX metrics
+#
+# WHAT IT DOES:
+# - Tells Prometheus where to scrape metrics
+# - Enables monitoring and alerting
+# - Integrates with Grafana for visualization
+#
+# REQUIREMENTS:
+# - Prometheus Operator installed
+# - NGINX metrics exporter (nginx-prometheus-exporter sidecar)
+#
+# UNCOMMENT TO USE (requires nginx-prometheus-exporter):
+#
+# apiVersion: monitoring.coreos.com/v1
+# kind: ServiceMonitor
+# metadata:
+#   name: nginx-frontend-metrics
+#   namespace: mgdb-ns
+#   labels:
+#     app: nginx-frontend
+# spec:
+#   selector:
+#     matchLabels:
+#       app: nginx-frontend
+#   endpoints:
+#   - port: metrics
+#       # Port name from Service
+#     interval: 30s
+#       # Scrape every 30 seconds
+#     path: /metrics
+#       # Metrics endpoint
+
+---
+# ============================================================================
+# OPTIONAL: CLUSTERISSUER - Let's Encrypt Certificate Issuer
+# ============================================================================
+# TASK: Configure cert-manager to issue Let's Encrypt certificates
+#
+# WHAT IT DOES:
+# - Defines how to obtain SSL/TLS certificates
+# - Connects to Let's Encrypt ACME server
+# - Handles certificate issuance and renewal
+#
+# REQUIREMENTS:
+# - cert-manager installed
+# - Valid email address for Let's Encrypt notifications
+#
+# DEPLOYMENT:
+# This is cluster-scoped (no namespace)
+# Deploy once for entire cluster
+#
+# UNCOMMENT TO USE:
+#
+# apiVersion: cert-manager.io/v1
+# kind: ClusterIssuer
+# metadata:
+#   name: letsencrypt-prod
+#   labels:
+#     app: cert-manager
+# spec:
+#   acme:
+#     server: https://acme-v02.api.letsencrypt.org/directory
+#       # Let's Encrypt production server
+#       # Alternative: https://acme-staging-v02.api.letsencrypt.org/directory (staging)
+#     email: your-email@company.com
+#       # Email for certificate expiration notifications
+#       # CHANGE THIS to your actual email
+#     privateKeySecretRef:
+#       name: letsencrypt-prod-account-key
+#       # Secret to store ACME account private key
+#     solvers:
+#     - http01:
+#         ingress:
+#           class: nginx
+#           # Use HTTP-01 challenge with NGINX Ingress
+#           # Alternative: dns01 (for wildcard certificates)
+
+# ============================================================================
+# DEPLOYMENT INSTRUCTIONS
+# ============================================================================
+#
+# PREREQUISITES:
+# 1. Kubernetes cluster (1.19+)
+# 2. kubectl configured
+# 3. NGINX Ingress Controller installed
+# 4. cert-manager installed (for TLS)
+# 5. Metrics Server installed (for HPA)
+# 6. DNS record: farajassulai.mygamesonline.org → Ingress IP
+#
+# INSTALLATION STEPS:
+#
+# 1. Install NGINX Ingress Controller:
+#    kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/cloud/deploy.yaml
+#
+# 2. Install cert-manager:
+#    kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.13.0/cert-manager.yaml
+#
+# 3. Install Metrics Server:
+#    kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+#
+# 4. Create ClusterIssuer (uncomment above and modify email):
+#    kubectl apply -f clusterissuer.yaml
+#
+# 5. Deploy this manifest:
+#    kubectl apply -f nginx-deployment.yaml
+#
+# 6. Verify deployment:
+#    kubectl get all -n mgdb-ns
+#    kubectl get ingress -n mgdb-ns
+#    kubectl get certificate -n mgdb-ns
+#
+# 7. Check Ingress IP:
+#    kubectl get ingress nginx-frontend-ingress -n mgdb-ns
+#
+# 8. Update DNS:
+#    farajassulai.mygamesonline.org → <INGRESS_EXTERNAL_IP>
+#
+# 9. Wait for certificate (2-5 minutes):
+#    kubectl describe certificate nginx-frontend-tls-secret -n mgdb-ns
+#
+# 10. Test application:
+#     curl https://farajassulai.mygamesonline.org/health
+#     # Should return: OK
+#
+# ============================================================================
+# VERIFICATION COMMANDS
+# ============================================================================
+#
+# Check pod status:
+# kubectl get pods -n mgdb-ns -l app=nginx-frontend
+#
+# Check pod logs:
+# kubectl logs -n mgdb-ns -l app=nginx-frontend --tail=50
+#
+# Check Service:
+# kubectl get svc nginx-frontend-service -n mgdb-ns
+#
+# Check Ingress:
+# kubectl get ingress nginx-frontend-ingress -n mgdb-ns
+# kubectl describe ingress nginx-frontend-ingress -n mgdb-ns
+#
+# Check HPA:
+# kubectl get hpa nginx-frontend-hpa -n mgdb-ns
+# kubectl describe hpa nginx-frontend-hpa -n mgdb-ns
+#
+# Check PDB:
+# kubectl get pdb nginx-frontend-pdb -n mgdb-ns
+#
+# Check certificate:
+# kubectl get certificate -n mgdb-ns
+# kubectl describe certificate nginx-frontend-tls-secret -n mgdb-ns
+#
+# Test health endpoint:
+# kubectl exec -it -n mgdb-ns deployment/nginx-frontend-deployment -- curl localhost:8080/health
+#
+# Test from outside cluster:
+# curl https://farajassulai.mygamesonline.org/health
+#
+# Check HPA metrics:
+# kubectl top pods -n mgdb-ns -l app=nginx-frontend
+#
+# ============================================================================
+# TROUBLESHOOTING
+# ============================================================================
+#
+# PROBLEM: Pods stuck in Pending
+# SOLUTION: Check resources, quotas, node capacity
+#   kubectl describe pod -n mgdb-ns -l app=nginx-frontend
+#
+# PROBLEM: Pods CrashLoopBackOff
+# SOLUTION: Check logs and configuration
+#   kubectl logs -n mgdb-ns -l app=nginx-frontend --previous
+#
+# PROBLEM: Cannot reach /health endpoint
+# SOLUTION: Check NGINX configuration, port mapping
+#   kubectl exec -it -n mgdb-ns deployment/nginx-frontend-deployment -- cat /etc/nginx/nginx.conf
+#
+# PROBLEM: Ingress not getting external IP
+# SOLUTION: Check Ingress Controller installation
+#   kubectl get pods -n ingress-nginx
+#   kubectl logs -n ingress-nginx -l app.kubernetes.io/component=controller
+#
+# PROBLEM: Certificate not issued
+# SOLUTION: Check cert-manager logs and challenges
+#   kubectl get certificate -n mgdb-ns
+#   kubectl describe certificate nginx-frontend-tls-secret -n mgdb-ns
+#   kubectl get challenges -n mgdb-ns
+#   kubectl logs -n cert-manager -l app=cert-manager
+#
+# PROBLEM: HPA not scaling
+# SOLUTION: Check Metrics Server and resource requests
+#   kubectl get hpa -n mgdb-ns
+#   kubectl top pods -n mgdb-ns
+#   kubectl logs -n kube-system -l k8s-app=metrics-server
+#
+# PROBLEM: Cannot connect to backend (Node.js)
+# SOLUTION: Check Service DNS, network policies
+#   kubectl exec -it -n mgdb-ns deployment/nginx-frontend-deployment -- nslookup node-api-service.mgdb-ns.svc.cluster.local
+#   kubectl exec -it -n mgdb-ns deployment/nginx-frontend-deployment -- curl http://node-api-service.mgdb-ns.svc.cluster.local:3000/
+#
+# ============================================================================
+# PRODUCTION RECOMMENDATIONS
+# ============================================================================
+#
+# SECURITY:
+# 1. Enable readOnlyRootFilesystem with proper tmpfs mounts
+# 2. Implement NetworkPolicy for network segmentation
+# 3. Use Pod Security Policies/Standards (restricted)
+# 4. Scan images for vulnerabilities (Trivy, Snyk)
+# 5. Enable RBAC with least privilege
+# 6. Use Secrets for sensitive data (not ConfigMaps)
+# 7. Implement WAF (ModSecurity, AWS WAF)
+# 8. Enable audit logging
+#
+# MONITORING:
+# 1. Deploy Prometheus + Grafana
+# 2. Configure nginx-prometheus-exporter sidecar
+# 3. Create dashboards for request rate, latency, errors
+# 4. Set up alerts for high error rates, latency
+# 5. Monitor certificate expiration
+# 6. Track HPA scaling events
+#
+# HIGH AVAILABILITY:
+# 1. Run 3+ replicas in production
+# 2. Spread pods across availability zones (topology spread)
+# 3. Configure PDB for zero-downtime deployments
+# 4. Use multiple Ingress Controllers
+# 5. Implement proper health checks
+# 6. Test failover scenarios
+#
+# PERFORMANCE:
+# 1. Tune NGINX worker_processes and worker_connections
+# 2. Enable HTTP/2 in Ingress
+# 3. Implement caching (proxy_cache)
+# 4. Use CDN for static assets
+# 5. Optimize keepalive_timeout
+# 6. Enable gzip compression
+# 7. Right-size resource requests/limits
+#
+# OBSERVABILITY:
+# 1. Structured logging (JSON format)
+# 2. Distributed tracing (Jaeger, Zipkin)
+# 3. Request IDs for correlation
+# 4. Access logs with response times
+# 5. Error tracking (Sentry)
+#
+# DISASTER RECOVERY:
+# 1. Document rollback procedures
+# 2. Test rollback in staging
+# 3. Maintain version history (git tags)
+# 4. Backup ConfigMaps and Secrets
+# 5. Test disaster recovery scenarios
+#
+# COST OPTIMIZATION:
+# 1. Right-size resource requests (not over-provision)
+# 2. Use node affinity for cost-effective nodes
+# 3. Implement cluster autoscaling
+# 4. Monitor resource utilization
+# 5. Use spot/preemptible instances for non-critical workloads
+#
+# ============================================================================

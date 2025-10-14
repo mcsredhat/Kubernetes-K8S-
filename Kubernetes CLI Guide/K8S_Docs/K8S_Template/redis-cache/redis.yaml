@@ -1,0 +1,236 @@
+# ConfigMap - Redis Configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: redis-config
+  namespace: mgdb-ns
+data:
+  redis.conf: |
+    # Redis configuration file
+    port 6379
+    bind 0.0.0.0
+    
+    # Enable persistence
+    save 900 1
+    save 300 10
+    save 60 10000
+    
+    # RDB persistence
+    dbfilename dump.rdb
+    dir /data
+    
+    # AOF persistence (Append Only File)
+    appendonly yes
+    appendfilename "appendonly.aof"
+    appendfsync everysec
+    
+    # Memory management
+    maxmemory 256mb
+    maxmemory-policy allkeys-lru
+    
+    # Require password for AUTH
+    requirepass changeme123
+    masterauth changeme123
+    
+    # Logging
+    loglevel notice
+    logfile ""
+    
+    # Databases
+    databases 16
+    
+    # Connection settings
+    timeout 0
+    tcp-keepalive 300
+
+---
+# Secret - Redis Password
+apiVersion: v1
+kind: Secret
+metadata:
+  name: redis-secret
+  namespace: mgdb-ns
+type: Opaque
+stringData:
+  password: changeme123
+
+---
+# Headless Service - For StatefulSet DNS (clusterIP: None required for StatefulSet)
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-service
+  namespace: mgdb-ns
+  labels:
+    app: redis
+spec:
+  type: ClusterIP
+  clusterIP: None
+  selector:
+    app: redis
+  ports:
+    - name: redis
+      port: 6379
+      targetPort: 6379
+      protocol: TCP
+
+---
+# StatefulSet - Redis with Persistence
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis
+  namespace: mgdb-ns
+spec:
+  serviceName: redis-headless
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "6379"
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - redis
+                topologyKey: kubernetes.io/hostname
+      
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          imagePullPolicy: IfNotPresent
+          
+          command:
+            - redis-server
+            - /usr/local/etc/redis/redis.conf
+          
+          ports:
+            - name: redis
+              containerPort: 6379
+              protocol: TCP
+          
+          # Volume mounts
+          volumeMounts:
+            - name: redis-config
+              mountPath: /usr/local/etc/redis
+              readOnly: true
+            - name: redis-data
+              mountPath: /data
+          
+          # Resource requests and limits
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          
+          # Liveness probe
+          livenessProbe:
+            exec:
+              command:
+                - redis-cli
+                - -a
+                - changeme123
+                - ping
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          
+          # Readiness probe
+          readinessProbe:
+            exec:
+              command:
+                - redis-cli
+                - -a
+                - changeme123
+                - ping
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 2
+          
+          # Security context
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 999
+            capabilities:
+              drop:
+                - ALL
+      
+      volumes:
+        - name: redis-config
+          configMap:
+            name: redis-config
+            defaultMode: 0644
+        - name: redis-data
+          emptyDir: 
+            sizeLimit: 5Gi
+
+---
+# NetworkPolicy - Restrict access to Redis
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: redis-network-policy
+  namespace: mgdb-ns
+spec:
+  podSelector:
+    matchLabels:
+      app: redis
+  
+  policyTypes:
+    - Ingress
+    - Egress
+  
+  # Ingress rules - Allow traffic from specific pods
+  ingress:
+    # Allow from backend (Node.js)
+    - from:
+        - podSelector:
+            matchLabels:
+              app: backend
+      ports:
+        - protocol: TCP
+          port: 6379
+    
+    # Allow from frontend (nginx) if needed
+    - from:
+        - podSelector:
+            matchLabels:
+              app: frontend
+      ports:
+        - protocol: TCP
+          port: 6379
+  
+  # Egress rules - Allow outbound traffic
+  egress:
+    # Allow DNS queries
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: UDP
+          port: 53
+    
+    # Allow traffic to other pods in namespace
+    - to:
+        - podSelector: {}
+      ports:
+        - protocol: TCP
+          port: 6379

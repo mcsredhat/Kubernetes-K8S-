@@ -1,0 +1,248 @@
+# ============================================================================
+# 06-services-ingress.yaml - Network Access and Load Balancing (CORRECTED)
+# ============================================================================
+# Purpose: Exposes applications internally and externally with load balancing
+# Dependencies: Deployment must exist, cert-manager and ingress-nginx required
+# FIXES: Use ${DOMAIN} variable instead of hardcoded domain
+# ============================================================================
+
+# Main Application Service - Internal load balancer
+apiVersion: v1
+kind: Service
+metadata:
+  name: ${APP_NAME}-service
+  namespace: ${NAMESPACE}
+  labels:
+    app: ${APP_NAME}
+    app.kubernetes.io/name: ${APP_NAME}
+    app.kubernetes.io/component: service
+    app.kubernetes.io/part-of: ${APP_NAME}
+    environment: ${ENVIRONMENT}
+  annotations:
+    description: "Main service for ${APP_NAME} application"
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "80"
+    prometheus.io/path: "/metrics"
+spec:
+  type: ClusterIP
+  selector:
+    app: ${APP_NAME}
+    app.kubernetes.io/name: ${APP_NAME}
+    version: v1.0
+  ports:
+  - name: http
+    port: 80
+    targetPort: http
+    protocol: TCP
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 10800
+
+---
+# Backend Service - Internal API service
+apiVersion: v1
+kind: Service
+metadata:
+  name: ${APP_NAME}-backend
+  namespace: ${NAMESPACE}
+  labels:
+    app: ${APP_NAME}-backend
+    app.kubernetes.io/name: ${APP_NAME}-backend
+    app.kubernetes.io/component: api
+    app.kubernetes.io/part-of: ${APP_NAME}
+  annotations:
+    description: "Backend API service for ${APP_NAME}"
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8080"
+    prometheus.io/path: "/metrics"
+spec:
+  selector:
+    app: ${APP_NAME}-backend
+    app.kubernetes.io/name: ${APP_NAME}-backend
+  ports:
+  - port: 8080
+    targetPort: http
+    name: http
+    protocol: TCP
+  type: ClusterIP
+  sessionAffinity: None
+
+---
+# Main Ingress - CORRECTED to use ${DOMAIN}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ${APP_NAME}-ingress
+  namespace: ${NAMESPACE}
+  labels:
+    app: ${APP_NAME}
+    app.kubernetes.io/name: ${APP_NAME}
+    app.kubernetes.io/component: ingress
+    app.kubernetes.io/part-of: ${APP_NAME}
+    environment: ${ENVIRONMENT}
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    
+    # SSL/TLS configuration
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/ssl-protocols: "TLSv1.2 TLSv1.3"
+    nginx.ingress.kubernetes.io/ssl-ciphers: "ECDHE-ECDSA-AES256-GCM-SHA384,ECDHE-RSA-AES256-GCM-SHA384"
+    
+    # Enhanced security headers
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      more_set_headers "X-Frame-Options: DENY";
+      more_set_headers "X-Content-Type-Options: nosniff";
+      more_set_headers "X-XSS-Protection: 1; mode=block";
+      more_set_headers "Strict-Transport-Security: max-age=31536000; includeSubDomains; preload";
+      more_set_headers "Referrer-Policy: strict-origin-when-cross-origin";
+      more_set_headers "Permissions-Policy: geolocation=(), microphone=(), camera=()";
+      more_set_headers "Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'";
+    
+    # Rate limiting
+    nginx.ingress.kubernetes.io/limit-rps: "10"
+    nginx.ingress.kubernetes.io/limit-connections: "20"
+    nginx.ingress.kubernetes.io/limit-req-status-code: "429"
+    nginx.ingress.kubernetes.io/limit-whitelist: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+    
+    # Performance optimizations
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-buffering: "on"
+    nginx.ingress.kubernetes.io/proxy-buffer-size: "4k"
+    
+    # CORS configuration - CORRECTED to use ${DOMAIN}
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "https://${DOMAIN}"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization"
+    nginx.ingress.kubernetes.io/cors-expose-headers: "Content-Length,Content-Range"
+
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: ${DOMAIN}
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: ${APP_NAME}-service
+            port:
+              number: 80
+  tls:
+  - hosts:
+    - ${DOMAIN}
+    secretName: ${APP_NAME}-tls
+
+---
+# Backend Ingress - CORRECTED to use ${DOMAIN}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ${APP_NAME}-backend-ingress
+  namespace: ${NAMESPACE}
+  labels:
+    app: ${APP_NAME}-backend
+    app.kubernetes.io/name: ${APP_NAME}-backend
+    app.kubernetes.io/component: ingress
+    app.kubernetes.io/part-of: ${APP_NAME}
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    
+    # API specific rate limiting (more restrictive)
+    nginx.ingress.kubernetes.io/limit-rps: "5"
+    nginx.ingress.kubernetes.io/limit-connections: "10"
+    
+    # SSL configuration
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-protocols: "TLSv1.2 TLSv1.3"
+    
+    # API security headers
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      more_set_headers "X-Frame-Options: DENY";
+      more_set_headers "X-Content-Type-Options: nosniff";
+      more_set_headers "X-XSS-Protection: 1; mode=block";
+      more_set_headers "Strict-Transport-Security: max-age=31536000; includeSubDomains";
+      more_set_headers "Cache-Control: no-cache, no-store, must-revalidate";
+    
+    # CORS for API - CORRECTED
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "https://${DOMAIN}"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
+    
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: api.${DOMAIN}
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: ${APP_NAME}-backend
+            port:
+              number: 8080
+  tls:
+  - hosts:
+    - api.${DOMAIN}
+    secretName: ${APP_NAME}-backend-tls
+
+---
+# LoadBalancer Service (Optional) - For cloud environments
+apiVersion: v1
+kind: Service
+metadata:
+  name: ${APP_NAME}-lb
+  namespace: ${NAMESPACE}
+  labels:
+    app: ${APP_NAME}
+    app.kubernetes.io/component: loadbalancer
+  annotations:
+    description: "LoadBalancer service for ${APP_NAME} (cloud provider specific)"
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+    service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled: "true"
+    service.beta.kubernetes.io/aws-load-balancer-backend-protocol: "http"
+spec:
+  type: LoadBalancer
+  selector:
+    app: ${APP_NAME}
+    app.kubernetes.io/name: ${APP_NAME}
+  ports:
+  - name: http
+    port: 80
+    targetPort: http
+    protocol: TCP
+  - name: https
+    port: 443
+    targetPort: http
+    protocol: TCP
+
+---
+# Headless Service (Optional) - For service discovery
+apiVersion: v1
+kind: Service
+metadata:
+  name: ${APP_NAME}-headless
+  namespace: ${NAMESPACE}
+  labels:
+    app: ${APP_NAME}
+    app.kubernetes.io/component: discovery
+spec:
+  clusterIP: None
+  selector:
+    app: ${APP_NAME}
+    app.kubernetes.io/name: ${APP_NAME}
+  ports:
+  - name: http
+    port: 8080
+    targetPort: http
+  publishNotReadyAddresses: false

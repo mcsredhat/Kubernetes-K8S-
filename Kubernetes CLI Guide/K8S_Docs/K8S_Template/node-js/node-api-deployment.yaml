@@ -1,0 +1,271 @@
+# ============================================================================
+# Node.js API Kubernetes Deployment - Production Ready (Fixed)
+# ============================================================================
+# Corrections and Updates:
+# - Updated Docker image to "farajassulai/node-app:jenkins-latest@sha256:8f9e402a658bc342e4b9e4b18dcb0cf5bbf3ddcc34d96c3234e9248a36230bc1" for immutability and security (pinned to the provided manifest digest).
+# - Updated Secret values:
+#   - JWT_SECRET: "eW91ci1yZWFsLWp3dC1zZWNyZXQ=" (assuming "JWS_secret" was a typo for "JWT_SECRET"; base64 of "your-real-jwt-secret").
+#   - API_KEY: "eW91ci1yZWFsLWFwaS1rZXk=" (base64 of "your-real-api-key").
+# - No other changes; the rest remains as in the previous fixed version.
+
+---
+# 1. CONFIGMAP: Environment configurations
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: node-api-config
+  namespace: mgdb-ns
+  labels:
+    app: node-api
+data:
+  NODE_ENV: "production"
+  PORT: "3000"
+  # Add other non-sensitive env vars here, e.g., LOG_LEVEL: "info"
+
+---
+# 2. SECRET: Sensitive data (JWT, API keys, DB credentials)
+apiVersion: v1
+kind: Secret
+metadata:
+  name: node-api-secret
+  namespace: mgdb-ns
+  labels:
+    app: node-api
+type: Opaque
+data:
+  JWT_SECRET: eW91ci1yZWFsLWp3dC1zZWNyZXQ=            # Updated: base64 of 'your-real-jwt-secret'
+  API_KEY: eW91ci1yZWFsLWFwaS1rZXk=                  # Updated: base64 of 'your-real-api-key'
+  DB_USERNAME: YWRtaW4=                        # base64 'admin'
+  DB_PASSWORD: U2VjdXJlUEBzc3cwcmQxMjM=      # base64 'SecureP@ssw0rd123'
+  DB_HOST: bW9uZ29kYi1zZXJ2aWNl             # base64 'mongodb-service'
+  DB_PORT: MjcwMTc=                            # base64 '27017'
+  DB_NAME: bXlkYg==                            # base64 'mydb'
+
+---
+# 3. DEPLOYMENT: Runs the Node.js API application
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: node-api-deployment
+  namespace: mgdb-ns
+  labels:
+    app: node-api
+    version: "1.0.0"
+spec:
+  replicas: 2  # Start with 2 replicas for HA
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: node-api
+  template:
+    metadata:
+      labels:
+        app: node-api
+        version: "1.0.0"
+    spec:
+      containers:
+      - name: node-api
+        image: farajassulai/node-app:jenkins-latest@sha256:8f9e402a658bc342e4b9e4b18dcb0cf5bbf3ddcc34d96c3234e9248a36230bc1  # Updated with provided image and digest
+        imagePullPolicy: Always
+        ports:
+        - name: http
+          containerPort: 3000
+          protocol: TCP
+        envFrom:
+        - configMapRef:
+            name: node-api-config
+        - secretRef:
+            name: node-api-secret
+        env:
+        - name: DB_URI  # Construct MongoDB URI if needed
+          value: "mongodb://$(DB_USERNAME):$(DB_PASSWORD)@$(DB_HOST):$(DB_PORT)/$(DB_NAME)"
+        resources:
+          requests:
+            cpu: 250m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        livenessProbe:
+          httpGet:
+            path: /health  # Assume your API has a /health endpoint
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 1000
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 30
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - node-api
+              topologyKey: kubernetes.io/hostname
+      tolerations:  # If needed, add similar to MongoDB for master node
+      - key: "node-role.kubernetes.io/master"
+        operator: "Exists"
+        effect: "NoSchedule"
+      - key: "node-role.kubernetes.io/control-plane"
+        operator: "Exists"
+        effect: "NoSchedule"
+
+---
+# 4. SERVICE: ClusterIP for internal API routing
+apiVersion: v1
+kind: Service
+metadata:
+  name: node-api-service
+  namespace: mgdb-ns
+  labels:
+    app: node-api
+spec:
+  type: ClusterIP
+  selector:
+    app: node-api
+  ports:
+  - port: 3000
+    targetPort: http
+    protocol: TCP
+    name: http
+
+---
+# 5. HPA: Horizontal Pod Autoscaler - Scale based on CPU/memory
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: node-api-hpa
+  namespace: mgdb-ns
+  labels:
+    app: node-api
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: node-api-deployment
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 50
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 60
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+    scaleUp:
+      stabilizationWindowSeconds: 60
+
+---
+# 6. INGRESS: External API access with SSL
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: node-api-ingress
+  namespace: mgdb-ns
+  labels:
+    app: node-api
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"  # Assume cert-manager is installed
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"   # For NGINX Ingress
+spec:
+  ingressClassName: nginx  # Updated to use spec instead of deprecated annotation
+  tls:
+  - hosts:
+    - api.example.com  # Replace with your domain
+    secretName: node-api-tls-secret
+  rules:
+  - host: api.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: node-api-service
+            port:
+              number: 3000
+
+---
+# 7. PDB: Pod Disruption Budget for high availability
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: node-api-pdb
+  namespace: mgdb-ns
+  labels:
+    app: node-api
+spec:
+  minAvailable: 1  # At least 1 pod available during disruptions
+  selector:
+    matchLabels:
+      app: node-api
+
+---
+# 8. NETWORKPOLICY: Security isolation
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: node-api-network-policy
+  namespace: mgdb-ns
+  labels:
+    app: node-api
+spec:
+  podSelector:
+    matchLabels:
+      app: node-api
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: mgdb-ns  # Allow from same namespace (e.g., other services)
+    - podSelector:
+        matchLabels:
+          app: ingress-nginx  # Allow from Ingress controller (adjust label if different)
+    ports:
+    - protocol: TCP
+      port: 3000
+  egress:
+  - to:
+    - podSelector:
+        matchLabels:
+          app: mongodb  # Allow egress to MongoDB pods
+    ports:
+    - protocol: TCP
+      port: 27017
+  - to: []  # Allow egress to anywhere (e.g., for external APIs; restrict if possible)
+    ports:
+    - protocol: TCP
+      port: 53  # DNS
+    - protocol: UDP
+      port: 53  # DNS

@@ -1,0 +1,1320 @@
+# ============================================================================
+# PART 11: NETWORKPOLICY
+# ============================================================================
+# TASK: Control ingress and egress traffic for Node.js API
+#
+# WHAT IT DOES:
+# - Restricts inbound traffic (Ingress)
+# - Restricts outbound traffic (Egress)
+# - Implements network segmentation (microsegmentation)
+# - Blocks unauthorized traffic between pods
+#
+# WHY IT'S NEEDED:
+# - Default: All pods can communicate with all pods (open mesh)
+# - NetworkPolicy: Only allowed traffic passes
+# - Implements Zero Trust security model
+# - Contains impact of compromised pod
+# - Complies with security standards (PCI-DSS, etc.)
+#
+# HOW IT WORKS:
+# When pod tries to send/receive traffic:
+# 1. Check NetworkPolicy rules
+# 2. If not explicitly allowed → DENY
+# 3. If allowed → PERMIT
+# (Deny unless explicitly allowed = deny-all default)
+#
+# PREREQUISITES:
+# - Network plugin must support NetworkPolicy
+# - Calico, Weave, Cilium, etc. (most support it)
+# - Check: kubectl get networkpolicies
+#
+# ============================================================================
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: node-api-network-policy
+  namespace: mgdb-ns
+  labels:
+    app: node-api
+    component: network-security
+spec:
+  # ===== POD SELECTOR =====
+  podSelector:
+    matchLabels:
+      app: node-api
+      # This policy applies to pods with label "app: node-api"
+  
+  # ===== POLICY TYPES =====
+  policyTypes:
+  - Ingress
+    # Control inbound traffic
+  - Egress
+    # Control outbound traffic
+  
+  # ===== INGRESS RULES (INBOUND TRAFFIC) =====
+  ingress:
+  
+  # Rule 1: Allow from same namespace (other services)
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: mgdb-ns
+          # Allow traffic from all pods in mgdb-ns namespace
+          # Example: NGINX sending requests to API
+    
+    # Rule 2: Allow from Ingress Controller
+    - podSelector:
+        matchLabels:
+          app: ingress-nginx
+          # Allow NGINX Ingress Controller to reach API
+          # Check actual label: kubectl get pods -l app=ingress-nginx -A
+          # May be different depending on installation
+    
+    ports:
+    - protocol: TCP
+      port: 3000
+        # Allow traffic on port 3000 (API port)
+  
+  # ===== EGRESS RULES (OUTBOUND TRAFFIC) =====
+  egress:
+  
+  # Rule 1: Allow to MongoDB
+  - to:
+    - podSelector:
+        matchLabels:
+          app: mongodb
+          # Allow traffic to MongoDB pods
+    
+    ports:
+    - protocol: TCP
+      port: 27017
+        # MongoDB default port
+  
+  # Rule 2: Allow DNS queries (to any IP)
+  - to:
+    - {}
+      # Empty selector = any destination
+    
+    ports:
+    - protocol: TCP
+      port: 53
+        # DNS TCP port
+    - protocol: UDP
+      port: 53
+        # DNS UDP port (primary)
+  
+  # Rule 3: Allow HTTP/HTTPS to external services
+  - to:
+    - {}
+      # Any destination (external APIs, etc.)
+    
+    ports:
+    - protocol: TCP
+      port: 80
+        # HTTP
+    - protocol: TCP
+      port: 443
+        # HTTPS
+
+---
+# ============================================================================
+# DEPLOYMENT SUMMARY & ARCHITECTURE
+# ============================================================================
+#
+# THREE-TIER APPLICATION ARCHITECTURE:
+#
+# ┌─────────────────────────────────────────────────────────────────┐
+# │                      Internet / External Users                   │
+# └────────────────────────────┬────────────────────────────────────┘
+#                              │ HTTPS requests
+#                              ▼
+# ┌─────────────────────────────────────────────────────────────────┐
+# │  Ingress Controller (NGINX) - Routes external traffic            │
+# │  - SSL/TLS termination                                           │
+# │  - Rate limiting                                                 │
+# │  - Domain routing (api.example.com)                              │
+# └──────────────────┬────────────────────────────┬─────────────────┘
+#                    │ HTTP to :80               │ HTTP to :80
+#                    ▼                            ▼
+# ┌──────────────────────────────────┐  ┌─────────────────────────┐
+# │ NGINX Frontend Service           │  │ Node.js API Service     │
+# │ (ClusterIP: port 80)             │  │ (ClusterIP: port 3000)  │
+# │                                  │  │                         │
+# │ 2 NGINX Pods (HPA: 2-10)        │  │ 2 Node.js Pods (HPA: 2-10) │
+# │ ├─ nginx-frontend-pod-xxx        │  │ ├─ node-api-pod-xxx     │
+# │ │  ├─ PORT: 8080                 │  │ │  ├─ PORT: 3000        │
+# │ │  ├─ Proxy → node-api-service   │  │ │  ├─ DB_URI → MongoDB  │
+# │ │  └─ Health: /health            │  │ │  └─ Health: /health   │
+# │ └─ nginx-frontend-pod-yyy        │  │ └─ node-api-pod-yyy     │
+# │    ├─ PORT: 8080                 │  │    ├─ PORT: 3000        │
+# │    ├─ Proxy → node-api-service   │  │    └─ Health: /health   │
+# │    └─ Health: /health            │  │                         │
+# └──────────────────────────────────┘  └────────────┬────────────┘
+#       │ Rate limiting                              │ Database queries
+#       │ Health checks: /health                     ▼
+#       │ Metrics: /metrics           ┌──────────────────────────────┐
+#       │                             │ MongoDB Service              │
+#       │                             │ (ClusterIP: port 27017)      │
+#       │                             │                              │
+#       │                             │ 1 MongoDB Pod                │
+#       │                             │ ├─ PORT: 27017               │
+#       │                             │ ├─ PVC: 10Gi                 │
+#       │                             │ └─ Health: mongosh ping      │
+#       │                             │                              │
+#       │                             │ Persistent Data:             │
+#       │                             │ /mnt/data/mongodb on k8s-master │
+#       │                             └──────────────────────────────┘
+#       │
+#       └──────────────────────────────────────────────────────────┐
+#          Health checks every 10s                                  │
+#          If fails 3x → restart pod                                │
+#          Readiness checks every 5s                                │
+#          If fails 2x → remove from LB                             │
+#
+# ============================================================================
+
+---
+# ============================================================================
+# RESOURCE SUMMARY & MONITORING
+# ============================================================================
+#
+# RESOURCE USAGE OVERVIEW (Estimated):
+#
+# MongoDB:
+#   Requests: 250m CPU, 256Mi RAM
+#   Limits: 1000m CPU, 1Gi RAM
+#   Storage: 10Gi PVC
+#
+# NGINX (2 replicas):
+#   Requests: 200m CPU, 256Mi RAM (total)
+#   Limits: 400m CPU, 512Mi RAM (total)
+#   Storage: ephemeral only
+#
+# Node.js (2 replicas):
+#   Requests: 500m CPU, 512Mi RAM (total)
+#   Limits: 1000m CPU, 1Gi RAM (total)
+#   Storage: ephemeral only
+#
+# TOTAL (Minimum 2 replicas each):
+#   CPU Requests: ~950m (~1 CPU)
+#   Memory Requests: ~1024Mi (~1Gi)
+#   CPU Limits: ~2400m (~2.4 CPUs)
+#   Memory Limits: ~2560Mi (~2.5Gi)
+#   Storage Requests: 10Gi (MongoDB)
+#
+# With HPA scaling (NGINX: 10, Node.js: 10):
+#   CPU Requests: ~950m + (8 * 100m) + (8 * 250m) = ~4.65 CPUs
+#   Memory Requests: ~1Gi + (8 * 128Mi) + (8 * 256Mi) = ~3.5Gi
+#
+# ResourceQuota in namespace:
+#   CPU Requests: 5000m (5 CPUs) - allows growth
+#   Memory Requests: 10Gi (10 GB) - allows growth
+#   CPU Limits: 10000m (10 CPUs)
+#   Memory Limits: 20Gi (20 GB)
+#
+# ============================================================================
+
+---
+# ============================================================================
+# DEPLOYMENT INSTRUCTIONS & COMMANDS
+# ============================================================================
+#
+# STEP 1: Verify prerequisites
+# $ kubectl get nodes
+# $ kubectl get storageclasses
+# $ kubectl get crd networkpolicies.networking.k8s.io
+# $ kubectl get deployment metrics-server -n kube-system
+#
+# STEP 2: Create MongoDB node directory (on k8s-master)
+# $ sudo mkdir -p /mnt/data/mongodb
+# $ sudo chmod 777 /mnt/data/mongodb
+#
+# STEP 3: Create namespace and apply all manifests
+# $ kubectl apply -f mongodb-deployment.yaml
+# $ kubectl apply -f nginx-deployment.yaml
+# $ kubectl apply -f node-api-deployment.yaml
+#
+# STEP 4: Verify all resources created
+# $ kubectl get all -n mgdb-ns
+# $ kubectl get pv,pvc -n mgdb-ns
+# $ kubectl get networkpolicies -n mgdb-ns
+#
+# STEP 5: Check pod status
+# $ kubectl get pods -n mgdb-ns
+# $ kubectl describe pod <pod-name> -n mgdb-ns
+# $ kubectl logs <pod-name> -n mgdb-ns
+#
+# STEP 6: Verify services and networking
+# $ kubectl get svc -n mgdb-ns
+# $ kubectl get endpoints -n mgdb-ns
+#
+# STEP 7: Check resource usage
+# $ kubectl top pods -n mgdb-ns
+# $ kubectl top nodes
+#
+# STEP 8: Verify HPA
+# $ kubectl get hpa -n mgdb-ns
+# $ kubectl describe hpa <hpa-name> -n mgdb-ns
+#
+# ============================================================================
+
+---
+# ============================================================================
+# TESTING & VERIFICATION
+# ============================================================================
+#
+# TEST MONGODB CONNECTION:
+# $ kubectl exec -it <mongodb-pod> -n mgdb-ns -- mongosh
+# > db.adminCommand('ping')
+# { ok: 1 }
+#
+# TEST NODE.JS API HEALTH:
+# $ kubectl exec -it <node-api-pod> -n mgdb-ns -- curl localhost:3000/health
+#
+# TEST NGINX HEALTH:
+# $ kubectl exec -it <nginx-pod> -n mgdb-ns -- curl localhost:8080/health
+#
+# TEST NETWORK CONNECTIVITY (Pod to Pod):
+# $ kubectl run -it --rm debug --image=alpine --restart=Never -n mgdb-ns -- sh
+# # curl http://node-api-service.mgdb-ns:3000/health
+# # curl http://nginx-frontend-service.mgdb-ns:80/health
+# # nslookup mongodb-service.mgdb-ns
+#
+# TEST INGRESS ROUTING (External):
+# $ kubectl port-forward -n mgdb-ns svc/nginx-frontend-service 8080:80
+# $ curl http://localhost:8080/health
+#
+# MONITOR POD LOGS:
+# $ kubectl logs -f <pod-name> -n mgdb-ns
+# $ kubectl logs -f deployment/mongodb-deployment -n mgdb-ns
+# $ kubectl logs -f deployment/nginx-frontend-deployment -n mgdb-ns
+# $ kubectl logs -f deployment/node-api-deployment -n mgdb-ns
+#
+# WATCH POD STATUS (Real-time):
+# $ kubectl get pods -n mgdb-ns -w
+#
+# ============================================================================
+
+---
+# ============================================================================
+# TROUBLESHOOTING GUIDE
+# ============================================================================
+#
+# POD NOT STARTING (Pending):
+# $ kubectl describe pod <pod-name> -n mgdb-ns
+# Look for: Events section showing reason
+# Common causes:
+#   - Insufficient resources (CPU/memory request too high)
+#   - PVC not bound
+#   - Node affinity constraints
+#
+# LIVENESS/READINESS PROBE FAILING:
+# $ kubectl logs <pod-name> -n mgdb-ns
+# Check: /health endpoint responding
+# $ kubectl exec -it <pod-name> -n mgdb-ns -- curl localhost:PORT/health
+#
+# SERVICES CAN'T CONNECT:
+# Check NetworkPolicy:
+# $ kubectl describe networkpolicy <policy-name> -n mgdb-ns
+# Verify allow rules include service ports
+#
+# DNS NOT RESOLVING:
+# Check CoreDNS pods:
+# $ kubectl get pods -n kube-system -l k8s-app=kube-dns
+# Test resolution:
+# $ kubectl exec -it <pod> -n mgdb-ns -- nslookup node-api-service
+#
+# HPA NOT SCALING:
+# Check Metrics Server:
+# $ kubectl get deployment metrics-server -n kube-system
+# Check HPA status:
+# $ kubectl describe hpa <hpa-name> -n mgdb-ns
+# Common issue: Resource requests not defined
+#
+# DATABASE CONNECTION FAILED:
+# Check MongoDB credentials:
+# $ kubectl get secret node-api-secret -n mgdb-ns -o yaml
+# Verify secret values match MongoDB Secret
+# Test connection from pod:
+# $ kubectl exec -it <node-api-pod> -n mgdb-ns -- \
+#   mongosh --host mongodb-service --username admin --password <pwd>
+#
+# ============================================================================
+
+---
+# ============================================================================
+# PRODUCTION CHECKLIST
+# ============================================================================
+#
+# SECURITY:
+# ☐ All container images use specific tags (not latest)
+# ☐ Images pinned to digest SHA256 hash
+# ☐ Secret values changed from defaults
+# ☐ All secrets stored in external secret manager (Vault, AWS Secrets)
+# ☐ etcd encryption enabled for additional layer
+# ☐ NetworkPolicy restricting all traffic except needed
+# ☐ Pod Security Policy/Standards enforced
+# ☐ RBAC properly configured (service accounts, roles)
+# ☐ Containers running as non-root user
+# ☐ Read-only root filesystems where possible
+#
+# RESOURCE MANAGEMENT:
+# ☐ Resource requests set for all containers
+# ☐ Resource limits set appropriately
+# ☐ ResourceQuota enforced at namespace level
+# ☐ LimitRange enforced for defaults
+# ☐ HPA configured with appropriate thresholds
+# ☐ PDB configured for high availability
+#
+# NETWORKING:
+# ☐ Services properly configured (type, selectors, ports)
+# ☐ NetworkPolicy restricting unnecessary traffic
+# ☐ DNS resolution verified
+# ☐ Ingress configured with TLS/SSL
+# ☐ Ingress domain points to load balancer IP
+#
+# MONITORING & LOGGING:
+# ☐ Liveness probes configured
+# ☐ Readiness probes configured
+# ☐ Health check endpoints implemented in apps
+# ☐ Logging to stdout/stderr (captured by pod logs)
+# ☐ Centralized logging solution (ELK, Splunk, etc.)
+# ☐ Prometheus metrics exposed
+# ☐ Alerting rules configured
+#
+# BACKUP & DISASTER RECOVERY:
+# ☐ Regular MongoDB backups scheduled
+# ☐ Backup tested and verified
+# ☐ Recovery procedure documented and tested
+# ☐ RTO/RPO targets defined
+# ☐ Disaster recovery drills scheduled
+#
+# UPDATES & MAINTENANCE:
+# ☐ Update strategy defined (RollingUpdate vs Recreate)
+# ☐ maxSurge/maxUnavailable configured
+# ☐ PDB prevents all pods being disrupted
+# ☐ Node maintenance window scheduled
+# ☐ Rollback procedure tested
+#
+# ============================================================================# ============================================================================
+# Node.js API Kubernetes Deployment - Production Ready (Fully Commented)
+# ============================================================================
+#
+# PURPOSE: This manifest deploys a Node.js API backend service in Kubernetes
+#          to handle application logic, database operations, and API requests.
+#
+# DEPLOYMENT ARCHITECTURE:
+# - Namespace: mgdb-ns (shared with MongoDB and NGINX)
+# - Resource Management: Quotas, limits, and requests
+# - Backend: Node.js API server on port 3000
+# - Database: Connected to MongoDB service
+# - High Availability: 2-10 replicas with HPA
+# - External Access: Ingress for API endpoints
+# - Security: RBAC, SecurityContext, NetworkPolicy, non-root user
+#
+# KEY FEATURES:
+# ✓ Non-root container (security best practice)
+# ✓ Immutable image (pinned digest for reproducibility)
+# ✓ Resource limits and requests
+# ✓ Horizontal Pod Autoscaler (scales 2-10 pods)
+# ✓ Health checks (liveness, readiness probes)
+# ✓ Pod-to-pod communication with MongoDB
+# ✓ Network policies for ingress/egress
+# ✓ Pod Disruption Budget for high availability
+#
+# ============================================================================
+
+---
+# ============================================================================
+# PART 1: NAMESPACE (SHARED)
+# ============================================================================
+# TASK: Create logical partition for all application resources
+#
+# WHAT IT DOES:
+# - Organizes MongoDB, NGINX, and Node.js in mgdb-ns namespace
+# - Provides resource isolation from other cluster applications
+# - Enables namespace-level quotas and RBAC policies
+# - Groups all application tiers in one logical unit
+#
+# WHY IT'S NEEDED:
+# - Isolates entire application stack
+# - Allows independent resource quotas
+# - Enables team-based access control
+# - Simplifies deployment and management
+#
+# NOTE: This is the SAME namespace as MongoDB and NGINX
+# If already created, skip this section or verify labels are consistent
+#
+# ============================================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mgdb-ns
+  labels:
+    name: mgdb-ns
+    environment: production
+      # Production environment indicator
+    team: platform-team
+      # Team managing the stack
+    app.kubernetes.io/managed-by: kubectl
+      # Management tool
+    pod-security.kubernetes.io/enforce: baseline
+      # Pod security standard enforcement level
+    pod-security.kubernetes.io/audit: baseline
+    pod-security.kubernetes.io/warn: baseline
+  annotations:
+    description: "Namespace for MongoDB, NGINX, and Node.js API stack"
+    contact: "platform-team@company.com"
+    created-by: "k8s-template-v2.0"
+spec:
+  finalizers: ["kubernetes"]
+
+---
+# ============================================================================
+# PART 2: RESOURCEQUOTA (UPDATED FOR FULL STACK)
+# ============================================================================
+# TASK: Limit total resource consumption in namespace
+#
+# WHAT IT DOES:
+# - Caps CPU, memory, storage for entire namespace
+# - Applies to MongoDB, NGINX, AND Node.js API combined
+# - Prevents resource exhaustion from all services
+# - Enforces cost control across all tiers
+#
+# WHY IT'S NEEDED:
+# - Prevents entire stack from consuming all cluster resources
+# - Protects other applications
+# - Enables fair resource sharing
+# - Enforces cluster governance
+#
+# RESOURCE BREAKDOWN (Estimated):
+# - MongoDB: requests: 250m CPU, 256Mi RAM
+# - NGINX: requests: 200m CPU (2x100m), 256Mi RAM (2x128Mi)
+# - Node.js: requests: 500m CPU (2x250m), 512Mi RAM (2x256Mi)
+# Total running: ~1 CPU, 1Gi RAM
+# Quota allows growth to 5 CPUs, 10Gi RAM with HPA
+#
+# ============================================================================
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: mgdb-ns-quota
+  namespace: mgdb-ns
+  labels:
+    component: resource-management
+    app.kubernetes.io/part-of: application-stack
+spec:
+  hard:
+    # ===== CPU LIMITS =====
+    requests.cpu: "5000m"
+      # Total CPU requests across all pods: 5 CPUs
+      # Current usage: ~1 CPU
+      # Growth capacity: 4 CPUs for scaling
+      # HPA can scale to 10 Node.js pods + 10 NGINX pods
+    
+    limits.cpu: "10000m"
+      # Hard CPU limit: 10 CPUs
+      # Absolute ceiling if all pods hit limits
+    
+    # ===== MEMORY LIMITS =====
+    requests.memory: "10Gi"
+      # Total memory requests: 10 GB
+      # Current usage: ~1 GB
+      # Growth capacity: 9 GB for scaling
+    
+    limits.memory: "20Gi"
+      # Hard memory limit: 20 GB
+      # Absolute ceiling if all pods hit limits
+    
+    # ===== STORAGE LIMITS =====
+    requests.storage: "200Gi"
+      # Max storage requests by PVCs
+      # MongoDB uses 10Gi
+    
+    persistentvolumeclaims: "5"
+      # Max PVCs (MongoDB: 1, others: 4)
+    
+    # ===== OBJECT COUNT LIMITS =====
+    pods: "30"
+      # Max total pods
+      # MongoDB: 1, NGINX: 2-10, Node.js: 2-10
+    
+    services: "15"
+      # Max Services
+    
+    secrets: "20"
+      # Max Secrets
+    
+    configmaps: "20"
+      # Max ConfigMaps
+    
+    count/deployments.apps: "10"
+      # Max Deployments
+    
+    count/statefulsets.apps: "2"
+      # Max StatefulSets
+    
+    count/ingresses.networking.k8s.io: "10"
+      # Max Ingress resources
+    
+    count/networkpolicies.networking.k8s.io: "10"
+      # Max NetworkPolicies
+
+---
+# ============================================================================
+# PART 3: LIMITRANGE (UPDATED FOR FULL STACK)
+# ============================================================================
+# TASK: Set default, min, max resource limits per container
+#
+# WHAT IT DOES:
+# - Applies to each individual container
+# - Prevents under/over-provisioned containers
+# - Sets defaults if not specified
+# - Rejects pods outside allowed ranges
+#
+# WHY IT'S NEEDED:
+# - Prevents containers from requesting too little (starvation)
+# - Prevents containers from requesting too much (runaway)
+# - Provides sensible defaults
+# - Enforces consistency across all deployments
+#
+# HOW IT WORKS:
+# When pod created:
+# 1. If no resources specified → apply defaults
+# 2. Check if within min/max range
+# 3. Reject if outside range
+# 4. Accept if within range
+#
+# ============================================================================
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: mgdb-ns-limits
+  namespace: mgdb-ns
+  labels:
+    component: resource-management
+    app.kubernetes.io/part-of: application-stack
+spec:
+  limits:
+  
+  # ===== CONTAINER RESOURCE LIMITS =====
+  - type: Container
+    
+    default:
+      # Limits applied if container doesn't specify
+      cpu: 500m
+      memory: 512Mi
+      ephemeral-storage: 2Gi
+    
+    defaultRequest:
+      # Requests applied if container doesn't specify
+      # Requests = what pod reserves for scheduling
+      # Limits = hard cap on actual usage
+      cpu: 200m
+      memory: 256Mi
+      ephemeral-storage: 500Mi
+    
+    max:
+      # Container cannot request/limit more than this
+      # Prevents runaway pods
+      cpu: 2000m
+      memory: 2Gi
+      ephemeral-storage: 10Gi
+    
+    min:
+      # Container must request at least this
+      # Prevents underconfigured pods
+      cpu: 50m
+      memory: 64Mi
+      ephemeral-storage: 100Mi
+  
+  # ===== PVC LIMITS =====
+  - type: PersistentVolumeClaim
+    max:
+      storage: 100Gi
+        # Max PVC size: 100 GB
+    min:
+      storage: 1Gi
+        # Min PVC size: 1 GB
+
+---
+# ============================================================================
+# PART 4: CONFIGMAP
+# ============================================================================
+# TASK: Store non-sensitive environment configuration
+#
+# WHAT IT DOES:
+# - Stores application environment variables
+# - Non-sensitive configuration (not secrets!)
+# - Mounted as environment variables in pod
+# - Can be updated without rebuilding image
+#
+# WHY IT'S NEEDED:
+# - Configuration should be external from code
+# - Different environments need different configs
+# - Allows configuration changes without pod restart
+# - Follows 12-factor app methodology
+#
+# IMPORTANT: Only non-sensitive data here!
+# - ✓ NODE_ENV, PORT, LOG_LEVEL
+# - ✗ Database passwords, API keys, JWT secrets
+# Use Secret for sensitive data (see next section)
+#
+# ============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: node-api-config
+  namespace: mgdb-ns
+  labels:
+    app: node-api
+    component: configuration
+data:
+  NODE_ENV: "production"
+    # Node.js environment: production
+    # Affects logging, error handling, performance optimizations
+    # Values: development, staging, production
+  
+  PORT: "3000"
+    # Port Node.js listens on inside container
+    # Express app binds to this port
+    # Service exposes this port to cluster
+  
+  # Add other non-sensitive env vars here:
+  # LOG_LEVEL: "info"       # info, debug, warn, error
+  # DATABASE_POOL_SIZE: "10"
+  # CACHE_TTL: "3600"
+  # API_TIMEOUT: "30000"
+
+---
+# ============================================================================
+# PART 5: SECRET
+# ============================================================================
+# TASK: Store sensitive credentials and keys
+#
+# WHAT IT DOES:
+# - Stores JWT secrets, API keys, database credentials
+# - Base64-encoded (NOT encrypted by default!)
+# - Referenced by Deployment via environment variables
+# - Never committed to git (add to .gitignore)
+#
+# WHY IT'S NEEDED:
+# - Credentials must not be in code or ConfigMap
+# - Kubernetes tracks secret access in audit logs
+# - Secrets often encrypted at rest (if configured)
+# - Separates secrets from configurations
+#
+# SECURITY NOTES:
+# - Base64 is ENCODING, NOT encryption (reversible!)
+# - Use etcd encryption in production for real security
+# - Alternatively use external secrets:
+#   - HashiCorp Vault
+#   - AWS Secrets Manager
+#   - Sealed Secrets (encrypted in git)
+#   - External Secrets Operator
+#
+# DATA FIELDS EXPLAINED:
+# - JWT_SECRET: Used to sign/verify JWT tokens
+# - API_KEY: API authentication key for integrations
+# - DB_USERNAME/PASSWORD: MongoDB credentials
+# - DB_HOST: MongoDB service DNS name
+# - DB_PORT: MongoDB port
+# - DB_NAME: MongoDB database name
+#
+# ============================================================================
+apiVersion: v1
+kind: Secret
+metadata:
+  name: node-api-secret
+  namespace: mgdb-ns
+  labels:
+    app: node-api
+    component: credentials
+type: Opaque
+  # Opaque: Default type for arbitrary data
+data:
+  # All values must be base64-encoded
+  # Encoding command: echo "value" | base64
+  # Decoding command: echo "base64" | base64 -d
+  
+  JWT_SECRET: eW91ci1yZWFsLWp3dC1zZWNyZXQ=
+    # Decoded: your-real-jwt-secret
+    # ⚠️ CHANGE THIS IN PRODUCTION!
+    # Used to sign JWT tokens
+    # If exposed: Anyone can forge tokens
+    # Generate strong secret: openssl rand -hex 32
+  
+  API_KEY: eW91ci1yZWFsLWFwaS1rZXk=
+    # Decoded: your-real-api-key
+    # ⚠️ CHANGE THIS IN PRODUCTION!
+    # Used for API authentication/integration
+  
+  DB_USERNAME: YWRtaW4=
+    # Decoded: admin
+    # MongoDB admin username
+    # Must match MongoDB Secret
+  
+  DB_PASSWORD: U2VjdXJlUEBzc3cwcmQxMjM=
+    # Decoded: SecureP@ssw0rd123
+    # MongoDB admin password
+    # ⚠️ Must match MongoDB Secret password
+    # Must be strong in production
+  
+  DB_HOST: bW9uZ29kYi1zZXJ2aWNl
+    # Decoded: mongodb-service
+    # MongoDB Service DNS name
+    # Format: service-name.namespace.svc.cluster.local
+    # Short form works within namespace
+  
+  DB_PORT: MjcwMTc=
+    # Decoded: 27017
+    # MongoDB default port
+  
+  DB_NAME: bXlkYg==
+    # Decoded: mydb
+    # MongoDB database name
+
+---
+# ============================================================================
+# PART 6: DEPLOYMENT
+# ============================================================================
+# TASK: Deploy Node.js API pods and manage replicas
+#
+# WHAT IT DOES:
+# - Creates and manages Node.js API pods
+# - Ensures pods run (restarts if crash)
+# - Handles rolling updates
+# - Maintains 2-10 replicas with HPA
+#
+# WHY IT'S NEEDED:
+# - Pod alone is ephemeral (deleted if node fails)
+# - Deployment provides pod management:
+#   - Restart crashed pods
+#   - Scale replicas
+#   - Update application version
+#   - Rollback to previous version
+#
+# REPLICAS: 2 (Minimum for HA)
+# - Ensures service continues if 1 pod fails
+# - HPA scales 2-10 based on CPU/memory usage
+#
+# ============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: node-api-deployment
+  namespace: mgdb-ns
+  labels:
+    app: node-api
+    component: backend-api
+    version: "1.0.0"
+spec:
+  # ===== REPLICA CONFIGURATION =====
+  replicas: 2
+    # Initial number of pods: 2
+    # Ensures HA (service continues if 1 pod fails)
+    # HPA will scale to 3-10 based on CPU/memory
+  
+  # ===== UPDATE STRATEGY =====
+  strategy:
+    type: RollingUpdate
+      # RollingUpdate: Create new pod, then delete old
+      # Alternative: Recreate (delete all, then create new)
+      # RollingUpdate recommended for zero-downtime updates
+    
+    rollingUpdate:
+      maxSurge: 1
+        # Max extra pods during update: 1
+        # Total pods: 2 + 1 = 3 during update
+        # Allows gradual rollout
+      
+      maxUnavailable: 0
+        # Max pods unavailable: 0
+        # Ensures minimum 2 pods always running
+        # For zero-downtime updates
+  
+  # ===== POD SELECTION =====
+  selector:
+    matchLabels:
+      app: node-api
+      # Deployment manages all pods with this label
+  
+  # ===== POD TEMPLATE =====
+  template:
+    metadata:
+      labels:
+        app: node-api
+        version: "1.0.0"
+    
+    spec:
+      # ===== CONTAINERS =====
+      containers:
+      - name: node-api
+          # Container name
+        
+        image: farajassulai/node-app:jenkins-latest@sha256:8f9e402a658bc342e4b9e4b18dcb0cf5bbf3ddcc34d96c3234e9248a36230bc1
+          # Docker image with pinned digest
+          # Format: registry/repository:tag@sha256:digest
+          # Digest ensures exact image version (immutable)
+          # Prevents unexpected updates
+          # Example digest lookup: docker inspect farajassulai/node-app:jenkins-latest | grep RepoDigests
+        
+        imagePullPolicy: Always
+          # Always pull image from registry
+          # Ensures latest image if tag is updated
+          # Alternatives:
+          # - IfNotPresent: Use local if available
+          # - Never: Use local only
+        
+        # ===== PORTS =====
+        ports:
+        - name: http
+            # Port name (referenced by Service and probes)
+          containerPort: 3000
+            # Port inside container where Node.js listens
+            # Express/Fastify typically uses 3000
+          protocol: TCP
+        
+        # ===== ENVIRONMENT CONFIGURATION =====
+        envFrom:
+        - configMapRef:
+            name: node-api-config
+            # Load all ConfigMap data as environment variables
+            # NODE_ENV=production, PORT=3000, etc.
+        
+        - secretRef:
+            name: node-api-secret
+            # Load all Secret data as environment variables
+            # JWT_SECRET, API_KEY, DB_USERNAME, etc.
+        
+        env:
+        - name: DB_URI
+            # MongoDB connection URI
+            # Constructed from individual secret values
+          value: "mongodb://$(DB_USERNAME):$(DB_PASSWORD)@$(DB_HOST):$(DB_PORT)/$(DB_NAME)"
+            # Example: mongodb://admin:SecureP@ssw0rd123@mongodb-service:27017/mydb
+            # Uses shell-style variable expansion
+            # DB_USERNAME, DB_PASSWORD, etc. come from Secret
+        
+        # ===== RESOURCE REQUESTS & LIMITS =====
+        resources:
+          requests:
+            cpu: 250m
+              # Request 250 millicores (0.25 CPU)
+              # Kubernetes reserves this for pod
+              # Used for scheduling decisions
+            memory: 256Mi
+              # Request 256 MiB of memory
+              # Kubernetes reserves this for pod
+              # Node.js typically needs 200-300Mi
+          
+          limits:
+            cpu: 500m
+              # Hard limit: 0.5 CPU
+              # Pod throttled if exceeds
+            memory: 512Mi
+              # Hard limit: 512 MiB
+              # Pod killed if exceeds (OOMKilled)
+        
+        # ===== LIVENESS PROBE =====
+        livenessProbe:
+          # Checks if container is alive
+          # If fails: Kubernetes restarts container
+          httpGet:
+            path: /health
+              # HTTP path to check
+              # Node.js app should implement this endpoint
+            port: http
+              # Port name (references containerPort.name)
+          
+          initialDelaySeconds: 30
+            # Wait 30s before first probe (let app start)
+          
+          periodSeconds: 10
+            # Check every 10 seconds
+          
+          timeoutSeconds: 5
+            # Fail if response takes >5 seconds
+          
+          failureThreshold: 3
+            # Restart if 3 consecutive probes fail
+            # Total time: 30s + (10s * 3) = 60s maximum
+        
+        # ===== READINESS PROBE =====
+        readinessProbe:
+          # Checks if container ready to receive traffic
+          # If fails: Remove from Service endpoints (traffic stops)
+          # Pod may recover (unlike liveness)
+          httpGet:
+            path: /health
+            port: http
+          
+          initialDelaySeconds: 10
+            # Wait 10s before first probe
+          
+          periodSeconds: 5
+            # Check every 5 seconds (more frequent than liveness)
+          
+          timeoutSeconds: 3
+            # Fail if response takes >3 seconds
+          
+          # No failureThreshold specified (default: 3)
+          # Remove from Service after 3 failures
+          # Total time: 10s + (5s * 3) = 25s
+        
+        # ===== CONTAINER-LEVEL SECURITY CONTEXT =====
+        securityContext:
+          allowPrivilegeEscalation: false
+            # Container cannot escalate to root
+            # Prevents privilege escalation exploits
+          
+          readOnlyRootFilesystem: true
+            # Filesystem is read-only
+            # Node.js can't write to system
+            # Only writes to /tmp (ephemeral)
+            # Prevents code injection attacks
+          
+          runAsNonRoot: true
+            # Container must run as non-root user
+            # Kubernetes denies if image tries to run as root
+            # Improves security
+          
+          runAsUser: 1000
+            # Run as user ID 1000
+            # Application-specific user (not root)
+            # In Docker image: create this user during build
+      
+      # ===== POD-LEVEL CONFIGURATION =====
+      restartPolicy: Always
+        # Restart container if it exits
+      
+      terminationGracePeriodSeconds: 30
+        # Time to gracefully shutdown before force kill
+        # When pod terminates:
+        # 1. SIGTERM sent to process
+        # 2. Process has 30s to shutdown cleanly
+        # 3. If not stopped: SIGKILL sent (forced)
+        # Node.js should close database connections
+      
+      # ===== POD AFFINITY =====
+      affinity:
+        podAntiAffinity:
+          # Pod anti-affinity: Try to spread pods across nodes
+          preferredDuringSchedulingIgnoredDuringExecution:
+          # Preferred: Try to spread, but not required
+          # Ignored during execution: Can share node if already scheduled
+          
+          - weight: 100
+              # Weight: Importance of this rule (1-100)
+              # Higher = more important
+            
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - node-api
+              
+              topologyKey: kubernetes.io/hostname
+              # Topology: Per hostname (don't run on same node)
+              # EFFECT: Try to avoid running 2 Node.js pods on same node
+              # Better availability (single node failure ≠ total failure)
+      
+      # ===== TOLERATIONS =====
+      tolerations:
+      # Tolerations allow pod to run on nodes with taints
+      # Control plane nodes have taints by default
+      
+      - key: "node-role.kubernetes.io/master"
+          # Taint key (Kubernetes 1.20 and older)
+        operator: "Exists"
+        effect: "NoSchedule"
+          # Allow pod on master nodes
+      
+      - key: "node-role.kubernetes.io/control-plane"
+          # Taint key (Kubernetes 1.21+)
+        operator: "Exists"
+        effect: "NoSchedule"
+          # Backward compatibility
+
+---
+# ============================================================================
+# PART 7: SERVICE (ClusterIP)
+# ============================================================================
+# TASK: Expose Node.js API internally within cluster
+#
+# WHAT IT DOES:
+# - Creates stable DNS name for Node.js API pods
+# - Provides load balancing across 2+ pods
+# - ClusterIP: Internal-only access (not from outside cluster)
+# - NGINX reverse proxy connects via this Service
+#
+# WHY IT'S NEEDED:
+# - Pod IP changes if pod restarts (unreliable)
+# - Service provides stable IP and DNS name
+# - NGINX discovers Node.js via Service DNS
+# - Kubernetes handles load balancing
+#
+# DNS NAMES:
+# - Within mgdb-ns: node-api-service
+# - From other namespaces: node-api-service.mgdb-ns
+# - Full DNS: node-api-service.mgdb-ns.svc.cluster.local
+#
+# CONNECTION FROM NGINX:
+# NGINX nginx.conf specifies:
+# proxy_pass http://node-api-service.mgdb-ns.svc.cluster.local:3000;
+# DNS resolves to Service IP
+# Service load-balances to pod IPs
+#
+# ============================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: node-api-service
+  # Service name (used in DNS)
+  namespace: mgdb-ns
+  labels:
+    app: node-api
+    component: backend-api
+spec:
+  type: ClusterIP
+    # Type: ClusterIP (internal access only)
+    # Kubernetes assigns stable IP from cluster subnet
+  
+  selector:
+    app: node-api
+    # Select pods with label "app: node-api"
+  
+  ports:
+  - port: 3000
+      # Port on Service (virtual IP)
+      # Clients connect to this port
+    targetPort: http
+      # Port on pod container
+      # Service forwards traffic to pod's port 3000
+    protocol: TCP
+    name: http
+
+---
+# ============================================================================
+# PART 8: HORIZONTAL POD AUTOSCALER (HPA)
+# ============================================================================
+# TASK: Auto-scale Node.js API pods based on CPU and memory
+#
+# WHAT IT DOES:
+# - Monitors CPU and memory usage
+# - Scales up when thresholds exceeded
+# - Scales down when usage drops
+# - Maintains 2-10 pod replicas
+#
+# WHY IT'S NEEDED:
+# - API load fluctuates (peak hours, off-peak)
+# - Manual scaling is slow and inefficient
+# - HPA automatically adds pods when needed
+# - HPA removes pods when traffic drops (saves costs)
+#
+# PREREQUISITES:
+# - Metrics Server must be installed
+# - Check: kubectl get deployment metrics-server -n kube-system
+# - Resource requests must be defined (✓ done in Deployment)
+#
+# SCALING TRIGGERS:
+# - CPU > 50% of requested (250m) = 125m
+# - Memory > 60% of requested (256Mi) = 154Mi
+# Either trigger causes scale-up
+#
+# ============================================================================
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: node-api-hpa
+  namespace: mgdb-ns
+  labels:
+    app: node-api
+    component: auto-scaling
+spec:
+  # ===== SCALE TARGET =====
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: node-api-deployment
+  
+  # ===== REPLICA LIMITS =====
+  minReplicas: 2
+    # Minimum pods: 2 (ensures HA)
+  
+  maxReplicas: 10
+    # Maximum pods: 10 (prevents cost explosion)
+  
+  # ===== SCALING METRICS =====
+  metrics:
+  
+  # Metric 1: CPU utilization
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 50
+          # Target: 50% CPU utilization
+          # If current > 50% → scale up
+          # If current < 50% → scale down
+  
+  # Metric 2: Memory utilization
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 60
+          # Target: 60% memory utilization
+          # More lenient than CPU (memory is harder to release)
+  
+  # ===== SCALING BEHAVIOR =====
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+        # Wait 5 minutes before scaling down
+        # Prevents rapid up-down cycles
+    
+    scaleUp:
+      stabilizationWindowSeconds: 60
+        # Wait 1 minute before scaling up again
+        # Allows time for new pods to stabilize
+
+---
+# ============================================================================
+# PART 9: INGRESS
+# ============================================================================
+# TASK: External HTTP/HTTPS routing for API
+#
+# WHAT IT DOES:
+# - Routes external requests to Node.js API
+# - SSL/TLS termination (HTTPS)
+# - DNS name routing (api.example.com → Service)
+# - Request path routing (not used here, but available)
+#
+# WHY IT'S NEEDED:
+# - Service only provides internal access
+# - Ingress enables external API access
+# - Manages SSL certificates
+# - Single entry point for traffic
+#
+# PREREQUISITES:
+# - NGINX Ingress Controller installed
+# - cert-manager installed for SSL
+# - DNS record: api.example.com → Ingress IP
+#
+# SSL CERTIFICATE:
+# - cert-manager automatically creates certificate
+# - Uses Let's Encrypt (letsencrypt-prod)
+# - Certificate auto-renewed before expiry
+# - Stored as Secret: node-api-tls-secret
+#
+# ============================================================================
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: node-api-ingress
+  namespace: mgdb-ns
+  labels:
+    app: node-api
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+      # Use Let's Encrypt for SSL certificate
+      # Must have cert-manager installed with cluster-issuer defined
+    
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+      # Redirect HTTP → HTTPS
+      # Force secure connections
+spec:
+  ingressClassName: nginx
+    # Use NGINX Ingress Controller
+    # Requires NGINX IC installed
+  
+  # ===== TLS/SSL CONFIGURATION =====
+  tls:
+  - hosts:
+    - api.example.com
+        # Domain name for certificate
+        # ⚠️ CHANGE THIS IN PRODUCTION!
+    
+    secretName: node-api-tls-secret
+      # Secret name where certificate is stored
+      # cert-manager creates this automatically
+  
+  # ===== ROUTING RULES =====
+  rules:
+  - host: api.example.com
+      # Domain to match
+      # ⚠️ CHANGE THIS IN PRODUCTION!
+    
+    http:
+      paths:
+      - path: /
+          # URL path
+          # / matches all paths
+        
+        pathType: Prefix
+          # pathType: Prefix (matches /api, /api/users, etc.)
+          # Alternative: Exact (exact match only)
+        
+        backend:
+          service:
+            name: node-api-service
+              # Service to route to
+            port:
+              number: 3000
+              # Service port
+
+---
+# ============================================================================
+# PART 10: POD DISRUPTION BUDGET (PDB)
+# ============================================================================
+# TASK: Guarantee minimum pods during maintenance
+#
+# WHAT IT DOES:
+# - Ensures minimum 1 pod stays running during disruptions
+# - Prevents cluster maintenance from killing all pods
+# - Allows node drains, upgrades, etc. safely
+# - Enforces availability SLA
+#
+# WHY IT'S NEEDED:
+# - Cluster operations sometimes disrupt pods:
+#   - Node drain for upgrade
+#   - Node failure recovery
+#   - Cluster scaling
+# - PDB prevents all pods from being disrupted simultaneously
+# - Keeps API available during maintenance
+#
+# HOW IT WORKS:
+# When node needs to drain:
+# 1. Kubernetes checks PDB
+# 2. If drain would violate PDB (minAvailable: 1) → block drain
+# 3. Must evict pods in way that maintains minimum
+#
+# ============================================================================
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: node-api-pdb
+  namespace: mgdb-ns
+  labels:
+    app: node-api
+spec:
+  minAvailable: 1
+    # Minimum pods that must stay available
+    # With 2 replicas: At least 1 must run
+    # Allows draining 1 pod at a time
+    # Alternative: maxUnavailable: 1 (same effect)
+  
+  selector:
+    matchLabels:
+      app: node-api
+      # Apply to pods with this label
+
+---
+# ============================================================================
+# PART 11: NETWORKPOLICY
+#

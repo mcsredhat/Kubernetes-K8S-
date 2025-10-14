@@ -1,0 +1,56 @@
+# ============================================================================
+# 09-monitoring-optional-servicemonitor.yaml
+# ============================================================================
+# Purpose: ServiceMonitor for Prometheus Operator (OPTIONAL)
+# Dependencies: Requires Prometheus Operator to be installed
+# Usage: Apply this file ONLY if you have Prometheus Operator installed
+# Check: kubectl get crd servicemonitors.monitoring.coreos.com
+# ============================================================================
+
+# ServiceMonitor - OPTIONAL (requires Prometheus Operator)
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: ${APP_NAME}-servicemonitor
+  namespace: ${NAMESPACE}
+  labels:
+    app: ${APP_NAME}
+    app.kubernetes.io/name: ${APP_NAME}
+    app.kubernetes.io/component: monitoring
+    release: prometheus
+  annotations:
+    description: "ServiceMonitor for Prometheus Operator - requires operator to be installed"
+spec:
+  selector:
+    matchLabels:
+      app: ${APP_NAME}
+      app.kubernetes.io/name: ${APP_NAME}
+  endpoints:
+  - port: http
+    path: /metrics
+    interval: 30s
+    scrapeTimeout: 10s
+    honorLabels: true
+  namespaceSelector:
+    matchNames:
+    - ${NAMESPACE}
+---
+# PodMonitor - OPTIONAL (alternative to ServiceMonitor)
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: ${APP_NAME}-podmonitor
+  namespace: ${NAMESPACE}
+  labels:
+    app: ${APP_NAME}
+    app.kubernetes.io/name: ${APP_NAME}
+    app.kubernetes.io/component: monitoring
+spec:
+  selector:
+    matchLabels:
+      app: ${APP_NAME}
+      app.kubernetes.io/name: ${APP_NAME}
+  podMetricsEndpoints:
+  - port: http
+    path: /metrics
+    interval: 30s

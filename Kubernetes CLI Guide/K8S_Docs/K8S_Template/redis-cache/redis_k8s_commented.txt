@@ -1,0 +1,1389 @@
+# TEST MEMORY SETTINGS:
+# $ kubectl exec -it redis-0 -n mgdb-ns -- redis-cli
+# > INFO memory
+# Shows: used_memory, maxmemory, evicted_keys, etc.
+#
+# TEST RATE LIMITING (if used by Node.js):
+# $ kubectl exec -it redis-0 -n mgdb-ns -- redis-cli
+# > INCR rate:user123:requests
+# (integer) 1
+# > INCR rate:user123:requests
+# (integer) 2
+# Check TTL:
+# > TTL rate:user123:requests
+# (integer) 55  # Expires in 55 seconds
+#
+# MONITOR REDIS COMMANDS (Real-time):
+# $ kubectl exec -it redis-0 -n mgdb-ns -- redis-cli MONITOR
+# Shows every command as it's executed
+#
+# CHECK CONNECTED CLIENTS:
+# $ kubectl exec -it redis-0 -n mgdb-ns -- redis-cli
+# > CLIENT LIST
+# Shows connected clients and their details
+#
+# ============================================================================
+
+---
+# ============================================================================
+# TROUBLESHOOTING GUIDE
+# ============================================================================
+#
+# POD NOT STARTING (Pending):
+# $ kubectl describe pod redis-0 -n mgdb-ns
+# Check Events section for reason:
+#   - Insufficient resources
+#   - Image pull error
+#   - Node affinity issues
+#
+# LIVENESS/READINESS PROBE FAILING:
+# $ kubectl logs redis-0 -n mgdb-ns
+# Look for: "DENIED Redis is running as cluster node"
+# or "ERR wrong number of arguments for 'ping' command"
+#
+# Fix: Verify password matches in both ConfigMap and probes
+#
+# CONNECTION REFUSED:
+# $ kubectl exec -it redis-0 -n mgdb-ns -- redis-cli
+# Error: Connection refused
+# Check if Redis process is running:
+# $ kubectl exec -it redis-0 -n mgdb-ns -- ps aux | grep redis
+#
+# Check logs for startup errors:
+# $ kubectl logs redis-0 -n mgdb-ns
+#
+# AUTHENTICATION ERRORS:
+# $ kubectl exec -it redis-0 -n mgdb-ns -- redis-cli -a wrongpassword
+# Error: ERR invalid password
+#
+# Fix: Verify password in Secret matches ConfigMap
+#
+# OUT OF MEMORY:
+# $ kubectl exec -it redis-0 -n mgdb-ns -- redis-cli
+# > INFO memory
+# If: used_memory > maxmemory
+# Then: Evictions happening (data loss!)
+#
+# Fix: Increase maxmemory or reduce data
+# $ kubectl set resources statefulset redis -c redis \
+#   --limits=memory=1Gi --requests=memory=512Mi
+#
+# DATA PERSISTENCE NOT WORKING:
+# $ kubectl exec -it redis-0 -n mgdb-ns -- ls -la /data/
+# Should see: dump.rdb or appendonly.aof
+#
+# If missing: RDB saves not happening
+# Check last_save:
+# $ kubectl exec -it redis-0 -n mgdb-ns -- redis-cli
+# > LASTSAVE
+# (unix timestamp)
+#
+# SLOW QUERIES:
+# $ kubectl exec -it redis-0 -n mgdb-ns -- redis-cli SLOWLOG GET
+# Shows queries taking longer than threshold
+#
+# NETWORK POLICY BLOCKING:
+# If Node.js can't connect to Redis:
+# 1. Check NetworkPolicy:
+#    $ kubectl describe networkpolicy redis-network-policy -n mgdb-ns
+# 2. Verify pod labels match rules
+# 3. Test connectivity:
+#    $ kubectl exec -it <node-api-pod> -- redis-cli -h redis-0.redis-service ping
+#
+# ============================================================================
+
+---
+# ============================================================================
+# PERFORMANCE TUNING & BEST PRACTICES
+# ============================================================================
+#
+# PERSISTENCE STRATEGY:
+#
+# Option 1: RDB ONLY (Fast, less durable)
+# appendonly: no
+# save: 900 1 (or your preference)
+# Pros: Fast, simple, small snapshots
+# Cons: Recent changes lost on crash
+# Use for: Caches where data loss acceptable
+#
+# Option 2: AOF ONLY (Slow, more durable)
+# appendonly: yes
+# appendfsync: always (safest)
+# Pros: Every write persisted, recoverable
+# Cons: Larger files, slower than RDB
+# Use for: Session data, critical caches
+#
+# Option 3: RDB + AOF (Best durability)
+# appendonly: yes
+# save: (your preference)
+# Pros: RDB for recovery speed, AOF for durability
+# Cons: Larger disk usage, both overhead
+# Use for: Production, important data
+#
+# MEMORY OPTIMIZATION:
+#
+# 1. Set appropriate maxmemory
+#    = ~80% of container memory limit
+#    Example: container limit 512Mi → maxmemory 256mb
+#
+# 2. Choose right eviction policy
+#    - allkeys-lru: Best for caches (remove unused)
+#    - volatile-lru: Only remove expired keys (safer)
+#    - allkeys-random: Worst performance (avoid)
+#    - noeviction: Throw error when full (monitoring required)
+#
+# 3. Use TTLs (Time To Live) for keys
+#    Automatic expiration prevents memory buildup
+#    Example: SET session:123 "data" EX 3600 (expires in 1 hour)
+#
+# MONITORING METRICS:
+#
+# Critical metrics:
+# - used_memory: How much memory Redis using
+# - evicted_keys: Keys removed due to memory pressure (data loss!)
+# - connected_clients: Number of connected clients
+# - total_commands_processed: Throughput
+# - keyspace_hits/misses: Cache hit rate
+#
+# Alert thresholds:
+# - used_memory > 80% of maxmemory → scale up
+# - evicted_keys > 0 → memory pressure (increase memory!)
+# - connected_clients > threshold → connection limit approaching
+#
+# SECURITY BEST PRACTICES:
+#
+# 1. Strong password
+#    Generate: openssl rand -base64 32
+#    Result: Something like "XrVmYpZ9K2j4Q8w5L1B6N7D3F9H2M4P8="
+#
+# 2. Use external secrets
+#    HashiCorp Vault, AWS Secrets Manager, Sealed Secrets
+#    Not storing plaintext in ConfigMap
+#
+# 3. TLS encryption (Redis 6+)
+#    tls-port 6380
+#    tls-cert-file /path/to/cert.crt
+#    tls-key-file /path/to/key.key
+#
+# 4. ACL (Access Control Lists) - Redis 6+
+#    Create users with specific permissions
+#    > ACL SETUSER alice on >password +@all ~*
+#
+# 5. Disable dangerous commands
+#    rename-command FLUSHDB ""
+#    rename-command FLUSHALL ""
+#    rename-command CONFIG ""
+#    Prevents accidental/malicious data deletion
+#
+# ============================================================================
+
+---
+# ============================================================================
+# REDIS USE CASES IN THIS STACK
+# ============================================================================
+#
+# 1. SESSION CACHING
+# - Store user session data after login
+# - Fast retrieval on each request
+# - Automatic expiration with TTL
+# - Example:
+#   SET session:user123 "{id:123, username:alice}" EX 3600
+#   GET session:user123
+#
+# 2. DATABASE QUERY CACHING
+# - Cache expensive database queries
+# - Reduce load on MongoDB
+# - Invalidate on data changes
+# - Example:
+#   SET cache:users:all "[...]" EX 1800  (30 minutes)
+#   GET cache:users:all
+#
+# 3. RATE LIMITING
+# - Track API requests per user/IP
+# - Implement per-second/per-minute limits
+# - Example:
+#   INCR api:requests:user123:1hour
+#   EXPIRE api:requests:user123:1hour 3600
+#   If INCR result > 100 → Reject request
+#
+# 4. REAL-TIME COUNTERS
+# - Website view counts
+# - Like/upvote counts
+# - Live user counts
+# - Example:
+#   INCR post:123:views
+#   INCRBY post:456:likes 5
+#
+# 5. DISTRIBUTED LOCKS
+# - Prevent concurrent operations on shared resources
+# - Cluster coordination
+# - Example:
+#   SET lock:user123 "1" NX EX 10
+#   If successful: Acquire lock for 10 seconds
+#
+# 6. PUB/SUB MESSAGING
+# - Real-time notifications
+# - Event streaming
+# - Example:
+#   PUBLISH channel:notifications "New message!"
+#   SUBSCRIBE channel:notifications
+#
+# 7. TASK QUEUES
+# - Background job processing
+# - Work distribution
+# - Example:
+#   LPUSH jobs:email "{to:alice@example.com, subject:Welcome}"
+#   RPOP jobs:email  (Worker picks up job)
+#
+# 8. LEADERBOARDS
+# - Ranked lists (games, competitions)
+# - Efficient sorted operations
+# - Example:
+#   ZADD leaderboard 1000 alice 950 bob 900 charlie
+#   ZRANGE leaderboard 0 9  (Top 10)
+#
+# ============================================================================
+
+---
+# ============================================================================
+# SCALING REDIS BEYOND SINGLE INSTANCE
+# ============================================================================
+#
+# SCENARIO 1: HIGHER AVAILABILITY (Master-Slave Replication)
+# Setup: 1 Master (write), N Slaves (read replicas)
+# Use: Redis Sentinel for automatic failover
+# When: Need HA but don't need sharding
+# Pros: Failover automatic, read scaling
+# Cons: Single write point, limited to one master's capacity
+#
+# StatefulSet: replicas: 3
+# Master: redis-0
+# Slaves: redis-1, redis-2
+# Sentinels: redis-sentinel-0, redis-sentinel-1, redis-sentinel-2
+#
+# SCENARIO 2: HORIZONTAL SCALING (Redis Cluster)
+# Setup: Multiple Redis nodes, data sharded
+# Slots: 16384 slots, each node owns subset
+# When: Data too large for one machine
+# Pros: Unlimited scaling, built-in sharding
+# Cons: More complex, cluster mode requirements
+#
+# StatefulSet: replicas: 6+ (minimum 3 master + 3 slave)
+# Each master owns ~5461 slots
+# Clients use cluster client library
+#
+# SCENARIO 3: CACHING LAYER (Distributed Cache)
+# Setup: Multiple independent Redis instances
+# Use: Cache different datasets in different instances
+# When: Different teams/services with separate caches
+# Pros: Simple, isolated failures
+# Cons: No sharing, potential duplication
+#
+# Deployment: Multiple StatefulSets
+# redis-cache-users: Users data
+# redis-cache-sessions: Session data
+# redis-cache-api: API rate limiting
+#
+# ============================================================================
+
+---
+# ============================================================================
+# PRODUCTION DEPLOYMENT CHECKLIST
+# ============================================================================
+#
+# STORAGE & PERSISTENCE:
+# ☐ Use PersistentVolumeClaim (not emptyDir)
+# ☐ Storage class optimized for I/O (fast-ssd)
+# ☐ Sufficient storage size (1.5x expected data)
+# ☐ RDB snapshots tested and verified
+# ☐ AOF rewrite frequency configured
+# ☐ Backup strategy defined (copy RDB to S3, etc.)
+# ☐ Recovery procedures documented and tested
+#
+# SECURITY:
+# ☐ Strong password (20+ characters, random)
+# ☐ Password stored in external secrets (not ConfigMap)
+# ☐ NetworkPolicy restricting access
+# ☐ Container running as non-root user
+# ☐ Read-only filesystem where possible
+# ☐ No dangerous commands exposed
+# ☐ TLS encryption enabled (if Redis 6+)
+# ☐ ACLs configured for different user types
+#
+# RESOURCE MANAGEMENT:
+# ☐ Memory requests set appropriately
+# ☐ Memory limits set (maxmemory in config)
+# ☐ CPU requests/limits configured
+# ☐ ResourceQuota enforced
+# ☐ LimitRange enforced
+# ☐ maxmemory-policy prevents data loss
+#
+# MONITORING & ALERTING:
+# ☐ Liveness probe configured (checks PING)
+# ☐ Readiness probe configured
+# ☐ Prometheus metrics exported (redis_exporter)
+# ☐ CPU/memory monitoring
+# ☐ Alert on memory pressure (evictions)
+# ☐ Alert on connection limits
+# ☐ Alert on persistence failures
+# ☐ Centralized logging (ELK, Splunk, etc.)
+#
+# HIGH AVAILABILITY:
+# ☐ Min 2 replicas for fault tolerance
+# ☐ Pod anti-affinity spreading across nodes
+# ☐ PDB (Pod Disruption Budget) configured
+# ☐ Sentinel or Cluster for auto-failover
+# ☐ Multiple zones if available
+#
+# PERFORMANCE:
+# ☐ RDB snapshot frequency optimized
+# ☐ AOF rewrite frequency optimized
+# ☐ appendfsync setting balanced for durability/performance
+# ☐ maxmemory-policy appropriate for use case
+# ☐ TCP keepalive configured
+# ☐ Performance tested with expected load
+#
+# OPERATIONS:
+# ☐ Update procedure tested (rolling restart)
+# ☐ Rollback procedure documented
+# ☐ Scaling procedure tested
+# ☐ Disaster recovery drills scheduled
+# ☐ Runbooks created for common issues
+# ☐ On-call rotation and alerting documented
+#
+# ============================================================================
+
+---
+# ============================================================================
+# REDIS STACK SUMMARY
+# ============================================================================
+#
+# COMPLETE APPLICATION STACK (All 4 tiers):
+#
+# ┌─────────────────────────────────────────────────────┐
+# │           External Users / Internet                  │
+# └────────────────────┬────────────────────────────────┘
+#                      │ HTTPS
+#                      ▼
+# ┌─────────────────────────────────────────────────────┐
+# │ Layer 1: NGINX Reverse Proxy (Port 80/443)          │
+# │ - SSL/TLS termination                               │
+# │ - Rate limiting                                      │
+# │ - 2-10 pods (HPA based on CPU)                      │
+# │ - ClusterIP Service                                 │
+# └────────────────────┬────────────────────────────────┘
+#                      │ HTTP (internal)
+#                      ▼
+# ┌─────────────────────────────────────────────────────┐
+# │ Layer 2: Node.js API (Port 3000)                     │
+# │ - Business logic                                     │
+# │ - 2-10 pods (HPA based on CPU/Memory)               │
+# │ - Connects to Redis and MongoDB                      │
+# │ - ClusterIP Service                                 │
+# └────────┬───────────────────────────────┬────────────┘
+#          │                               │
+#   Cache │                         Database│
+#          ▼                               ▼
+# ┌──────────────────┐  ┌─────────────────────────┐
+# │ Layer 3: Redis   │  │ Layer 4: MongoDB        │
+# │ Cache (Port 6379)│  │ Database (Port 27017)   │
+# │ - Sessions       │  │ - Persistent data       │
+# │ - Caching        │  │ - 1 instance            │
+# │ - Rate limiting  │  │ - 10Gi storage          │
+# │ - 1 instance     │  │ - StatefulSet           │
+# │ - StatefulSet    │  │ - ClusterIP Service     │
+# └──────────────────┘  └─────────────────────────┘
+#
+# NAMESPACE: mgdb-ns
+# ENVIRONMENT: production
+# REPLICAS: 
+#   - NGINX: 2-10 (HPA)
+#   - Node.js: 2-10 (HPA)
+#   - Redis: 1
+#   - MongoDB: 1
+#
+# STORAGE:
+#   - MongoDB: 10Gi PVC
+#   - Redis: emptyDir 5Gi (development)
+#             PVC 50Gi (production recommended)
+#
+# TOTAL RESOURCES:
+#   CPU Requests: ~1 CPU (baseline)
+#   Memory Requests: ~1.28 GB (baseline)
+#   With HPA max: ~5.5 CPUs, ~3.5GB
+#   ResourceQuota: 6 CPUs, 12 GB (growth headroom)
+#
+# ============================================================================# ============================================================================
+# Redis Cache Kubernetes Deployment - Production Ready (Fully Commented)
+# ============================================================================
+#
+# PURPOSE: This manifest deploys Redis in-memory data store in Kubernetes
+#          for caching, sessions, and real-time data operations.
+#
+# DEPLOYMENT ARCHITECTURE:
+# - Namespace: mgdb-ns (shared with MongoDB, NGINX, Node.js)
+# - Resource Management: Quotas, limits, and requests
+# - Stateful: StatefulSet with persistent storage
+# - Persistence: RDB and AOF for data durability
+# - Authentication: Password protection
+# - High Availability: Pod anti-affinity for spreading
+# - Security: RBAC, SecurityContext, NetworkPolicy
+#
+# KEY FEATURES:
+# ✓ Redis 7 Alpine (lightweight, ~15MB image)
+# ✓ Data persistence (RDB + AOF)
+# ✓ Password authentication
+# ✓ Memory limits and eviction policy
+# ✓ Health checks (liveness, readiness probes)
+# ✓ Persistent volume for data
+# ✓ Non-root user for security
+# ✓ Network policies for access control
+#
+# USE CASES:
+# - Session storage (user login data)
+# - Caching (database query results)
+# - Rate limiting (API request tracking)
+# - Real-time counters (view counts, likes)
+# - Task queues (job processing)
+# - Pub/Sub messaging
+#
+# ============================================================================
+
+---
+# ============================================================================
+# PART 1: NAMESPACE (SHARED)
+# ============================================================================
+# TASK: Create logical partition for all application resources
+#
+# WHAT IT DOES:
+# - Organizes MongoDB, NGINX, Node.js, and Redis in mgdb-ns namespace
+# - Provides resource isolation from other cluster applications
+# - Enables namespace-level quotas and RBAC policies
+# - Groups entire application stack in one logical unit
+#
+# WHY IT'S NEEDED:
+# - Isolates entire application stack
+# - Allows independent resource quotas
+# - Enables team-based access control
+# - Simplifies deployment and management
+#
+# NOTE: This is the SAME namespace as MongoDB, NGINX, and Node.js
+# If already created, skip this section or verify labels are consistent
+#
+# ============================================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mgdb-ns
+  labels:
+    name: mgdb-ns
+    environment: production
+      # Production environment indicator
+    team: platform-team
+      # Team managing the stack
+    app.kubernetes.io/managed-by: kubectl
+      # Management tool
+    pod-security.kubernetes.io/enforce: baseline
+      # Pod security standard enforcement
+    pod-security.kubernetes.io/audit: baseline
+    pod-security.kubernetes.io/warn: baseline
+  annotations:
+    description: "Namespace for MongoDB, NGINX, Node.js API, and Redis stack"
+    contact: "platform-team@company.com"
+    created-by: "k8s-template-v2.0"
+spec:
+  finalizers: ["kubernetes"]
+
+---
+# ============================================================================
+# PART 2: RESOURCEQUOTA (UPDATED FOR FULL STACK)
+# ============================================================================
+# TASK: Limit total resource consumption in namespace
+#
+# WHAT IT DOES:
+# - Caps CPU, memory, storage for entire namespace
+# - Applies to MongoDB, NGINX, Node.js, AND Redis combined
+# - Prevents resource exhaustion from all services
+# - Enforces cost control across all tiers
+#
+# WHY IT'S NEEDED:
+# - Prevents entire stack from consuming all cluster resources
+# - Protects other applications
+# - Enables fair resource sharing
+# - Enforces cluster governance
+#
+# RESOURCE BREAKDOWN (Estimated):
+# - MongoDB: 250m CPU, 256Mi RAM, 10Gi storage
+# - NGINX: 200m CPU, 256Mi RAM
+# - Node.js: 500m CPU, 512Mi RAM
+# - Redis: 100m CPU, 256Mi RAM
+# Total running: ~1.05 CPU, ~1.28Gi RAM
+# Quota allows growth to 6 CPUs, 12Gi RAM with HPA
+#
+# ============================================================================
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: mgdb-ns-quota
+  namespace: mgdb-ns
+  labels:
+    component: resource-management
+    app.kubernetes.io/part-of: application-stack
+spec:
+  hard:
+    # ===== CPU LIMITS =====
+    requests.cpu: "6000m"
+      # Total CPU requests across all pods: 6 CPUs
+      # Current: ~1.05 CPU
+      # Growth capacity: ~5 CPUs for scaling
+    
+    limits.cpu: "12000m"
+      # Hard CPU limit: 12 CPUs
+    
+    # ===== MEMORY LIMITS =====
+    requests.memory: "12Gi"
+      # Total memory requests: 12 GB
+      # Current: ~1.28 GB
+      # Growth capacity: ~11 GB for scaling
+    
+    limits.memory: "24Gi"
+      # Hard memory limit: 24 GB
+    
+    # ===== STORAGE LIMITS =====
+    requests.storage: "250Gi"
+      # Max storage requests
+    
+    persistentvolumeclaims: "5"
+      # Max PVCs (MongoDB: 1, Redis: 1)
+    
+    # ===== OBJECT COUNT LIMITS =====
+    pods: "40"
+      # Max total pods
+    
+    services: "20"
+      # Max Services
+    
+    secrets: "25"
+      # Max Secrets
+    
+    configmaps: "25"
+      # Max ConfigMaps
+    
+    count/deployments.apps: "10"
+    count/statefulsets.apps: "3"
+    count/ingresses.networking.k8s.io: "10"
+    count/networkpolicies.networking.k8s.io: "10"
+
+---
+# ============================================================================
+# PART 3: LIMITRANGE (UPDATED FOR FULL STACK)
+# ============================================================================
+# TASK: Set default, min, max resource limits per container
+#
+# WHAT IT DOES:
+# - Applies to each individual container
+# - Prevents under/over-provisioned containers
+# - Sets defaults if not specified
+# - Rejects pods outside allowed ranges
+#
+# WHY IT'S NEEDED:
+# - Prevents containers from requesting too little
+# - Prevents containers from requesting too much
+# - Provides sensible defaults
+# - Enforces consistency
+#
+# ============================================================================
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: mgdb-ns-limits
+  namespace: mgdb-ns
+  labels:
+    component: resource-management
+    app.kubernetes.io/part-of: application-stack
+spec:
+  limits:
+  
+  # ===== CONTAINER RESOURCE LIMITS =====
+  - type: Container
+    
+    default:
+      cpu: 500m
+      memory: 512Mi
+      ephemeral-storage: 2Gi
+    
+    defaultRequest:
+      cpu: 200m
+      memory: 256Mi
+      ephemeral-storage: 500Mi
+    
+    max:
+      cpu: 2000m
+      memory: 2Gi
+      ephemeral-storage: 10Gi
+    
+    min:
+      cpu: 50m
+      memory: 64Mi
+      ephemeral-storage: 100Mi
+  
+  # ===== PVC LIMITS =====
+  - type: PersistentVolumeClaim
+    max:
+      storage: 100Gi
+    min:
+      storage: 1Gi
+
+---
+# ============================================================================
+# PART 4: CONFIGMAP
+# ============================================================================
+# TASK: Store Redis configuration file
+#
+# WHAT IT DOES:
+# - Stores complete Redis configuration
+# - Mounted as file in pod at /usr/local/etc/redis/redis.conf
+# - Can be updated without rebuilding image
+# - Enables configuration changes without restart
+#
+# WHY IT'S NEEDED:
+# - Configuration should be external from container
+# - Different environments need different configs
+# - Allows fine-tuning Redis behavior
+# - Follows 12-factor app methodology
+#
+# REDIS CONFIGURATION EXPLAINED:
+# - port: Port to listen on
+# - bind: Network interface to bind to
+# - save: RDB persistence snapshots (seconds, changes)
+# - appendonly: AOF persistence (Append Only File)
+# - maxmemory: Maximum memory Redis can use
+# - maxmemory-policy: What to do when memory full (LRU eviction)
+# - requirepass: Password for authentication
+# - databases: Number of databases (0-15, default 16)
+#
+# ============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: redis-config
+  namespace: mgdb-ns
+  labels:
+    app: redis
+    component: configuration
+data:
+  # Key: redis.conf (mounted as file)
+  # Value: Redis configuration content
+  redis.conf: |
+    # ===== BASIC SETTINGS =====
+    port 6379
+      # Port Redis listens on
+      # Default: 6379
+    
+    bind 0.0.0.0
+      # Bind to all network interfaces
+      # 0.0.0.0 = accessible from any IP
+      # Warning: With authentication required, this is acceptable
+      # Without auth, this is a security risk
+    
+    # ===== RDB PERSISTENCE (Snapshots) =====
+    # RDB = point-in-time snapshot of all data
+    # Saved to disk periodically
+    # Faster to load than AOF
+    # Risk: Recent changes lost if crash between snapshots
+    
+    save 900 1
+      # Save if 1 key changed in 900 seconds (15 minutes)
+      # Frequent changes trigger more saves
+    
+    save 300 10
+      # Save if 10 keys changed in 300 seconds (5 minutes)
+    
+    save 60 10000
+      # Save if 10000 keys changed in 60 seconds (1 minute)
+      # Catches sudden traffic spikes
+    
+    # RDB persistence details
+    dbfilename dump.rdb
+      # RDB snapshot filename
+    
+    dir /data
+      # Directory where RDB file is saved
+      # /data is mounted PVC (persistent)
+    
+    # ===== AOF PERSISTENCE (Append Only File) =====
+    # AOF = log of every write command
+    # More durable but slower
+    # Can be replayed to recover all data
+    # Combines with RDB for best durability
+    
+    appendonly yes
+      # Enable AOF persistence
+      # yes = always on
+      # no = disabled
+    
+    appendfilename "appendonly.aof"
+      # AOF log filename
+    
+    appendfsync everysec
+      # How often to sync AOF to disk
+      # everysec = once per second (good balance)
+      # always = after every command (slowest, safest)
+      # no = let OS handle flushing (fastest, least safe)
+    
+    # ===== MEMORY MANAGEMENT =====
+    maxmemory 256mb
+      # Maximum memory Redis can use
+      # Important: Prevent out-of-memory errors
+      # Set to ~80% of container limit (container limit: 512Mi)
+      # When reached: evict keys based on policy
+    
+    maxmemory-policy allkeys-lru
+      # Policy when maxmemory reached:
+      # allkeys-lru = remove least recently used keys
+      # volatile-lru = remove LRU among keys with TTL
+      # allkeys-random = random removal
+      # volatile-random = random among TTL keys
+      # volatile-ttl = remove keys about to expire
+      # noeviction = error when full (don't delete)
+    
+    # ===== AUTHENTICATION =====
+    requirepass changeme123
+      # Password for AUTH command
+      # ⚠️ CHANGE THIS IN PRODUCTION!
+      # Without password: Anyone with network access can connect
+    
+    masterauth changeme123
+      # Password for connecting to master (if using replication)
+      # Only needed in Redis Sentinel/Cluster setups
+    
+    # ===== LOGGING =====
+    loglevel notice
+      # Log level: debug, verbose, notice, warning
+      # notice = default, logs important events
+    
+    logfile ""
+      # Log file location
+      # "" (empty) = log to stdout
+      # Kubernetes captures stdout as pod logs
+    
+    # ===== DATABASE SETTINGS =====
+    databases 16
+      # Number of databases (0-15)
+      # Multiple databases for logical separation
+      # Similar to MySQL schemas
+    
+    # ===== CONNECTION SETTINGS =====
+    timeout 0
+      # Client idle timeout (seconds)
+      # 0 = never close idle connections
+    
+    tcp-keepalive 300
+      # TCP keepalive interval (seconds)
+      # Prevents connection drops
+
+---
+# ============================================================================
+# PART 5: SECRET
+# ============================================================================
+# TASK: Store Redis password
+#
+# WHAT IT DOES:
+# - Stores Redis authentication password
+# - Base64-encoded (NOT encrypted by default!)
+# - Referenced by liveness/readiness probes
+# - Never committed to git
+#
+# WHY IT'S NEEDED:
+# - Passwords should not be in ConfigMap (public!)
+# - Kubernetes tracks secret access in audit logs
+# - Secrets often encrypted at rest (if configured)
+# - Separates secrets from configurations
+#
+# SECURITY NOTES:
+# - Base64 is ENCODING, NOT encryption (reversible!)
+# - Use etcd encryption in production
+# - Consider external secrets: Vault, AWS Secrets Manager, Sealed Secrets
+#
+# ============================================================================
+apiVersion: v1
+kind: Secret
+metadata:
+  name: redis-secret
+  namespace: mgdb-ns
+  labels:
+    app: redis
+    component: credentials
+type: Opaque
+  # Opaque: Default type for arbitrary data
+stringData:
+  # stringData values are automatically base64-encoded
+  # More readable than pre-encoding
+  password: changeme123
+    # ⚠️ CHANGE THIS IN PRODUCTION!
+    # Should be strong password (20+ characters)
+    # Generate: openssl rand -base64 32
+
+---
+# ============================================================================
+# PART 6: SERVICE (HEADLESS FOR STATEFULSET)
+# ============================================================================
+# TASK: Create stable DNS name for Redis
+#
+# WHAT IT DOES:
+# - Creates headless Service (clusterIP: None)
+# - Provides stable DNS for StatefulSet pods
+# - Enables StatefulSet to have predictable names
+# - No load balancing (direct pod IP)
+#
+# WHY IT'S NEEDED:
+# - StatefulSet pods need stable identities
+# - Pod names: redis-0, redis-1, redis-2, etc.
+# - DNS names: redis-0.redis-service, redis-1.redis-service, etc.
+# - Clients can connect to specific pods
+# - Important for replication/clustering
+#
+# HEADLESS VS REGULAR SERVICE:
+# Regular (ClusterIP):
+#   - Single virtual IP
+#   - Load balancing across pods
+#   - Good for stateless apps
+#
+# Headless (clusterIP: None):
+#   - No virtual IP
+#   - DNS returns list of pod IPs
+#   - Direct pod connection
+#   - Good for stateful apps (databases, caches)
+#
+# DNS NAMES:
+# - redis-0.redis-service.mgdb-ns.svc.cluster.local
+# - redis-1.redis-service.mgdb-ns.svc.cluster.local
+# - redis-service.mgdb-ns (returns all pod IPs)
+#
+# ============================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-service
+  # Service name (used in DNS)
+  namespace: mgdb-ns
+  labels:
+    app: redis
+    component: cache
+spec:
+  type: ClusterIP
+    # Type: ClusterIP
+  
+  clusterIP: None
+    # HEADLESS SERVICE: No virtual IP
+    # Required for StatefulSet
+    # DNS queries return pod IPs directly
+  
+  selector:
+    app: redis
+    # Select pods with label "app: redis"
+  
+  ports:
+  - name: redis
+      # Port name
+    port: 6379
+      # Service port (virtual IP port)
+      # For headless, this is still used by endpoints
+    targetPort: 6379
+      # Pod container port
+    protocol: TCP
+
+---
+# ============================================================================
+# PART 7: STATEFULSET
+# ============================================================================
+# TASK: Deploy Redis with stable identity and persistence
+#
+# WHAT IT DOES:
+# - Creates Redis pods with stable identities
+# - Manages PVC persistence for each pod
+# - Provides ordered pod names (redis-0, redis-1, etc.)
+# - Maintains stable DNS names
+#
+# WHY IT'S NEEDED:
+# - Redis is stateful (stores data in memory/disk)
+# - Pod identity must be stable (for replication, clustering)
+# - Each pod needs own persistent volume
+# - Deployment doesn't provide these guarantees
+# - StatefulSet does (designed for stateful apps)
+#
+# DIFFERENCE: DEPLOYMENT VS STATEFULSET:
+# 
+# Deployment (for stateless apps):
+#   - Pods are interchangeable
+#   - Random names (app-xxxxx)
+#   - No guaranteed ordering
+#   - No persistent storage per pod
+#
+# StatefulSet (for stateful apps):
+#   - Pods have stable identities
+#   - Ordered names (redis-0, redis-1, redis-2)
+#   - Guaranteed ordering during updates
+#   - Persistent volume per pod
+#   - For: Databases, caches, queues, etc.
+#
+# ============================================================================
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis
+  # StatefulSet name
+  namespace: mgdb-ns
+  labels:
+    app: redis
+    component: cache-layer
+spec:
+  # ===== STATEFULSET CONFIGURATION =====
+  serviceName: redis-service
+    # Headless Service name
+    # StatefulSet uses this for pod DNS names
+    # Must match Service name exactly
+  
+  replicas: 1
+    # Number of pods: 1
+    # Can be scaled to 3+ for Redis Sentinel/Cluster
+    # Currently: Single Redis instance (no replication)
+  
+  selector:
+    matchLabels:
+      app: redis
+      # Select pods with this label
+  
+  # ===== POD TEMPLATE =====
+  template:
+    metadata:
+      labels:
+        app: redis
+        version: "7-alpine"
+      
+      annotations:
+        prometheus.io/scrape: "true"
+          # Enable Prometheus scraping
+        prometheus.io/port: "6379"
+          # Prometheus port (requires redis_exporter sidecar)
+    
+    spec:
+      # ===== AFFINITY (POD SPREADING) =====
+      affinity:
+        podAntiAffinity:
+          # Pod anti-affinity: Spread across nodes
+          preferredDuringSchedulingIgnoredDuringExecution:
+          # Preferred: Try to spread, but not required
+          
+          - weight: 100
+              # Weight: Importance (1-100)
+            
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - redis
+              
+              topologyKey: kubernetes.io/hostname
+              # EFFECT: Try to avoid running 2 Redis pods on same node
+              # Better fault tolerance
+      
+      # ===== CONTAINERS =====
+      containers:
+      - name: redis
+          # Container name
+        
+        image: redis:7-alpine
+          # Docker image: Redis 7 on Alpine Linux
+          # Alpine: Lightweight (~15MB vs 130MB Debian)
+          # Version: 7-alpine (latest stable v7)
+        
+        imagePullPolicy: IfNotPresent
+          # Pull only if not present locally
+        
+        # ===== COMMAND & ARGS =====
+        command:
+        - redis-server
+          # Redis server executable
+        
+        args:
+        - /usr/local/etc/redis/redis.conf
+          # Path to config file (mounted from ConfigMap)
+        
+        # ===== PORTS =====
+        ports:
+        - name: redis
+            # Port name
+          containerPort: 6379
+            # Port inside container
+          protocol: TCP
+        
+        # ===== VOLUME MOUNTS =====
+        volumeMounts:
+        - name: redis-config
+            # Volume name (defined in volumes section)
+          mountPath: /usr/local/etc/redis
+            # Mount path inside container
+          readOnly: true
+            # Mount as read-only (prevent accidental changes)
+        
+        - name: redis-data
+            # Persistent volume for data
+          mountPath: /data
+            # Where RDB and AOF files are stored
+        
+        # ===== RESOURCE REQUESTS & LIMITS =====
+        resources:
+          requests:
+            memory: "256Mi"
+              # Request 256 MiB of memory
+              # Redis typical usage: 200-300Mi
+            cpu: "100m"
+              # Request 100 millicores (0.1 CPU)
+          
+          limits:
+            memory: "512Mi"
+              # Hard limit: 512 MiB
+              # maxmemory in config: 256Mi
+              # Limit includes memory overhead
+            cpu: "500m"
+              # Hard limit: 0.5 CPU
+        
+        # ===== LIVENESS PROBE =====
+        livenessProbe:
+          # Checks if Redis is alive/responsive
+          # If fails: Kubernetes restarts container
+          exec:
+            command:
+              - redis-cli
+              - -a
+              - changeme123
+                # Password (-a flag)
+              - ping
+                # PING command
+              # Full command: redis-cli -a changeme123 ping
+              # Expected response: PONG
+          
+          initialDelaySeconds: 30
+            # Wait 30s before first probe (let Redis start)
+          
+          periodSeconds: 10
+            # Check every 10 seconds
+          
+          timeoutSeconds: 5
+            # Fail if response takes >5 seconds
+          
+          failureThreshold: 3
+            # Restart if 3 consecutive probes fail
+            # Total time: 30s + (10s * 3) = 60s
+        
+        # ===== READINESS PROBE =====
+        readinessProbe:
+          # Checks if Redis ready to serve traffic
+          # If fails: Remove from Service endpoints
+          exec:
+            command:
+              - redis-cli
+              - -a
+              - changeme123
+              - ping
+          
+          initialDelaySeconds: 10
+            # Wait 10s before first probe
+          
+          periodSeconds: 5
+            # Check every 5 seconds (more frequent)
+          
+          timeoutSeconds: 3
+            # Fail if response takes >3 seconds
+          
+          failureThreshold: 2
+            # Remove from Service after 2 failures
+        
+        # ===== SECURITY CONTEXT =====
+        securityContext:
+          allowPrivilegeEscalation: false
+            # Container cannot escalate to root
+          
+          runAsNonRoot: true
+            # Must run as non-root user
+          
+          runAsUser: 999
+            # Run as user ID 999 (redis user in image)
+          
+          capabilities:
+            drop:
+              - ALL
+                # Drop all Linux capabilities
+                # No special powers (setuid, network admin, etc.)
+      
+      # ===== VOLUMES =====
+      volumes:
+      - name: redis-config
+          # ConfigMap volume (read-only config)
+        configMap:
+          name: redis-config
+            # ConfigMap name
+          defaultMode: 0644
+            # File permissions: rw-r--r--
+      
+      - name: redis-data
+          # Persistent data volume
+        emptyDir:
+          # ephemeral volume (deleted when pod terminated)
+          sizeLimit: 5Gi
+            # Maximum size: 5 GiB
+            # Prevents runaway data from filling node
+          # Note: emptyDir is not persistent!
+          # Data lost on pod restart
+          # For production: Use PersistentVolumeClaim (VolumeClaimTemplate)
+          # See production section below
+
+---
+# ============================================================================
+# PART 8: NETWORKPOLICY
+# ============================================================================
+# TASK: Control ingress and egress traffic for Redis
+#
+# WHAT IT DOES:
+# - Restricts inbound traffic (Ingress)
+# - Restricts outbound traffic (Egress)
+# - Only allowed traffic passes
+# - Blocks unauthorized connections
+#
+# WHY IT'S NEEDED:
+# - Default: All pods can communicate (open mesh)
+# - NetworkPolicy: Only allowed traffic
+# - Implements Zero Trust security
+# - Contains impact of compromised pod
+# - Complies with security standards
+#
+# IMPORTANT RULES:
+# - Only Node.js backend connects to Redis
+# - Not NGINX (frontend)
+# - Not MongoDB (different cache requirements)
+#
+# ============================================================================
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: redis-network-policy
+  namespace: mgdb-ns
+  labels:
+    app: redis
+    component: network-security
+spec:
+  # ===== POD SELECTOR =====
+  podSelector:
+    matchLabels:
+      app: redis
+      # This policy applies to pods with label "app: redis"
+  
+  # ===== POLICY TYPES =====
+  policyTypes:
+  - Ingress
+    # Control inbound traffic
+  - Egress
+    # Control outbound traffic
+  
+  # ===== INGRESS RULES (INBOUND TRAFFIC) =====
+  ingress:
+  
+  # Rule 1: Allow from Node.js backend (node-api pods)
+  - from:
+    - podSelector:
+        matchLabels:
+          app: node-api
+          # Allow Node.js pods to connect
+          # These pods use Redis for caching, sessions, etc.
+    
+    ports:
+    - protocol: TCP
+      port: 6379
+        # Redis port
+  
+  # Rule 2: Allow from NGINX frontend (optional)
+  # Uncomment if NGINX needs to access Redis
+  # - from:
+  #   - podSelector:
+  #       matchLabels:
+  #         app: nginx-frontend
+  #   ports:
+  #   - protocol: TCP
+  #     port: 6379
+  
+  # ===== EGRESS RULES (OUTBOUND TRAFFIC) =====
+  egress:
+  
+  # Rule 1: Allow DNS queries
+  - to:
+    - namespaceSelector: {}
+      # Any namespace (for CoreDNS)
+    
+    ports:
+    - protocol: UDP
+      port: 53
+        # DNS UDP (primary)
+    - protocol: TCP
+      port: 53
+        # DNS TCP (fallback)
+  
+  # Rule 2: Allow communication with other Redis pods
+  # (Only needed if using Redis Sentinel/Cluster)
+  - to:
+    - podSelector:
+        matchLabels:
+          app: redis
+    
+    ports:
+    - protocol: TCP
+      port: 6379
+        # Redis inter-pod communication
+
+---
+# ============================================================================
+# PRODUCTION CONSIDERATIONS & IMPROVEMENTS
+# ============================================================================
+#
+# CURRENT SETUP (Development):
+# - emptyDir for storage (data lost on pod restart)
+# - Single Redis instance (no replication)
+# - No Redis Sentinel (no automatic failover)
+# - No Redis Cluster (no sharding)
+#
+# PRODUCTION IMPROVEMENTS:
+#
+# 1. PERSISTENT STORAGE:
+# Add VolumeClaimTemplate to StatefulSet:
+# volumeClaimTemplates:
+# - metadata:
+#     name: redis-data
+#   spec:
+#     accessModes: ["ReadWriteOnce"]
+#     storageClassName: fast-ssd
+#     resources:
+#       requests:
+#         storage: 50Gi
+#
+# 2. REDIS SENTINEL (High Availability):
+# - Monitors Redis master/slave
+# - Automatic failover on master failure
+# - Typically 3+ Sentinel instances
+# - Requires separate StatefulSet for Sentinels
+#
+# 3. REDIS CLUSTER (Sharding):
+# - Data partitioned across nodes
+# - Horizontal scaling
+# - Each node has master+slave
+# - Requires 6+ nodes minimum
+#
+# 4. BACKUP & RECOVERY:
+# - Regular RDB snapshots to S3/GCS
+# - AOF backup for durability
+# - Test restore procedures
+# - Define RTO/RPO targets
+#
+# 5. MONITORING & ALERTING:
+# - Prometheus metrics export
+# - Redis Commander for GUI monitoring
+# - Alert on high memory usage
+# - Alert on evictions (data loss)
+# - Alert on connection count
+#
+# 6. AUTHENTICATION & ENCRYPTION:
+# - Use strong passwords (20+ characters)
+# - External Secrets for password management
+# - TLS encryption for client connections (Redis 6+)
+# - mTLS for Sentinel/Cluster communication
+#
+# 7. PERFORMANCE TUNING:
+# - Adjust save/appendfsync for durability vs performance
+# - Configure maxmemory-policy based on use case
+# - Enable output buffers limits
+# - Configure TCP keepalive
+#
+# ============================================================================
+
+---
+# ============================================================================
+# DEPLOYMENT INSTRUCTIONS & COMMANDS
+# ============================================================================
+#
+# STEP 1: Apply manifests
+# $ kubectl apply -f redis.yaml
+#
+# STEP 2: Verify deployment
+# $ kubectl get statefulset -n mgdb-ns
+# $ kubectl get pods -n mgdb-ns -l app=redis
+# $ kubectl get svc -n mgdb-ns -l app=redis
+#
+# STEP 3: Check pod status
+# $ kubectl describe pod redis-0 -n mgdb-ns
+# $ kubectl logs redis-0 -n mgdb-ns
+#
+# STEP 4: Verify Redis is running
+# $ kubectl exec -it redis-0 -n mgdb-ns -- redis-cli
+# > ping
+# PONG
+# > AUTH changeme123
+# OK
+# > INFO
+#
+# STEP 5: Check persistence
+# $ kubectl exec -it redis-0 -n mgdb-ns -- ls -la /data
+# Look for: dump.rdb, appendonly.aof
+#
+# STEP 6: Test from Node.js pod
+# $ kubectl exec -it <node-api-pod> -n mgdb-ns -- \
+#   redis-cli -h redis-0.redis-service -a changeme123 ping
+#
+# STEP 7: Monitor resource usage
+# $ kubectl top pod redis-0 -n mgdb-ns
+#
+# ============================================================================
+
+---
+# ============================================================================
+# TESTING & VERIFICATION
+# ============================================================================
+#
+# TEST REDIS CONNECTION (From inside cluster):
+# $ kubectl exec -it redis-0 -n mgdb-ns -- redis-cli
+# > PING
+# PONG
+#
+# TEST WITH PASSWORD:
+# $ kubectl exec -it redis-0 -n mgdb-ns -- redis-cli -a changeme123
+# > ping
+# PONG
+#
+# TEST DATA PERSISTENCE:
+# 1. Set a key:
+# > SET mykey "hello"
+# OK
+#
+# 2. Delete pod (force restart):
+# $ kubectl delete pod redis-0 -n mgdb-ns
+#
+# 3. StatefulSet recreates pod
+# $ kubectl exec -it redis-0 -n mgdb-ns -- redis-cli
+# > GET mykey
+# (nil)  # Key lost because emptyDir is ephemeral!
+#
+# NOTE: To preserve data on restart, use PersistentVolumeClaim (see production section)
+#
+# TEST RDB PERSISTENCE:
+# $ kubectl exec -it redis-0 -n mgdb-ns -- redis-cli
+# > SAVE
+# OK
+# Check file created:
+# $ kubectl exec -it redis-0 -n mgdb-ns -- ls -lh /data/dump.rdb
+#
+# TEST AOF PERSISTENCE:
+# $ kubectl exec -it redis-0 -n mgdb-ns -- tail -f /data/appendonly.aof
+# Shows every command written to AOF
+#
+# TEST MEMORY SETTINGS:
+# $ kubectl exec -it

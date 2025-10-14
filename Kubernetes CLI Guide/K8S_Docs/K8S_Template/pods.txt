@@ -1,0 +1,2 @@
+pods examples need to create under the following image name.
+(react,python API,Vue,postgreSQl,angular,prometheus,Grafana,Kafka,RabbitMQ)

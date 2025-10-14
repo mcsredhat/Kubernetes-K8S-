@@ -1,0 +1,311 @@
+# ============================================================================
+# 08-security-network.yaml - Network Security (CORRECTED)
+# ============================================================================
+# Purpose: Implements network segmentation and traffic policies for security
+# Dependencies: Network policy controller must be enabled (Calico, Cilium, etc.)
+# FIXES: Flexible DNS resolution, multiple namespace selector patterns
+# ============================================================================
+
+# Network Policy - Main application traffic control
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: myapp-network-policy
+  namespace: myapp-prod
+  labels:
+    app: myapp
+    app.kubernetes.io/name: myapp
+    app.kubernetes.io/component: security
+    app.kubernetes.io/part-of: myapp
+  annotations:
+    description: "Network policy for myapp with flexible DNS resolution"
+spec:
+  podSelector:
+    matchLabels:
+      app: myapp
+      app.kubernetes.io/name: myapp
+  policyTypes:
+  - Ingress
+  - Egress
+
+  ingress:
+  # Allow ingress controller traffic
+  - from:
+    - namespaceSelector:
+        matchExpressions:
+        - key: name
+          operator: In
+          values: [ "ingress-nginx", "nginx-ingress", "kube-system" ]
+    ports:
+    - protocol: TCP
+      port: 8080
+
+  # Allow monitoring systems
+  - from:
+    - namespaceSelector:
+        matchExpressions:
+        - key: name
+          operator: In
+          values: [ "monitoring", "prometheus", "kube-system" ]
+    ports:
+    - protocol: TCP
+      port: 8080
+
+  # Allow traffic from same namespace
+  - from:
+    - podSelector: {}
+    ports:
+    - protocol: TCP
+      port: 8080
+
+  # Allow communication within the application
+  - from:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/part-of: myapp
+    ports:
+    - protocol: TCP
+      port: 8080
+
+  egress:
+  # DNS resolution - CORRECTED: Multiple patterns for compatibility
+  # Pattern 1: Using kubernetes.io/metadata.name label (newer clusters)
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+
+  # Pattern 2: Using name label (older clusters)
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+
+  # Pattern 3: Fallback - allow DNS to any kube-system pod with kube-dns label
+  - to:
+    - namespaceSelector: {}
+      podSelector:
+        matchLabels:
+          k8s-app: kube-dns
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+
+  # Pattern 4: CoreDNS (some clusters use this label)
+  - to:
+    - namespaceSelector: {}
+      podSelector:
+        matchLabels:
+          k8s-app: coredns
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+
+  # Kubernetes API server access (CRITICAL for RBAC)
+  - to:
+    - namespaceSelector: {}
+    ports:
+    - protocol: TCP
+      port: 443
+
+  # External HTTPS/HTTP access (adjust as needed for security)
+  - to:
+    - namespaceSelector: {}
+    ports:
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 80
+
+  # Backend communication within namespace
+  - to:
+    - podSelector:
+        matchLabels:
+          app: myapp-backend
+    ports:
+    - protocol: TCP
+      port: 8080
+
+  # Database and cache access (common ports)
+  - to:
+    - podSelector:
+        matchExpressions:
+        - key: app
+          operator: In
+          values: [ "postgres", "postgresql", "mysql", "redis", "mongodb" ]
+    ports:
+    - protocol: TCP
+      port: 5432 # PostgreSQL
+    - protocol: TCP
+      port: 3306 # MySQL
+    - protocol: TCP
+      port: 6379 # Redis
+    - protocol: TCP
+      port: 27017 # MongoDB
+---
+# Network Policy for Backend Service - CORRECTED
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: myapp-backend-network-policy
+  namespace: myapp-prod
+  labels:
+    app: myapp-backend
+    app.kubernetes.io/name: myapp-backend
+    app.kubernetes.io/component: security
+    app.kubernetes.io/part-of: myapp
+spec:
+  podSelector:
+    matchLabels:
+      app: myapp-backend
+      app.kubernetes.io/name: myapp-backend
+  policyTypes:
+  - Ingress
+  - Egress
+
+  ingress:
+  # Allow traffic from main application
+  - from:
+    - podSelector:
+        matchLabels:
+          app: myapp
+          app.kubernetes.io/name: myapp
+    ports:
+    - protocol: TCP
+      port: 8080
+
+  # Allow ingress controller access
+  - from:
+    - namespaceSelector:
+        matchExpressions:
+        - key: name
+          operator: In
+          values: [ "ingress-nginx", "nginx-ingress", "kube-system" ]
+    ports:
+    - protocol: TCP
+      port: 8080
+
+  # Allow monitoring
+  - from:
+    - namespaceSelector:
+        matchExpressions:
+        - key: name
+          operator: In
+          values: [ "monitoring", "prometheus", "kube-system" ]
+    ports:
+    - protocol: TCP
+      port: 8080
+
+  egress:
+  # DNS resolution - Multiple patterns for compatibility
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+
+  - to:
+    - namespaceSelector: {}
+      podSelector:
+        matchExpressions:
+        - key: k8s-app
+          operator: In
+          values: [ "kube-dns", "coredns" ]
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+
+  # Kubernetes API access (CRITICAL)
+  - to:
+    - namespaceSelector: {}
+    ports:
+    - protocol: TCP
+      port: 443
+
+  # External API access
+  - to:
+    - namespaceSelector: {}
+    ports:
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 80
+
+  # Database access
+  - to:
+    - podSelector:
+        matchExpressions:
+        - key: app
+          operator: In
+          values: [ "postgres", "postgresql", "mysql", "redis", "mongodb" ]
+    ports:
+    - protocol: TCP
+      port: 5432
+    - protocol: TCP
+      port: 3306
+    - protocol: TCP
+      port: 6379
+    - protocol: TCP
+      port: 27017
+---
+# Monitoring Access Policy - CORRECTED
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: myapp-monitoring-access
+  namespace: myapp-prod
+  labels:
+    app: myapp
+    app.kubernetes.io/component: security
+    app.kubernetes.io/part-of: myapp
+  annotations:
+    description: "Allow monitoring systems to scrape metrics"
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/part-of: myapp
+  policyTypes:
+  - Ingress
+  ingress:
+  # Allow monitoring from common monitoring namespaces
+  - from:
+    - namespaceSelector:
+        matchExpressions:
+        - key: name
+          operator: In
+          values: [ "monitoring", "prometheus", "grafana", "kube-system" ]
+    ports:
+    - protocol: TCP
+      port: 8080
+    - protocol: TCP
+      port: 9090

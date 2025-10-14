@@ -1,0 +1,1254 @@
+# ============================================================================
+# MongoDB Kubernetes Deployment - Production Ready (Fully Commented)
+# ============================================================================
+# 
+# PURPOSE: This manifest deploys MongoDB database in a Kubernetes cluster
+#          with production-ready configurations, security, and resource management.
+#
+# DEPLOYMENT ARCHITECTURE:
+# - Namespace: Logical isolation for MongoDB resources
+# - Storage: Local hostPath volumes with PV/PVC
+# - Security: RBAC, SecurityContext, Network Policies
+# - Resources: Quotas, limits, and requests
+# - Monitoring: Liveness and readiness probes
+#
+# DEPLOYMENT ORDER:
+# 1. StorageClass → 2. Namespace → 3. ResourceQuota → 4. LimitRange
+# 5. Secret → 6. ConfigMap → 7. PV → 8. PVC → 9. ServiceAccount
+# 10. Role → 11. RoleBinding → 12. Deployment → 13. Services
+#
+# ============================================================================
+
+---
+# ============================================================================
+# PART 1: STORAGECLASS
+# ============================================================================
+# TASK: Define how storage should be provisioned in the cluster
+#
+# WHAT IT DOES:
+# - Specifies storage provisioning behavior
+# - Uses "no-provisioner" for static local volumes (not dynamic provisioning)
+# - WaitForFirstConsumer: PVC waits for pod before binding (avoids mismatches)
+# - Defines storage class name "mongodb-local-storage"
+#
+# WHY IT'S NEEDED:
+# - PersistentVolumeClaim (PVC) references this StorageClass
+# - Ensures pods and volumes are created on the same node (data locality)
+# - Required for stateful applications like MongoDB
+#
+# WHEN IT'S USED:
+# - Before creating PersistentVolume and PersistentVolumeClaim
+# - Referenced by PVC in storage provisioning
+#
+# ============================================================================
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: mongodb-local-storage
+  # Name used by PVC to reference this storage class
+provisioner: kubernetes.io/no-provisioner
+  # "no-provisioner": Static volumes (PV created manually, not auto-provisioned)
+  # Alternative: "ebs.csi.aws.com" for AWS EBS, "pd.csi.storage.gke.io" for GCP
+volumeBindingMode: WaitForFirstConsumer
+  # WaitForFirstConsumer: Pod-aware binding
+  # Binds PV to PVC only when pod is scheduled
+  # Alternative: Immediate (binds immediately, may cause pod scheduling issues)
+allowVolumeExpansion: false
+  # false: Volume size cannot be expanded after creation
+  # true: Allows resizing PVC (requires storage backend support)
+
+---
+# ============================================================================
+# PART 2: NAMESPACE
+# ============================================================================
+# TASK: Create a logical partition for MongoDB resources
+#
+# WHAT IT DOES:
+# - Organizes all MongoDB resources in one namespace (mgdb-ns)
+# - Provides resource isolation and quota management
+# - Applies security policies to all pods in namespace
+# - Prevents resource conflicts between applications
+#
+# WHY IT'S NEEDED:
+# - Isolates MongoDB from other applications
+# - Allows different RBAC policies per namespace
+# - Enables resource quotas and limits
+# - Simplifies access control and monitoring
+#
+# KEY LABELS:
+# - environment: production (identifies environment)
+# - team: database-team (identifies responsible team)
+# - pod-security.kubernetes.io/enforce: baseline (enforces security standards)
+#
+# POD SECURITY STANDARDS:
+# - privileged: No restrictions (not recommended)
+# - baseline: Minimally restrictive (prevents known privilege escalations)
+# - restricted: Heavily restricted (follows pod hardening best practices)
+#
+# ============================================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mgdb-ns
+  # Namespace name used in all MongoDB resource definitions
+  labels:
+    name: mgdb-ns
+    environment: production
+      # Indicates this is for production use
+    team: database-team
+      # Indicates which team manages this
+    app.kubernetes.io/managed-by: kubectl
+      # Standard label: application is managed by kubectl
+    pod-security.kubernetes.io/enforce: baseline
+      # Enforces "baseline" pod security standard:
+      # - Restricts privileged containers
+      # - Prevents root user in some cases
+      # - Blocks hostPath volumes (except configMap, secret, etc.)
+      # Alternative levels: restricted (strict), baseline, privileged (none)
+    pod-security.kubernetes.io/audit: baseline
+      # Audits policy violations (logs when pods don't meet standard)
+    pod-security.kubernetes.io/warn: baseline
+      # Warns about policy violations (visible in kubectl output)
+  annotations:
+    description: "Namespace for mongodb-app application in production environment"
+    contact: "database-team@company.com"
+    created-by: "k8s-template-v2.0"
+spec:
+  finalizers: ["kubernetes"]
+    # Prevents namespace deletion until all resources are cleaned up
+    # Kubernetes waits for all objects to be deleted before removing namespace
+
+---
+# ============================================================================
+# PART 3: RESOURCEQUOTA
+# ============================================================================
+# TASK: Limit total resource consumption in the namespace
+#
+# WHAT IT DOES:
+# - Caps CPU, memory, and storage usage for entire namespace
+# - Prevents resource exhaustion from overprovisioning
+# - Ensures fair resource sharing in multi-tenant clusters
+#
+# WHY IT'S NEEDED:
+# - Prevents MongoDB from consuming all cluster resources
+# - Protects other applications from resource starvation
+# - Enforces cost control in shared clusters
+# - Enables chargeback and resource management
+#
+# HARD LIMITS EXPLAINED:
+# - requests.cpu: Total requested CPU = 2000m (2 CPUs)
+#   If pods request 2000m total, no new pods can be created
+# - requests.memory: Total requested memory = 4Gi
+#   If pods request 4Gi total, no new pods can be created
+# - limits.cpu: Cluster-enforced CPU limit = 4000m (4 CPUs)
+# - limits.memory: Cluster-enforced memory limit = 8Gi
+# - requests.storage: Total storage that can be requested = 100Gi
+# - persistentvolumeclaims: Maximum number of PVCs = 5
+# - pods: Maximum number of pods = 10
+# - services: Maximum number of services = 5
+# - secrets: Maximum number of secrets = 10
+# - configmaps: Maximum number of ConfigMaps = 10
+#
+# REQUESTS vs LIMITS:
+# - Requests: What pod asks for (used for scheduling)
+# - Limits: Maximum pod can use (enforced at runtime)
+#
+# ============================================================================
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: mgdb-ns-quota
+  namespace: mgdb-ns
+  # This quota applies only to resources in mgdb-ns namespace
+  labels:
+    component: resource-management
+    app.kubernetes.io/part-of: mongodb-app
+spec:
+  hard:
+    # CPU and Memory Requests (what pods ask for)
+    requests.cpu: "2000m"
+      # 2000 millicores = 2 full CPUs
+      # Sum of all "requests.cpu" in all pods cannot exceed this
+    requests.memory: "4Gi"
+      # 4 Gigabytes of memory
+      # Sum of all "requests.memory" in all pods cannot exceed this
+    
+    # CPU and Memory Limits (hard caps on actual usage)
+    limits.cpu: "4000m"
+      # 4 CPUs - hard ceiling for actual CPU consumption
+    limits.memory: "8Gi"
+      # 8 GB - hard ceiling for actual memory consumption
+    
+    # Storage limits
+    requests.storage: "100Gi"
+      # Maximum total storage that can be requested by PVCs
+    persistentvolumeclaims: "5"
+      # Maximum number of PVCs in namespace
+    
+    # Object count limits
+    pods: "10"
+      # Maximum number of pods allowed
+    services: "5"
+      # Maximum number of Services (LoadBalancers, NodePorts, etc.)
+    secrets: "10"
+      # Maximum number of Secrets (prevents configuration sprawl)
+    configmaps: "10"
+      # Maximum number of ConfigMaps
+    count/ingresses.networking.k8s.io: "5"
+      # Maximum number of Ingress resources
+
+---
+# ============================================================================
+# PART 4: LIMITRANGE
+# ============================================================================
+# TASK: Set default, minimum, and maximum resource limits per container
+#
+# WHAT IT DOES:
+# - Applies to individual pods/containers, not the entire namespace (unlike ResourceQuota)
+# - Prevents pods from requesting too little or too much resources
+# - Sets defaults if pod doesn't specify resources
+#
+# WHY IT'S NEEDED:
+# - Prevents resource starvation from underconfigured pods
+# - Prevents runaway pods from consuming excessive resources
+# - Provides intelligent defaults to reduce configuration errors
+# - Works together with ResourceQuota for defense-in-depth
+#
+# HOW IT WORKS:
+# When a pod is created:
+# 1. If no requests/limits specified → use default values
+# 2. Check if requests fall within min/max range
+# 3. Reject pod if outside allowed range
+# 4. Accept pod if within range
+#
+# RELATIONSHIP WITH RESOURCEQUOTA:
+# - LimitRange: Per-container/PVC limits
+# - ResourceQuota: Namespace-wide limits
+# - Both must be satisfied for pod to be created
+#
+# ============================================================================
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: mgdb-ns-limits
+  namespace: mgdb-ns
+  labels:
+    component: resource-management
+    app.kubernetes.io/part-of: mongodb-app
+spec:
+  limits:
+  
+  # ===== CONTAINER LIMITS =====
+  - type: Container
+    # These apply to individual containers
+    
+    default:
+      # Applied if container doesn't specify limits
+      cpu: 500m
+      memory: 512Mi
+      ephemeral-storage: 1Gi
+        # ephemeral-storage: Temporary storage (logs, emptyDir volumes)
+    
+    defaultRequest:
+      # Applied if container doesn't specify requests
+      # Requests = what pod reserves/asks for
+      # Limits = hard cap on actual usage
+      cpu: 250m
+      memory: 256Mi
+      ephemeral-storage: 500Mi
+    
+    max:
+      # Container cannot request more than this
+      cpu: 2000m
+      memory: 2Gi
+      ephemeral-storage: 5Gi
+    
+    min:
+      # Container must request at least this
+      cpu: 50m
+      memory: 64Mi
+      ephemeral-storage: 100Mi
+  
+  # ===== PERSISTENTVOLUMECLAIM LIMITS =====
+  - type: PersistentVolumeClaim
+    # These apply to individual PVCs
+    max:
+      storage: 50Gi
+      # PVC cannot request more than 50Gi
+    min:
+      storage: 1Gi
+      # PVC must request at least 1Gi
+
+---
+# ============================================================================
+# PART 5: SECRET
+# ============================================================================
+# TASK: Store sensitive credentials (MongoDB root username/password)
+#
+# WHAT IT DOES:
+# - Stores MongoDB admin credentials securely
+# - Data is base64-encoded (NOT encrypted by default, use secrets encryption for production)
+# - Referenced by Deployment via environment variables
+#
+# WHY IT'S NEEDED:
+# - Credentials should not be in container images or ConfigMaps
+# - Secrets are often encrypted at rest (if configured)
+# - Kubernetes tracks secret access in audit logs
+# - Separates secrets from configurations
+#
+# VALUES EXPLAINED:
+# - mongodb-root-username: YWRtaW4= → base64 for "admin"
+# - mongodb-root-password: U2VjdXJlUEBzc3cwcmQxMjM= → base64 for "SecureP@ssw0rd123"
+#
+# SECURITY NOTES:
+# - Base64 is encoding, NOT encryption (reversible!)
+# - Use etcd encryption in production: https://kubernetes.io/docs/tasks/administer-cluster/encrypt-data/
+# - Alternatively use external secrets: HashiCorp Vault, AWS Secrets Manager, etc.
+# - Never commit secrets to git (use .gitignore or sealed-secrets)
+#
+# HOW TO ENCODE/DECODE:
+# Encode: echo -n "admin" | base64
+# Decode: echo "YWRtaW4=" | base64 -d
+#
+# ============================================================================
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mongodb-secret
+  # Name used to reference this secret in Deployment
+  namespace: mgdb-ns
+  labels:
+    app: mongodb
+    component: database
+type: Opaque
+# Opaque: Default type for arbitrary data
+# Alternatives: kubernetes.io/service-account-token, kubernetes.io/dockercfg, etc.
+data:
+  # Base64-encoded credentials
+  mongodb-root-username: YWRtaW4=
+    # Decoded: admin
+    # To decode: echo "YWRtaW4=" | base64 -d
+    # To encode: echo -n "admin" | base64
+  mongodb-root-password: U2VjdXJlUEBzc3cwcmQxMjM=
+    # Decoded: SecureP@ssw0rd123
+    # ⚠️ WARNING: Use strong passwords in production!
+    # Consider: 
+    #   - Generating with password managers
+    #   - Using external secrets (Vault, AWS Secrets Manager)
+    #   - Rotating regularly
+
+---
+# ============================================================================
+# PART 6: CONFIGMAP
+# ============================================================================
+# TASK: Store MongoDB configuration file
+#
+# WHAT IT DOES:
+# - Stores MongoDB configuration in key-value format
+# - Mounted as file in pod at /etc/mongo/mongodb.conf
+# - Separated from application code and secrets
+# - Can be updated without rebuilding container image
+#
+# WHY IT'S NEEDED:
+# - Configuration should be externalized from application
+# - Different environments may need different configurations
+# - Allows configuration changes without pod restart (in some cases)
+# - Follows 12-factor app methodology
+#
+# MONGODB CONFIGURATION EXPLAINED:
+# storage.dbPath: Where MongoDB stores data files
+# storage.journal.enabled: Write-ahead logging (prevents data loss on crash)
+# storage.wiredTiger.engineConfig.cacheSizeGB: Memory cache for database
+# systemLog.destination: Where to write logs (file in this case)
+# net.port: Port MongoDB listens on
+# net.bindIp: 0.0.0.0 means bind to all network interfaces
+# security.authorization: Enable user authentication
+# replication.replSetName: Name of replica set for replication
+#
+# ============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mongodb-config
+  namespace: mgdb-ns
+  labels:
+    app: mongodb
+    component: database
+data:
+  # Key: mongodb.conf
+  # Value: MongoDB configuration file content
+  mongodb.conf: |
+    # STORAGE CONFIGURATION
+    storage:
+      dbPath: /data/db
+        # Where MongoDB stores database files
+      journal:
+        enabled: true
+        # Write-ahead logging: ensures durability on crash
+        # Journal records operations before applying to database
+      wiredTiger:
+        engineConfig:
+          cacheSizeGB: 1
+          # In-memory cache for frequently accessed data
+          # Recommended: 50% of available RAM minus 1GB for system
+    
+    # LOGGING CONFIGURATION
+    systemLog:
+      destination: file
+        # Log to file (alternative: stdout)
+      path: /var/log/mongodb/mongod.log
+        # Log file location
+      logAppend: true
+        # Append logs instead of overwriting
+    
+    # NETWORK CONFIGURATION
+    net:
+      port: 27017
+        # MongoDB default port
+      bindIp: 0.0.0.0
+        # Listen on all network interfaces
+        # Note: 0.0.0.0 means all interfaces (be careful with exposure)
+        # Alternative: 127.0.0.1 (localhost only)
+    
+    # SECURITY CONFIGURATION
+    security:
+      authorization: enabled
+        # Enable user authentication
+        # All connections must authenticate
+    
+    # REPLICATION CONFIGURATION
+    replication:
+      replSetName: "rs0"
+        # Replica set name for replication
+        # Required for MongoDB replica sets (HA setup)
+
+---
+# ============================================================================
+# PART 7: PERSISTENTVOLUME (PV)
+# ============================================================================
+# TASK: Create physical storage that persists beyond pod lifecycle
+#
+# WHAT IT DOES:
+# - Allocates 10Gi of storage from host filesystem
+# - Uses hostPath (local filesystem) - suitable for testing, NOT production
+# - Tied to specific node (k8s-master) via nodeAffinity
+# - Reclaimed after pod deletion (Delete policy)
+#
+# WHY IT'S NEEDED:
+# - MongoDB data must persist across pod restarts
+# - Without PV: Data lost when pod crashes
+# - With PV: Data survives pod failures
+# - Kubernetes manages PV lifecycle
+#
+# IMPORTANT NOTES:
+# - hostPath is for DEVELOPMENT/TESTING ONLY
+# - For PRODUCTION use:
+#   - AWS EBS: provisioner: ebs.csi.aws.com
+#   - GCP PD: provisioner: pd.csi.storage.gke.io
+#   - Azure Disk: provisioner: disk.csi.azure.com
+#   - NFS: provisioner: kubernetes.io/nfs
+#
+# SETUP REQUIRED ON WORKER NODE:
+# $ sudo mkdir -p /mnt/data/mongodb
+# $ sudo chmod 777 /mnt/data/mongodb
+# Run this command on k8s-master (or specified node)
+#
+# ACCESS MODES:
+# - ReadWriteOnce (RWO): Single node, read/write
+# - ReadOnlyMany (ROX): Multiple nodes, read-only
+# - ReadWriteMany (RWX): Multiple nodes, read/write (requires shared storage)
+#
+# ============================================================================
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: mongodb-pv
+  labels:
+    app: mongodb
+spec:
+  capacity:
+    storage: 10Gi
+      # Volume size: 10 Gigabytes
+  
+  accessModes:
+    - ReadWriteOnce
+      # ReadWriteOnce: Volume can be mounted by one pod, read/write
+      # Alternatives:
+      # - ReadWriteMany: Multiple pods, read/write (requires shared storage)
+      # - ReadOnlyMany: Multiple pods, read-only
+  
+  storageClassName: mongodb-local-storage
+    # References StorageClass defined earlier
+    # PVC will bind to PVs with matching storageClassName
+  
+  persistentVolumeReclaimPolicy: Delete
+    # What happens to volume when PVC is deleted:
+    # - Delete: Volume is deleted (data loss!)
+    # - Retain: Volume kept, manual cleanup required
+    # - Recycle: Data deleted, volume reused (deprecated)
+  
+  hostPath:
+    path: /mnt/data/mongodb
+      # Path on host node where data is stored
+      # ⚠️ This is node-local storage (not shared across cluster)
+    type: DirectoryOrCreate
+      # DirectoryOrCreate: Create directory if not exists
+      # Alternatives: Directory (must exist), File, Socket, etc.
+  
+  nodeAffinity:
+    # Restricts where this PV can be used
+    required:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: kubernetes.io/hostname
+            # Node label: hostname
+          operator: In
+            # operator In: hostname must match one of values
+          values:
+          - k8s-master
+            # Only available on node named k8s-master
+            # If this node goes down, pod cannot start!
+            # For HA: Use multiple nodes or shared storage
+
+---
+# ============================================================================
+# PART 8: PERSISTENTVOLUMECLAIM (PVC)
+# ============================================================================
+# TASK: Request storage resources (like a "purchase order" for storage)
+#
+# WHAT IT DOES:
+# - Requests 10Gi of storage from cluster
+# - Kubernetes automatically binds this PVC to a matching PV
+# - Pod uses this PVC (not PV directly)
+# - Simplifies storage provisioning for applications
+#
+# WHY IT'S NEEDED:
+# - Pod doesn't need to know about specific PV
+# - Kubernetes handles binding automatically
+# - Enables portability (same PVC works on different clusters)
+# - Separates storage provisioning from application definition
+#
+# HOW IT WORKS:
+# 1. PVC asks for 10Gi with "mongodb-local-storage" storageClass
+# 2. Kubernetes finds matching PV (same storageClass, enough space)
+# 3. PVC binds to PV (1:1 mapping)
+# 4. Pod can now use this storage via PVC name
+#
+# BINDING PROCESS:
+# - Static Provisioning: PVC binds to existing PV
+# - Dynamic Provisioning: StorageClass creates PV automatically
+# - This manifest uses static provisioning (PV created manually)
+#
+# ============================================================================
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mongodb-pvc
+  # Name used by Deployment to reference this claim
+  namespace: mgdb-ns
+  labels:
+    app: mongodb
+spec:
+  accessModes:
+    - ReadWriteOnce
+      # Single pod can read/write
+      # Must match PV's accessMode
+  
+  resources:
+    requests:
+      storage: 10Gi
+        # Request 10GB of storage
+        # Must be <= PV's capacity
+  
+  storageClassName: mongodb-local-storage
+    # Look for PV with this storageClass
+    # Must match PV's storageClassName
+
+---
+# ============================================================================
+# PART 9: SERVICEACCOUNT
+# ============================================================================
+# TASK: Create identity for MongoDB pod
+#
+# WHAT IT DOES:
+# - Creates Kubernetes identity/principal for MongoDB pod
+# - Pod uses this ServiceAccount to authenticate to API server
+# - Enables RBAC (role-based access control)
+# - Tracks which pod performs which actions
+#
+# WHY IT'S NEEDED:
+# - Pod may need to access Kubernetes API
+# - RBAC requires identity (ServiceAccount) to apply rules
+# - Audit logs track actions to ServiceAccount
+# - Enables fine-grained access control
+#
+# HOW IT WORKS:
+# 1. Pod runs with this ServiceAccount
+# 2. Pod receives JWT token (stored in /var/run/secrets/kubernetes.io/serviceaccount/)
+# 3. Pod uses token to authenticate API requests
+# 4. API server checks RBAC rules for this ServiceAccount
+# 5. Request allowed/denied based on Role/RoleBinding
+#
+# AUTOMOUNTSERVICEACCOUNTTOKEN:
+# - true: Automatically inject ServiceAccount token in pod
+# - false: Don't inject token (pod can't access API)
+#
+# DEFAULT SERVICEACCOUNT:
+# - Every namespace has a "default" ServiceAccount
+# - This creates a custom ServiceAccount with specific permissions
+#
+# ============================================================================
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: mongodb-sa
+  # Name used by Deployment
+  namespace: mgdb-ns
+  labels:
+    app: mongodb
+automountServiceAccountToken: true
+  # Pod will automatically receive ServiceAccount token
+  # Token mounted at: /var/run/secrets/kubernetes.io/serviceaccount/token
+  # Set to false if pod doesn't need API access
+
+---
+# ============================================================================
+# PART 10: ROLE
+# ============================================================================
+# TASK: Define permissions for ServiceAccount
+#
+# WHAT IT DOES:
+# - Specifies what actions are allowed on which resources
+# - Example: "mongodb-sa can GET pods and ConfigMaps in mgdb-ns"
+# - Used by RoleBinding to grant permissions to users/services
+#
+# WHY IT'S NEEDED:
+# - Implements principle of least privilege
+# - Pod only gets permissions it actually needs
+# - Prevents compromised pod from accessing everything
+# - Follows security best practices
+#
+# RULES EXPLAINED:
+# Each rule specifies:
+# - apiGroups: API group (empty string "" = core API)
+# - resources: What objects (pods, configmaps, secrets, etc.)
+# - verbs: What actions (get, list, watch, create, delete, etc.)
+#
+# ROLE vs CLUSTERROLE:
+# - Role: Namespace-scoped (only affects resources in one namespace)
+# - ClusterRole: Cluster-scoped (affects resources across all namespaces)
+#
+# COMMON VERBS:
+# - get: Retrieve individual resource
+# - list: List all resources of a type
+# - watch: Stream updates to resources
+# - create: Create new resources
+# - update: Modify existing resources
+# - patch: Partially modify resources
+# - delete: Delete resources
+#
+# ============================================================================
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: mongodb-role
+  # Name used by RoleBinding
+  namespace: mgdb-ns
+  labels:
+    app: mongodb
+rules:
+  
+  # Rule 1: Pod introspection
+  - apiGroups: [""]
+      # "" = core Kubernetes API (v1 API group)
+    resources: ["pods", "pods/log"]
+      # Can access pods and their logs
+      # pods: Read pod metadata
+      # pods/log: Read pod logs
+    verbs: ["get", "list", "watch"]
+      # Allowed actions:
+      # - get: Retrieve individual pod
+      # - list: List all pods
+      # - watch: Stream pod changes
+  
+  # Rule 2: ConfigMap access
+  - apiGroups: [""]
+    resources: ["configmaps"]
+      # Can access ConfigMaps
+    verbs: ["get", "list", "watch"]
+      # Read-only access
+      # Allows pod to read configuration dynamically
+  
+  # Rule 3: Secret access
+  - apiGroups: [""]
+    resources: ["secrets"]
+      # Can access Secrets
+    verbs: ["get"]
+      # Only GET, not LIST or WATCH (more secure)
+      # Prevents pod from listing all secrets
+      # Pod must know secret name to access it
+  
+  # Rule 4: Endpoint discovery
+  - apiGroups: [""]
+    resources: ["endpoints"]
+      # Can access Endpoints (service discovery)
+    verbs: ["get", "list", "watch"]
+      # Used for discovering other services
+      # Endpoints contain IP addresses of service backends
+
+---
+# ============================================================================
+# PART 11: ROLEBINDING
+# ============================================================================
+# TASK: Grant Role permissions to ServiceAccount
+#
+# WHAT IT DOES:
+# - Connects ServiceAccount (who) with Role (permissions)
+# - Says: "Give mongodb-sa the permissions defined in mongodb-role"
+# - Without RoleBinding: Role exists but nobody has those permissions
+#
+# WHY IT'S NEEDED:
+# - RBAC requires both Role AND RoleBinding
+# - Role = permission specification (like a job description)
+# - RoleBinding = granting role to user (like hiring someone)
+#
+# HOW IT WORKS:
+# When pod (using mongodb-sa) makes API request:
+# 1. API server sees request comes from mongodb-sa
+# 2. Looks up RoleBindings for mongodb-sa
+# 3. Finds mongodb-rolebinding
+# 4. Checks permissions in referenced Role (mongodb-role)
+# 5. Allows/denies request based on permissions
+#
+# SUBJECTS:
+# - ServiceAccount: Identity for pods
+# - User: Human user
+# - Group: Group of users
+#
+# ROLEREF:
+# - Role: Namespace-scoped permissions
+# - ClusterRole: Cluster-scoped permissions
+#
+# ============================================================================
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: mongodb-rolebinding
+  namespace: mgdb-ns
+  labels:
+    app: mongodb
+subjects:
+  # WHO gets the permissions
+  - kind: ServiceAccount
+      # Subject type: ServiceAccount
+    name: mongodb-sa
+      # Name of ServiceAccount
+    namespace: mgdb-ns
+      # Namespace where ServiceAccount exists
+roleRef:
+  # WHAT permissions to grant
+  kind: Role
+    # Reference type: Role (not ClusterRole)
+  name: mongodb-role
+    # Name of Role to apply
+  apiGroup: rbac.authorization.k8s.io
+    # API group for RBAC resources
+
+---
+# ============================================================================
+# PART 12: DEPLOYMENT
+# ============================================================================
+# TASK: Deploy MongoDB pod with configuration
+#
+# WHAT IT DOES:
+# - Creates and manages MongoDB pod
+# - Ensures pod runs (restarts if it crashes)
+# - Handles rolling updates and rollbacks
+# - Maintains desired number of replicas
+#
+# WHY IT'S NEEDED:
+# - Pod alone is ephemeral (gets deleted if node fails)
+# - Deployment provides pod management:
+#   - Restart crashed pods
+#   - Scale up/down replicas
+#   - Update application version
+#   - Rollback to previous version
+#
+# REPLICAS: 1 (Single MongoDB instance)
+# - Note: For HA, need StatefulSet with 3+ replicas
+# - This deployment is for single-instance setup
+#
+# DEPLOYMENT vs STATEFULSET:
+# - Deployment: For stateless applications (order doesn't matter)
+# - StatefulSet: For stateful applications (stable identity, ordered deployment)
+# - MongoDB replica sets should use StatefulSet
+#
+# ============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mongodb-deployment
+  namespace: mgdb-ns
+  labels:
+    app: mongodb
+    version: "7.0.12"
+      # MongoDB version (for tracking)
+spec:
+  # ===== REPLICA CONFIGURATION =====
+  replicas: 1
+    # Number of pods to run
+    # 1 = single MongoDB instance
+    # Note: MongoDB replica set (replication) is different from k8s replicas
+    # For HA MongoDB: Use StatefulSet with 3 replicas + MongoDB replica set
+  
+  # ===== UPDATE STRATEGY =====
+  strategy:
+    type: Recreate
+      # Recreate: Delete old pod, then create new pod
+      # Alternative: RollingUpdate (create new, then delete old)
+      # Recreate used because MongoDB needs clean shutdown
+      # RollingUpdate would create two pods accessing same PVC (not allowed with ReadWriteOnce)
+  
+  # ===== POD SELECTION =====
+  selector:
+    matchLabels:
+      app: mongodb
+      # Deployment manages all pods with label "app: mongodb"
+      # Must match pod template labels
+  
+  # ===== POD TEMPLATE =====
+  template:
+    metadata:
+      labels:
+        app: mongodb
+        # Pod label for Deployment selection
+        version: "7.0.12"
+        # For tracking which version is running
+    
+    spec:
+      # ===== SERVICE ACCOUNT =====
+      serviceAccountName: mongodb-sa
+        # Pod uses this ServiceAccount
+        # Grants RBAC permissions to pod
+        # If omitted, uses "default" ServiceAccount
+      
+      # ===== POD-LEVEL SECURITY CONTEXT =====
+      securityContext:
+        # Applies to all containers in pod
+        fsGroup: 999
+          # Files created by container have group 999
+          # MongoDB runs as user 999, group 999
+          # This ensures proper file permissions
+          # All processes in pod are part of fsGroup
+        runAsNonRoot: true
+          # Container must run as non-root user
+          # Prevents privilege escalation
+          # Kubernetes denies if image tries to run as root
+        runAsUser: 999
+          # Run container as user ID 999
+          # In MongoDB image, this is the 'mongodb' user
+      
+      # ===== CONTAINERS =====
+      containers:
+      - name: mongodb
+          # Container name
+        
+        image: mongo:7.0.12
+          # Docker image: MongoDB version 7.0.12
+          # Repository: Docker Hub official image
+          # Format: [registry]/[repository]:[tag]
+          # Full format: docker.io/library/mongo:7.0.12
+        
+        imagePullPolicy: IfNotPresent
+          # Pull image only if not present locally
+          # Alternatives:
+          # - Always: Always pull (ensures latest)
+          # - Never: Use local image only
+        
+        # ===== PORTS =====
+        ports:
+        - name: mongodb
+            # Port name (referenced by Service)
+          containerPort: 27017
+            # Port inside container
+            # MongoDB default port
+          protocol: TCP
+            # Protocol: TCP
+        
+        # ===== ENVIRONMENT VARIABLES =====
+        env:
+        - name: MONGO_INITDB_ROOT_USERNAME
+            # MongoDB initialization: root username env var
+            # Used during first MongoDB startup
+          valueFrom:
+            secretKeyRef:
+              name: mongodb-secret
+                # Reference Secret created earlier
+              key: mongodb-root-username
+                # Get this key from Secret
+          # Result: Username "admin" injected into container
+        
+        - name: MONGO_INITDB_ROOT_PASSWORD
+            # MongoDB initialization: root password env var
+          valueFrom:
+            secretKeyRef:
+              name: mongodb-secret
+              key: mongodb-root-password
+          # Result: Password injected into container
+          # MongoDB creates admin user with these credentials on first start
+        
+        - name: MONGOD_OPTS
+            # Additional MongoDB options
+          value: "--bind_ip_all --replSet rs0"
+          # --bind_ip_all: Listen on all interfaces (0.0.0.0)
+          # --replSet rs0: Initialize replica set named "rs0"
+        
+        # ===== RESOURCE REQUESTS & LIMITS =====
+        resources:
+          # Resource management for container
+          requests:
+            cpu: 250m
+              # Request 250 millicores (0.25 CPU)
+              # Kubernetes reserves this much CPU for pod
+              # Used for scheduling decisions
+              # Pod won't be scheduled if node doesn't have 250m available
+            memory: 256Mi
+              # Request 256 MiB of memory
+              # Kubernetes reserves this much RAM for pod
+          
+          limits:
+            cpu: 1000m
+              # Hard limit: 1 CPU (1000 millicores)
+              # Pod throttled if exceeds this
+              # CPU is compressible (pod slowed down, not killed)
+            memory: 1Gi
+              # Hard limit: 1 GiB of memory
+              # Pod killed if exceeds this (OOMKilled)
+              # Memory is incompressible (cannot be throttled)
+        
+        # ===== LIVENESS PROBE =====
+        livenessProbe:
+          # Checks if container is alive
+          # If fails: Kubernetes restarts container
+          # Purpose: Detect deadlocks, infinite loops, or crashed processes
+          exec:
+            command:
+              - mongosh
+                # MongoDB shell command (mongosh = new shell, mongo = old shell)
+              - --eval
+                # Execute JavaScript code
+              - "db.adminCommand('ping')"
+                # Send ping to MongoDB
+                # Returns { ok: 1 } if MongoDB is responsive
+          initialDelaySeconds: 30
+            # Wait 30s before first probe (let MongoDB start)
+            # MongoDB needs time to initialize
+          periodSeconds: 10
+            # Check every 10 seconds
+          timeoutSeconds: 5
+            # Fail if response takes >5 seconds
+          failureThreshold: 3
+            # Restart if 3 consecutive probes fail
+            # Total time to restart: 30s
+          # Total time to restart: initialDelay + (periodSeconds * failureThreshold)
+          # = 30s + (10s * 3) = 60s maximum
+        
+        # ===== READINESS PROBE =====
+        readinessProbe:
+          # Checks if container is ready to receive traffic
+          # If fails: Remove pod from Service endpoints (traffic stops)
+          # Pod may become ready again (unlike liveness)
+          # Purpose: Prevent traffic to pod during startup or maintenance
+          exec:
+            command:
+              - mongosh
+              - --eval
+              - "db.adminCommand('ping')"
+          initialDelaySeconds: 10
+            # Wait 10s before first probe
+            # Shorter than liveness (readiness can fail without restart)
+          periodSeconds: 5
+            # Check every 5 seconds (more frequent than liveness)
+          timeoutSeconds: 5
+            # Fail if response takes >5 seconds
+          failureThreshold: 2
+            # Remove from Service endpoints after 2 failures
+          # Total time to mark not ready: 10s + (5s * 2) = 20s
+        
+        # ===== VOLUME MOUNTS =====
+        volumeMounts:
+        - name: mongodb-storage
+            # Volume name (references volumes section)
+          mountPath: /data/db
+            # Where to mount inside container
+            # MongoDB's default data directory
+          # PersistentVolume data mounted here
+        
+        - name: mongodb-config
+            # ConfigMap volume
+          mountPath: /etc/mongo
+            # Where to mount inside container
+            # MongoDB configuration directory
+          # ConfigMap mounted as files here
+        
+        # ===== CONTAINER-LEVEL SECURITY CONTEXT =====
+        securityContext:
+          # Applies to this container only
+          # Overrides pod-level securityContext if specified
+          allowPrivilegeEscalation: false
+            # Prevents gaining more privileges than parent process
+            # Blocks setuid binaries and similar escalation paths
+          readOnlyRootFilesystem: false
+            # false: Root filesystem is writable
+            # true: Root filesystem is read-only (more secure)
+            # MongoDB needs writable filesystem for temporary files
+          capabilities:
+            drop:
+              - ALL
+            # Drop all Linux capabilities
+            # Capabilities are fine-grained permissions (e.g., NET_ADMIN, SYS_TIME)
+            # Dropping ALL removes all special permissions
+            # Alternative: add specific capabilities if needed
+      
+      # ===== VOLUMES =====
+      volumes:
+      - name: mongodb-storage
+          # Volume name (referenced by volumeMounts)
+        persistentVolumeClaim:
+          claimName: mongodb-pvc
+            # Reference PVC created earlier
+            # Pod uses storage from this PVC
+      
+      - name: mongodb-config
+          # ConfigMap volume
+        configMap:
+          name: mongodb-config
+            # Reference ConfigMap created earlier
+            # ConfigMap mounted as files
+      
+      # ===== RESTART POLICY =====
+      restartPolicy: Always
+        # Always restart container if it fails
+        # Alternatives:
+        # - OnFailure: Restart only if exit code != 0
+        # - Never: Never restart
+      
+      # ===== TERMINATION GRACE PERIOD =====
+      terminationGracePeriodSeconds: 30
+        # Time to wait before killing pod during shutdown
+        # Process:
+        # 1. Send SIGTERM to container
+        # 2. Wait up to 30 seconds
+        # 3. Send SIGKILL if still running
+        # Allows MongoDB to flush data and close connections gracefully
+      
+      # ===== AFFINITY RULES =====
+      affinity:
+        podAntiAffinity:
+          # Spread pods across nodes (avoid single point of failure)
+          preferredDuringSchedulingIgnoredDuringExecution:
+            # Preferred: Try to follow rule, but not required
+            # Alternative: requiredDuringSchedulingIgnoredDuringExecution (hard requirement)
+          - weight: 100
+              # Priority weight (higher = more important)
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - mongodb
+                    # Don't schedule MongoDB pods on same node
+              topologyKey: kubernetes.io/hostname
+                # Spread across nodes (hostname = node identifier)
+                # Alternative: topology.kubernetes.io/zone (spread across zones)
+      
+      # ===== TOLERATIONS =====
+      tolerations:
+        # Allows pod to run on nodes with matching taints
+        # Taints repel pods; tolerations allow specific pods
+      - key: "node-role.kubernetes.io/master"
+          # Tolerate master node taint
+        operator: "Exists"
+          # If taint exists, tolerate it (ignore value)
+        effect: "NoSchedule"
+          # Taint effect: NoSchedule (pod won't be scheduled without toleration)
+      
+      - key: "node-role.kubernetes.io/control-plane"
+          # Tolerate control-plane node taint (newer Kubernetes)
+        operator: "Exists"
+        effect: "NoSchedule"
+        # These tolerations allow MongoDB to run on master/control-plane nodes
+        # Useful for single-node clusters or development
+
+---
+# ============================================================================
+# PART 13: SERVICE (ClusterIP)
+# ============================================================================
+# TASK: Expose MongoDB within the cluster
+#
+# WHAT IT DOES:
+# - Creates stable internal DNS name (mongodb-service.mgdb-ns.svc.cluster.local)
+# - Load balances traffic to MongoDB pods
+# - Provides stable IP address (ClusterIP)
+# - Enables service discovery
+#
+# WHY IT'S NEEDED:
+# - Pod IP addresses change when pods restart
+# - Service provides stable endpoint
+# - Other applications connect to Service, not Pod
+# - Kubernetes handles routing to healthy pods
+#
+# SERVICE TYPES:
+# - ClusterIP: Internal only (cluster-internal IP)
+# - NodePort: Expose on every node's IP
+# - LoadBalancer: External load balancer (cloud provider)
+# - ExternalName: CNAME record to external service
+#
+# HOW IT WORKS:
+# 1. Application queries DNS: mongodb-service.mgdb-ns.svc.cluster.local
+# 2. DNS returns ClusterIP (e.g., 10.96.0.100)
+# 3. Application connects to ClusterIP:27017
+# 4. kube-proxy routes traffic to pod IP
+# 5. Pod receives connection
+#
+# ============================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongodb-service
+    # Service name (used in DNS)
+    # Full DNS: mongodb-service.mgdb-ns.svc.cluster.local
+  namespace: mgdb-ns
+  labels:
+    app: mongodb
+spec:
+  type: ClusterIP
+    # Internal service only (not accessible from outside cluster)
+    # Alternatives:
+    # - NodePort: Accessible via node IP:port
+    # - LoadBalancer: Cloud load balancer
+  
+  selector:
+    app: mongodb
+    # Route traffic to pods with label "app: mongodb"
+    # Service automatically discovers matching pods
+  
+  ports:
+  - port: 27017
+      # Service port (what clients connect to)
+    targetPort: mongodb
+      # Pod port (where traffic is routed)
+      # References container port name "mongodb"
+      # Alternative: Use port number (27017)
+    protocol: TCP
+      # Protocol: TCP
+    name: mongodb
+      # Port name
+  
+  sessionAffinity: None
+    # None: Round-robin load balancing
+    # ClientIP: Sticky sessions (same client → same pod)
+
+---
+# ============================================================================
+# PART 14: SERVICE (NodePort)
+# ============================================================================
+# TASK: Expose MongoDB externally for testing/development
+#
+# WHAT IT DOES:
+# - Exposes MongoDB on every node's IP address
+# - Accessible via <NodeIP>:30017 from outside cluster
+# - Still creates ClusterIP for internal access
+#
+# WHY IT'S NEEDED:
+# - Allows external tools to connect (e.g., MongoDB Compass)
+# - Useful for development and testing
+# - NOT recommended for production (use LoadBalancer or Ingress)
+#
+# SECURITY WARNING:
+# - NodePort exposes service to external network
+# - Make sure firewall rules are properly configured
+# - Use authentication (enabled in this config)
+# - Consider using VPN or bastion host for production
+#
+# HOW TO CONNECT:
+# External: mongo://admin:SecureP@ssw0rd123@<NODE_IP>:30017
+# Internal: mongo://admin:SecureP@ssw0rd123@mongodb-service:27017
+#
+# NODEPORT RANGE:
+# - Default: 30000-32767
+# - Can be changed in kube-apiserver flags
+# - This manifest uses: 30017
+#
+# ============================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongodb-service-nodeport
+    # Different service name for NodePort
+  namespace: mgdb-ns
+  labels:
+    app: mongodb
+spec:
+  type: NodePort
+    # Expose on every node's IP
+  
+  selector:
+    app: mongodb
+    # Route traffic to pods with label "app: mongodb"
+  
+  ports:
+  - port: 27017
+      # Service port (internal)
+    targetPort: mongodb
+      # Pod port
+    nodePort: 30017
+      # External port on every node
+      # Accessible via <NodeIP>:30017
+    protocol: TCP
+    name: mongodb
+
+# ============================================================================
+# END OF MANIFEST
+# ============================================================================
+#
+# DEPLOYMENT INSTRUCTIONS:
+# 1. Create directory on worker node:
+#    sudo mkdir -p /mnt/data/mongodb && sudo chmod 777 /mnt/data/mongodb
+#
+# 2. Deploy manifest:
+#    kubectl apply -f mongodb-deployment.yaml
+#
+# 3. Verify deployment:
+#    kubectl get all -n mgdb-ns
+#    kubectl get pv,pvc -n mgdb-ns
+#
+# 4. Check pod logs:
+#    kubectl logs -n mgdb-ns deployment/mongodb-deployment
+#
+# 5. Connect to MongoDB:
+#    kubectl exec -it -n mgdb-ns deployment/mongodb-deployment -- mongosh
+#
+# 6. Test external connection (if using NodePort):
+#    mongosh --host <NODE_IP> --port 30017 -u admin -p SecureP@ssw0rd123
+#
+# TROUBLESHOOTING:
+# - Pod stuck in Pending: Check PV/PVC binding, node affinity
+# - Pod CrashLoopBackOff: Check logs, resource limits, probes
+# - Cannot connect: Check Service, NetworkPolicy, firewall
+# - Permission errors: Check securityContext, fsGroup
+#
+# PRODUCTION RECOMMENDATIONS:
+# 1. Use StatefulSet instead of Deployment for MongoDB replica sets
+# 2. Use cloud storage (EBS, PD) instead of hostPath
+# 3. Enable etcd encryption for Secrets
+# 4. Use external secrets manager (Vault, AWS Secrets Manager)
+# 5. Implement backup strategy (persistent volume snapshots)
+# 6. Configure monitoring (Prometheus, Grafana)
+# 7. Set up alerts for resource usage, pod health
+# 8. Use NetworkPolicy to restrict traffic
+# 9. Implement regular security scanning
+# 10. Document disaster recovery procedures
+#
+# ============================================================================

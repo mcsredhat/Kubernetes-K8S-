@@ -1,0 +1,83 @@
+kubectl get deployment metrics-server -n kube-system
+NAME             READY   UP-TO-DATE   AVAILABLE   AGE
+metrics-server   0/1     1            0           43s 
+kubectl get pods -n kube-system -l k8s-app=metrics-server -o wide
+kubectl logs -n kube-system -l k8s-app=metrics-server
+E1007 21:01:27.898942       1 scraper.go:149] "Failed to scrape node" err="Get \"https://172.31.29.230:10250/metrics/resource\": tls: failed to verify certificate: x509: cannot validate certificate for 172.31.29.230 because it doesn't contain any IP SANs" node="k8s-worker1"
+E1007 21:01:27.914173       1 scraper.go:149] "Failed to scrape node" err="Get \"https://172.31.24.197:10250/metrics/resource\": tls: failed to verify certificate: x509: cannot validate certificate for 172.31.24.197 because it doesn't contain any IP SANs" node="k8s-master"
+E1007 21:01:28.115160       1 scraper.go:149] "Failed to scrape node" err="Get \"https://100.121.197.110:10250/metrics/resource\": tls: failed to verify certificate: x509: cannot validate certificate for 100.121.197.110 because it doesn't contain any IP SANs" node="k8s-worker3"
+E1007 21:01:28.263131       1 scraper.go:149] "Failed to scrape node" err="Get \"https://100.72.236.100:10250/metrics/resource\": tls: failed to verify certificate: x509: cannot validate certificate for 100.72.236.100 because it doesn't contain any IP SANs" node="k8s-worker2"
+I1007 21:01:31.393006       1 server.go:192] "Failed probe" probe="metric-storage-ready" err="no metrics to serve"
+I1007 21:01:41.392888       1 server.go:192] "Failed probe" probe="metric-storage-ready" err="no metrics to serve"
+E1007 21:01:42.906872       1 scraper.go:149] "Failed to scrape node" err="Get \"https://172.31.24.197:10250/metrics/resource\": tls: failed to verify certificate: x509: cannot validate certificate for 172.31.24.197 because it doesn't contain any IP SANs" node="k8s-master"
+E1007 21:01:42.912951       1 scraper.go:149] "Failed to scrape node" err="Get \"https://172.31.29.230:10250/metrics/resource\": tls: failed to verify certificate: x509: cannot validate certificate for 172.31.29.230 because it doesn't contain any IP SANs" node="k8s-worker1"
+E1007 21:01:43.122177       1 scraper.go:149] "Failed to scrape node" err="Get \"https://100.121.197.110:10250/metrics/resource\": tls: failed to verify certificate: x509: cannot validate certificate for 100.121.197.110 because it doesn't contain any IP SANs" node="k8s-worker3"
+E1007 21:01:43.223185       1 scraper.go:149] "Failed to scrape node" err="Get \"https://100.72.236.100:10250/metrics/resource\": tls: failed to verify certificate: x509: cannot validate certificate for 100.72.236.100 because it doesn't contain any IP SANs" node="k8s-worker2"
+---
+
+### 🧩 Step 1: Confirm you added the flags
+
+Please run this command to verify that the **Metrics Server** deployment has the correct args:
+
+```bash
+kubectl get deployment metrics-server -n kube-system -o yaml | grep -A5 args:
+```
+
+You should see **both** of these lines under `args:`:
+
+```
+--kubelet-insecure-tls
+--kubelet-preferred-address-types=InternalIP,Hostname,ExternalIP
+```
+
+If not, you can patch them in directly (no need to edit manually):
+
+```bash
+kubectl patch deployment metrics-server -n kube-system \
+  --type='json' \
+  -p='[{"op": "add", "path": "/spec/template/spec/containers/0/args/-", "value": "--kubelet-insecure-tls"},
+       {"op": "add", "path": "/spec/template/spec/containers/0/args/-", "value": "--kubelet-preferred-address-types=InternalIP,Hostname,ExternalIP"}]'
+```
+
+---
+
+### 🌀 Step 2: Restart and wait
+
+After patching, restart the Metrics Server pod to force it to reinitialize:
+
+```bash
+kubectl rollout restart deployment metrics-server -n kube-system
+```
+
+Then wait until it’s ready:
+
+```bash
+kubectl get pods -n kube-system -l k8s-app=metrics-server
+```
+
+You should see:
+
+```
+metrics-server-xxxx   1/1   Running   0   <time>
+```
+
+---
+
+### 🧪 Step 3: Test again
+
+Once the pod is **Running** for at least 30–60 seconds, test again:
+
+```bash
+kubectl top nodes
+kubectl top pods -A
+```
+
+If it still fails, send me the output of:
+
+```bash
+kubectl logs -n kube-system -l k8s-app=metrics-server --tail=30
+```
+
+That will tell us if the scrape issue persists or if the API service isn’t registered yet.
+
+Would you like me to check which Metrics Server image version you’re running too (some older ones need a slightly different flag)?

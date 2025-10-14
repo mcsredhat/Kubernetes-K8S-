@@ -1,0 +1,501 @@
+# ============================================================================
+# 10-backup-maintenance.yaml - Multi-Cloud Backup & Rollback (CORRECTED)
+# ============================================================================
+# Purpose: Automated backup with comprehensive rollback - supports AWS/GCP/Azure
+# Dependencies: Uses myapp-sa with enhanced RBAC from 04-rbac.yaml
+# FIXES: Multi-cloud support, increased resource limits, fail-fast on errors
+# ============================================================================
+
+# Volume Snapshot Class - AWS
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshotClass
+metadata:
+  name: myapp-snapshot-class-aws
+  labels:
+    app: myapp
+    app.kubernetes.io/component: backup
+    cloud-provider: aws
+driver: ebs.csi.aws.com
+deletionPolicy: Retain
+parameters:
+  encrypted: "true"
+---
+# Volume Snapshot Class - GCP
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshotClass
+metadata:
+  name: myapp-snapshot-class-gcp
+  labels:
+    app: myapp
+    app.kubernetes.io/component: backup
+    cloud-provider: gcp
+driver: pd.csi.storage.gke.io
+deletionPolicy: Retain
+---
+# Volume Snapshot Class - Azure
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshotClass
+metadata:
+  name: myapp-snapshot-class-azure
+  labels:
+    app: myapp
+    app.kubernetes.io/component: backup
+    cloud-provider: azure
+driver: disk.csi.azure.com
+deletionPolicy: Retain
+---
+# ConfigMap for Backup Registry
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: myapp-backup-registry
+  namespace: myapp-prod
+  labels:
+    app: myapp
+    app.kubernetes.io/component: backup
+data:
+  last-successful-backup: ""
+  backup-count: "0"
+  last-restore: ""
+  backup-schedule: "0 2 * * *"
+---
+# Backup Storage PVC
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: myapp-backup-pvc
+  namespace: myapp-prod
+  labels:
+    app: myapp
+    app.kubernetes.io/component: backup-storage
+    app.kubernetes.io/part-of: myapp
+  annotations:
+    description: "Persistent storage for myapp backups"
+spec:
+  accessModes:
+  - ReadWriteOnce
+  storageClassName: "local-storage"
+  resources:
+    requests:
+      storage: 20Gi
+---
+# Enhanced Backup CronJob - CORRECTED with increased resources
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: myapp-backup
+  namespace: myapp-prod
+  labels:
+    app: myapp
+    app.kubernetes.io/component: backup
+  annotations:
+    description: "Automated daily backup with integrity verification"
+spec:
+  schedule: "0 2 * * *"
+  timeZone: "UTC"
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 3600
+  jobTemplate:
+    spec:
+      activeDeadlineSeconds: 3600
+      backoffLimit: 2
+      template:
+        metadata:
+          labels:
+            app: myapp-backup
+            app.kubernetes.io/component: backup
+        spec:
+          restartPolicy: OnFailure
+          serviceAccountName: myapp-sa
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65534
+            fsGroup: 65534
+          containers:
+          - name: backup
+            image: bitnami/kubectl:latest
+            command:
+            - /bin/bash
+            - -c
+            - |
+              set -e
+
+              BACKUP_DATE=$(date +%Y%m%d_%H%M%S)
+              BACKUP_DIR="/backup/"
+
+              echo "=== myapp Backup Started at $(date -Iseconds) ==="
+              mkdir -p ""
+
+              # Backup application data
+              if [ -d "/data" ] && [ "$(ls -A /data 2>/dev/null)" ]; then
+                tar -czf "/app-data.tar.gz" -C /data . || {
+                  echo "ERROR: Backup tar failed"
+                  exit 1
+                }
+                echo "✓ Data backup: $(ls -lh /app-data.tar.gz | awk '{print $5}')"
+              else
+                echo "⚠ No data to backup"
+                touch "/no-data-found"
+              fi
+
+              # Get deployment info for restore - CORRECTED: fail if not found
+              if ! REPLICAS=$(kubectl get deployment myapp-deployment -n myapp-prod -o jsonpath='{.spec.replicas}' 2>/dev/null); then
+                echo "ERROR: Cannot get deployment replica count"
+                exit 1
+              fi
+
+              # Create metadata
+              cat > "/backup-info.json" << EOF
+              {
+                "app": "myapp",
+                "environment": "production",
+                "namespace": "myapp-prod", 
+                "backup_date": "",
+                "backup_timestamp": "$(date -Iseconds)",
+                "backup_type": "automated",
+                "deployment_replicas": "3",
+                "storage_size": "20Gi",
+                "files": ["app-data.tar.gz"],
+                "status": "completed"
+              }
+              EOF
+
+              # Checksums
+              cd ""
+              if [ -f "app-data.tar.gz" ]; then
+                sha256sum app-data.tar.gz > checksums.sha256 || {
+                  echo "ERROR: Checksum creation failed"
+                  exit 1
+                }
+                echo "✓ Integrity checksums created"
+              fi
+
+              # Update registry
+              kubectl patch configmap myapp-backup-registry -n myapp-prod \
+                --type merge -p "{\"data\":{\"last-successful-backup\":\"\"}}" || true
+
+              # Cleanup old backups (keep last N days)
+              find /backup -name "20*" -type d -mtime +7 -exec rm -rf {} + 2>/dev/null || true
+
+              echo "=== Backup Summary ==="
+              echo "Size: $(du -sh  | cut -f1)"
+              echo "Location: "
+              echo "✓ Backup completed at $(date -Iseconds)"
+
+            volumeMounts:
+            - name: app-data
+              mountPath: /data
+              readOnly: true
+            - name: backup-storage
+              mountPath: /backup
+
+            resources:
+              requests:
+                memory: "512Mi"
+                cpu: "200m"
+              limits:
+                memory: "2Gi"
+                cpu: "1000m"
+
+          volumes:
+          - name: app-data
+            persistentVolumeClaim:
+              claimName: myapp-data-pvc
+          - name: backup-storage
+            persistentVolumeClaim:
+              claimName: myapp-backup-pvc
+---
+# AUTOMATED ROLLBACK JOB - One-Click Restoration (CORRECTED)
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: myapp-rollback
+  namespace: myapp-prod
+  labels:
+    app: myapp
+    app.kubernetes.io/component: rollback
+  annotations:
+    description: "One-click rollback to last known good backup"
+    usage: "kubectl create -f this-section.yaml"
+spec:
+  activeDeadlineSeconds: 3600
+  backoffLimit: 1
+  template:
+    metadata:
+      labels:
+        app: myapp-rollback
+    spec:
+      restartPolicy: Never
+      serviceAccountName: myapp-sa
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        fsGroup: 65534
+      initContainers:
+      - name: pre-rollback-check
+        image: busybox:1.36
+        command:
+        - /bin/sh
+        - -c
+        - |
+          echo "=== Pre-Rollback Validation ==="
+
+          LATEST_BACKUP=$(ls -t /backup | grep "^20" | head -n 1)
+
+          if [ -z "" ]; then
+            echo "ERROR: No backup found!"
+            exit 1
+          fi
+
+          echo "Latest backup: "
+
+          # Verify integrity
+          if [ -f "/backup//checksums.sha256" ]; then
+            cd /backup/
+            if sha256sum -c checksums.sha256; then
+              echo "✓ Backup integrity verified"
+            else
+              echo "ERROR: Checksum verification failed!"
+              exit 1
+            fi
+          fi
+
+          echo "" > /shared/backup-to-restore
+          echo "✓ Pre-rollback checks passed"
+        volumeMounts:
+        - name: backup-storage
+          mountPath: /backup
+          readOnly: true
+        - name: shared
+          mountPath: /shared
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m"
+
+      containers:
+      - name: rollback
+        image: bitnami/kubectl:latest
+        command:
+        - /bin/bash
+        - -c
+        - |
+          set -e
+
+          echo "=========================================="
+          echo "  AUTOMATED ROLLBACK PROCEDURE"
+          echo "=========================================="
+          echo "Application: myapp"
+          echo "Namespace: myapp-prod"
+          echo "Timestamp: $(date -Iseconds)"
+          echo ""
+
+          BACKUP_TO_RESTORE=$(cat /shared/backup-to-restore)
+          echo "Using backup: "
+          echo ""
+
+          # Step 1: Scale down - CORRECTED: fail if deployment doesn't exist
+          echo "Step 1: Scaling down application..."
+          if ! ORIGINAL_REPLICAS=$(kubectl get deployment myapp-deployment -n myapp-prod -o jsonpath='{.spec.replicas}' 2>/dev/null); then
+            echo "ERROR: Cannot find deployment myapp-deployment"
+            exit 1
+          fi
+          echo "  Current replicas: "
+
+          kubectl scale deployment myapp-deployment --replicas=0 -n myapp-prod || {
+            echo "ERROR: Failed to scale down"
+            exit 1
+          }
+          kubectl wait --for=delete pod -l app=myapp -n myapp-prod --timeout=300s || true
+          sleep 10
+          echo "  ✓ Application stopped"
+          echo ""
+
+          # Step 2: Safety backup
+          echo "Step 2: Creating safety backup..."
+          SAFETY_BACKUP="/backup/pre-rollback-$(date +%Y%m%d_%H%M%S)"
+          mkdir -p ""
+
+          if [ -d "/data" ] && [ "$(ls -A /data 2>/dev/null)" ]; then
+            tar -czf "/current-state.tar.gz" -C /data . 2>/dev/null || true
+            echo "  ✓ Safety backup: "
+          fi
+          echo ""
+
+          # Step 3: Clear data
+          echo "Step 3: Clearing current data..."
+          rm -rf /data/* /data/.* 2>/dev/null || true
+          echo "  ✓ Data cleared"
+          echo ""
+
+          # Step 4: Restore
+          echo "Step 4: Restoring from backup..."
+          cd /data
+
+          if [ -f "/backup//app-data.tar.gz" ]; then
+            tar -xzf "/backup//app-data.tar.gz" || {
+              echo "ERROR: Restore failed"
+              exit 1
+            }
+            echo "  ✓ Data restored"
+            echo "  Restored size: $(du -sh /data | cut -f1)"
+          else
+            echo "ERROR: Backup file not found!"
+            exit 1
+          fi
+          echo ""
+
+          # Step 5: Scale up
+          echo "Step 5: Scaling up application..."
+          kubectl scale deployment myapp-deployment --replicas= -n myapp-prod || {
+            echo "ERROR: Failed to scale up"
+            exit 1
+          }
+
+          echo "  Waiting for deployment..."
+          kubectl wait --for=condition=available --timeout=300s \
+            deployment/myapp-deployment -n myapp-prod || true
+          echo ""
+
+          # Step 6: Health check
+          echo "Step 6: Health check..."
+          sleep 10
+
+          READY_PODS=$(kubectl get pods -n myapp-prod -l app=myapp \
+            -o jsonpath='{.items[?(@.status.phase=="Running")].metadata.name}' | wc -w)
+
+          echo "  Ready pods:  / "
+          echo ""
+
+          # Update registry
+          kubectl patch configmap myapp-backup-registry -n myapp-prod \
+            --type merge -p "{\"data\":{\"last-restore\":\"$(date -Iseconds)\",\"restored-from\":\"\"}}" || true
+
+          echo "=========================================="
+          echo "  ROLLBACK COMPLETED"
+          echo "=========================================="
+          echo "Restored from: "
+          echo "Application: Running ( pods)"
+          echo "Safety backup: "
+          echo "=========================================="
+
+        volumeMounts:
+        - name: app-data
+          mountPath: /data
+        - name: backup-storage
+          mountPath: /backup
+          readOnly: true
+        - name: shared
+          mountPath: /shared
+          readOnly: true
+
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "200m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+
+      volumes:
+      - name: app-data
+        persistentVolumeClaim:
+          claimName: myapp-data-pvc
+      - name: backup-storage
+        persistentVolumeClaim:
+          claimName: myapp-backup-pvc
+      - name: shared
+        emptyDir: {}
+---
+# Volume Snapshot CronJob - CORRECTED with cloud provider detection
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: myapp-snapshot
+  namespace: myapp-prod
+  labels:
+    app: myapp
+    app.kubernetes.io/component: backup
+spec:
+  schedule: "0 1 * * 0"
+  timeZone: "UTC"
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 1
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      activeDeadlineSeconds: 1800
+      template:
+        spec:
+          restartPolicy: OnFailure
+          serviceAccountName: myapp-sa
+          containers:
+          - name: snapshot-creator
+            image: bitnami/kubectl:latest
+            env:
+            - name: CLOUD_PROVIDER
+              value: ""
+            command:
+            - /bin/bash
+            - -c
+            - |
+              SNAPSHOT_NAME="myapp-auto-$(date +%Y%m%d-%H%M%S)"
+
+              # Determine snapshot class based on cloud provider
+              case "" in
+                aws)
+                  SNAPSHOT_CLASS="myapp-snapshot-class-aws"
+                  ;;
+                gcp)
+                  SNAPSHOT_CLASS="myapp-snapshot-class-gcp"
+                  ;;
+                azure)
+                  SNAPSHOT_CLASS="myapp-snapshot-class-azure"
+                  ;;
+                *)
+                  echo "ERROR: Unknown cloud provider: "
+                  echo "Set CLOUD_PROVIDER to: aws, gcp, or azure"
+                  exit 1
+                  ;;
+              esac
+
+              echo "Creating snapshot using class: "
+
+              cat <<EOF | kubectl apply -f -
+              apiVersion: snapshot.storage.k8s.io/v1
+              kind: VolumeSnapshot
+              metadata:
+                name: 
+                namespace: myapp-prod
+                labels:
+                  app: myapp
+                  backup-type: automated
+                  cloud-provider: 
+                annotations:
+                  created-by: "snapshot-cronjob"
+                  backup-date: "$(date -Iseconds)"
+              spec:
+                volumeSnapshotClassName: 
+                source:
+                  persistentVolumeClaimName: myapp-data-pvc
+              EOF
+
+              echo "✓ Created snapshot: "
+
+              # Cleanup old snapshots (keep last N)
+              kubectl get volumesnapshots -n myapp-prod \
+                -l backup-type=automated \
+                --sort-by=.metadata.creationTimestamp \
+                -o name | head -n -4 | xargs -r kubectl delete -n myapp-prod || true
+            resources:
+              requests:
+                memory: "64Mi"
+                cpu: "50m"
+              limits:
+                memory: "128Mi"
+                cpu: "100m"
