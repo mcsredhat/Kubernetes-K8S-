@@ -1,0 +1,1693 @@
+# ============================================================================
+# Prometheus Monitoring Stack - Production Ready (Fully Commented)
+# ============================================================================
+#
+# PURPOSE: This manifest deploys a complete Prometheus monitoring stack for
+#          observing MongoDB, Node.js API, and NGINX applications.
+#
+# COMPONENTS:
+# 1. Prometheus: Metrics collection and storage
+# 2. Grafana: Metrics visualization and dashboards
+# 3. Alertmanager: Alert routing and management
+# 4. Node Exporter: Host-level metrics (CPU, memory, disk)
+# 5. kube-state-metrics: Kubernetes object metrics
+# 6. ServiceMonitors: Scrape configuration for applications
+#
+# ARCHITECTURE:
+# Applications → Metrics Endpoints → Prometheus → Grafana (visualization)
+#                                  ↓
+#                              Alertmanager → Notifications (email, Slack, PagerDuty)
+#
+# DEPLOYMENT ORDER:
+# 1. Namespace → 2. RBAC (ServiceAccount, ClusterRole, ClusterRoleBinding)
+# 3. ConfigMaps → 4. PersistentVolume & PVC → 5. Deployments
+# 6. Services → 7. ServiceMonitors → 8. Ingress
+#
+# NAMESPACE STRATEGY:
+# - Dedicated namespace: monitoring (separate from application namespaces)
+# - Benefits: Isolation, separate resource quotas, easier management
+#
+# ============================================================================
+
+---
+# ============================================================================
+# PART 1: NAMESPACE - Monitoring Namespace
+# ============================================================================
+# TASK: Create dedicated namespace for monitoring stack
+#
+# WHAT IT DOES:
+# - Creates namespace "monitoring" for Prometheus, Grafana, Alertmanager
+# - Isolates monitoring from application workloads
+# - Enables separate resource quotas and RBAC policies
+#
+# WHY SEPARATE NAMESPACE:
+# - Isolation: Monitoring doesn't compete with applications for resources
+# - Security: Different RBAC policies (monitoring needs cluster-wide access)
+# - Organization: Clear separation of concerns
+# - Disaster Recovery: Can restore monitoring independently
+#
+# WHY NOT IN APPLICATION NAMESPACE:
+# - Monitoring needs to survive application failures
+# - Requires cluster-wide permissions (view all namespaces)
+# - Different lifecycle (monitoring rarely changes)
+#
+# ============================================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring
+  # Dedicated namespace for monitoring stack
+  labels:
+    name: monitoring
+    environment: production
+    team: platform-team
+      # Platform team manages monitoring infrastructure
+    app.kubernetes.io/managed-by: kubectl
+    pod-security.kubernetes.io/enforce: baseline
+      # Baseline pod security standard
+    pod-security.kubernetes.io/audit: baseline
+    pod-security.kubernetes.io/warn: baseline
+  annotations:
+    description: "Namespace for monitoring stack: Prometheus, Grafana, Alertmanager"
+    contact: "platform-team@company.com"
+    created-by: "k8s-monitoring-template-v1.0"
+spec:
+  finalizers: ["kubernetes"]
+
+---
+# ============================================================================
+# PART 2: RESOURCEQUOTA - Monitoring Namespace Resources
+# ============================================================================
+# TASK: Limit resource consumption in monitoring namespace
+#
+# WHAT IT DOES:
+# - Sets hard limits on CPU, memory, and storage
+# - Prevents monitoring stack from consuming all cluster resources
+# - Ensures monitoring doesn't impact applications
+#
+# WHY IT'S NEEDED:
+# - Monitoring can be resource-intensive (metrics storage, queries)
+# - Prevents runaway Prometheus memory usage
+# - Protects applications from monitoring overhead
+#
+# QUOTA SIZING:
+# - Prometheus: CPU-intensive during scraping, memory for TSDB
+# - Grafana: Lightweight (mostly queries Prometheus)
+# - Alertmanager: Minimal resources
+# - Node Exporter: DaemonSet (one per node, minimal resources)
+#
+# ============================================================================
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: monitoring-quota
+  namespace: monitoring
+  labels:
+    component: resource-management
+spec:
+  hard:
+    # ===== CPU & MEMORY =====
+    requests.cpu: "4000m"
+      # 4 CPUs requested
+      # Prometheus: 1-2 CPUs, Grafana: 0.5 CPU, others: minimal
+    requests.memory: "8Gi"
+      # 8 GiB memory requested
+      # Prometheus: 4-6 GiB (depends on metrics volume), Grafana: 1 GiB
+    limits.cpu: "8000m"
+      # 8 CPUs limit
+    limits.memory: "16Gi"
+      # 16 GiB memory limit
+    
+    # ===== STORAGE =====
+    requests.storage: "200Gi"
+      # Total storage for metrics
+      # Prometheus: 100 GiB (retention), Grafana: minimal
+    persistentvolumeclaims: "5"
+      # Max 5 PVCs
+    
+    # ===== OBJECT COUNTS =====
+    pods: "20"
+      # Max 20 pods (Prometheus, Grafana, Alertmanager, Node Exporter per node)
+    services: "10"
+    secrets: "10"
+    configmaps: "10"
+
+---
+# ============================================================================
+# PART 3: LIMITRANGE - Per-Container Limits
+# ============================================================================
+# TASK: Set default and maximum resource limits per container
+#
+# WHAT IT DOES:
+# - Provides defaults for containers without resource specifications
+# - Enforces minimum and maximum resource boundaries
+# - Works with ResourceQuota for defense-in-depth
+#
+# ============================================================================
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: monitoring-limits
+  namespace: monitoring
+  labels:
+    component: resource-management
+spec:
+  limits:
+  - type: Container
+    default:
+      cpu: 500m
+      memory: 512Mi
+      ephemeral-storage: 1Gi
+    defaultRequest:
+      cpu: 250m
+      memory: 256Mi
+      ephemeral-storage: 500Mi
+    max:
+      cpu: 4000m
+        # Allow up to 4 CPUs per container (Prometheus may need this)
+      memory: 8Gi
+        # Allow up to 8 GiB per container
+      ephemeral-storage: 10Gi
+    min:
+      cpu: 50m
+      memory: 64Mi
+      ephemeral-storage: 100Mi
+  
+  - type: PersistentVolumeClaim
+    max:
+      storage: 200Gi
+    min:
+      storage: 1Gi
+
+---
+# ============================================================================
+# PART 4: SERVICEACCOUNT - Prometheus RBAC
+# ============================================================================
+# TASK: Create identity for Prometheus pods
+#
+# WHAT IT DOES:
+# - Creates ServiceAccount for Prometheus
+# - Prometheus uses this identity to query Kubernetes API
+# - Required for service discovery (finding pods to scrape)
+#
+# WHY IT'S NEEDED:
+# - Prometheus needs to discover targets dynamically
+# - Queries Kubernetes API for Pods, Services, Endpoints
+# - Reads labels and annotations for scrape configuration
+# - Requires cluster-wide read permissions
+#
+# PERMISSIONS NEEDED:
+# - List/Get: Pods, Services, Endpoints, Nodes
+# - Used for: Service discovery, target labeling
+#
+# ============================================================================
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: prometheus-sa
+  namespace: monitoring
+  labels:
+    app: prometheus
+    component: monitoring
+automountServiceAccountToken: true
+  # Inject token for API access
+
+---
+# ============================================================================
+# PART 5: CLUSTERROLE - Prometheus Permissions
+# ============================================================================
+# TASK: Define cluster-wide read permissions for Prometheus
+#
+# WHAT IT DOES:
+# - Grants Prometheus permission to discover and scrape metrics
+# - Allows reading Kubernetes objects (Pods, Services, Nodes, etc.)
+# - Enables service discovery across all namespaces
+#
+# WHY CLUSTERROLE (not Role):
+# - Prometheus monitors ALL namespaces
+# - Role is namespace-scoped (insufficient)
+# - ClusterRole grants cluster-wide permissions
+#
+# PERMISSIONS EXPLAINED:
+# - Pods: Discover pods with metrics endpoints
+# - Services: Discover services exposing metrics
+# - Endpoints: Find actual pod IPs for scraping
+# - Nodes: Collect node-level metrics
+# - Namespaces: Label metrics with namespace
+# - ConfigMaps: Optional (for dynamic configuration)
+#
+# SECURITY:
+# - Read-only permissions (get, list, watch)
+# - No write permissions (create, update, delete)
+# - Follows principle of least privilege
+#
+# ============================================================================
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: prometheus-clusterrole
+  labels:
+    app: prometheus
+    component: monitoring
+rules:
+# ===== CORE API GROUP =====
+- apiGroups: [""]
+    # "" = core Kubernetes API (v1)
+  resources:
+  - nodes
+      # Node metrics (CPU, memory, disk)
+  - nodes/proxy
+      # Access kubelet metrics endpoint
+  - services
+      # Discover services exposing metrics
+  - endpoints
+      # Find pod IPs behind services
+  - pods
+      # Discover pods with metrics
+  - namespaces
+      # Label metrics with namespace
+  verbs: ["get", "list", "watch"]
+    # Read-only operations
+
+# ===== APPS API GROUP =====
+- apiGroups: ["apps"]
+  resources:
+  - deployments
+      # Deployment metrics
+  - daemonsets
+      # DaemonSet metrics
+  - statefulsets
+      # StatefulSet metrics
+  - replicasets
+      # ReplicaSet metrics
+  verbs: ["get", "list", "watch"]
+
+# ===== BATCH API GROUP =====
+- apiGroups: ["batch"]
+  resources:
+  - jobs
+      # Job metrics
+  - cronjobs
+      # CronJob metrics
+  verbs: ["get", "list", "watch"]
+
+# ===== NETWORKING API GROUP =====
+- apiGroups: ["networking.k8s.io"]
+  resources:
+  - ingresses
+      # Ingress metrics
+  verbs: ["get", "list", "watch"]
+
+---
+# ============================================================================
+# PART 6: CLUSTERROLEBINDING - Grant Permissions
+# ============================================================================
+# TASK: Bind ClusterRole to Prometheus ServiceAccount
+#
+# WHAT IT DOES:
+# - Grants prometheus-sa the permissions defined in prometheus-clusterrole
+# - Enables Prometheus to discover and scrape metrics cluster-wide
+#
+# WHY IT'S NEEDED:
+# - ServiceAccount alone has no permissions
+# - ClusterRole alone grants nothing
+# - ClusterRoleBinding connects them
+#
+# ============================================================================
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: prometheus-clusterrolebinding
+  labels:
+    app: prometheus
+    component: monitoring
+subjects:
+- kind: ServiceAccount
+  name: prometheus-sa
+  namespace: monitoring
+    # Grant to prometheus-sa in monitoring namespace
+roleRef:
+  kind: ClusterRole
+  name: prometheus-clusterrole
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# ============================================================================
+# PART 7: CONFIGMAP - Prometheus Configuration
+# ============================================================================
+# TASK: Store Prometheus scrape configuration
+#
+# WHAT IT DOES:
+# - Defines which targets to scrape (Kubernetes service discovery)
+# - Configures scrape intervals, timeouts, and relabeling
+# - Sets up alerting rules and recording rules
+#
+# WHY IT'S NEEDED:
+# - Prometheus needs to know what to monitor
+# - Service discovery automates target discovery
+# - Relabeling adds/modifies metric labels
+#
+# CONFIGURATION SECTIONS:
+# 1. global: Default settings (scrape_interval, evaluation_interval)
+# 2. alerting: Alertmanager endpoints
+# 3. rule_files: Alert and recording rules
+# 4. scrape_configs: Target discovery and scraping
+#
+# SCRAPE CONFIGS:
+# - kubernetes-apiservers: Kubernetes API server metrics
+# - kubernetes-nodes: Node metrics (kubelet)
+# - kubernetes-cadvisor: Container metrics (cAdvisor)
+# - kubernetes-pods: Pod metrics (application metrics)
+# - kubernetes-service-endpoints: Service metrics
+#
+# SERVICE DISCOVERY:
+# - role: kubernetes_sd_config role (node, pod, service, endpoints)
+# - Discovers targets automatically
+# - No manual configuration needed when pods/services change
+#
+# RELABELING:
+# - Adds/modifies labels before scraping
+# - Example: Add namespace, pod name, container name
+# - Used for filtering and organization
+#
+# ============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: monitoring
+  labels:
+    app: prometheus
+    component: configuration
+data:
+  prometheus.yml: |
+    # ===== GLOBAL CONFIGURATION =====
+    global:
+      scrape_interval: 15s
+        # Scrape targets every 15 seconds
+        # Lower = more granular data, higher resource usage
+        # Recommended: 15s-60s
+      
+      evaluation_interval: 15s
+        # Evaluate alerting rules every 15 seconds
+        # Should be ≤ scrape_interval
+      
+      external_labels:
+        cluster: 'production-cluster'
+          # Label added to all metrics
+          # Useful for multi-cluster setups
+        environment: 'production'
+    
+    # ===== ALERTING CONFIGURATION =====
+    alerting:
+      alertmanagers:
+      - static_configs:
+        - targets:
+          - alertmanager-service:9093
+            # Alertmanager endpoint
+            # Format: <service-name>:<port>
+    
+    # ===== RULE FILES =====
+    rule_files:
+    - /etc/prometheus/rules/*.rules.yml
+      # Alert and recording rules
+      # Loaded from ConfigMap volume mount
+    
+    # ===== SCRAPE CONFIGURATIONS =====
+    scrape_configs:
+    
+    # ===== JOB 1: PROMETHEUS ITSELF =====
+    - job_name: 'prometheus'
+        # Scrape Prometheus's own metrics
+      static_configs:
+      - targets: ['localhost:9090']
+          # Prometheus exposes metrics on port 9090
+    
+    # ===== JOB 2: KUBERNETES API SERVER =====
+    - job_name: 'kubernetes-apiservers'
+      # Scrape Kubernetes API server metrics
+      kubernetes_sd_configs:
+      - role: endpoints
+          # Discover endpoints
+      
+      scheme: https
+        # API server uses HTTPS
+      
+      tls_config:
+        ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+          # CA certificate for verifying API server
+      
+      bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+        # ServiceAccount token for authentication
+      
+      relabel_configs:
+      # Keep only endpoints for kubernetes service in default namespace
+      - source_labels: [__meta_kubernetes_namespace, __meta_kubernetes_service_name, __meta_kubernetes_endpoint_port_name]
+        action: keep
+        regex: default;kubernetes;https
+    
+    # ===== JOB 3: KUBERNETES NODES (KUBELET) =====
+    - job_name: 'kubernetes-nodes'
+      # Scrape node metrics from kubelet
+      kubernetes_sd_configs:
+      - role: node
+          # Discover nodes
+      
+      scheme: https
+      tls_config:
+        ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+      bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+      
+      relabel_configs:
+      # Add node name as label
+      - action: labelmap
+        regex: __meta_kubernetes_node_label_(.+)
+          # Convert node labels to metric labels
+    
+    # ===== JOB 4: KUBERNETES CADVISOR (CONTAINER METRICS) =====
+    - job_name: 'kubernetes-cadvisor'
+      # Scrape container metrics from cAdvisor
+      # cAdvisor: Container Advisor (built into kubelet)
+      # Provides: CPU, memory, network, filesystem metrics per container
+      kubernetes_sd_configs:
+      - role: node
+      
+      scheme: https
+      tls_config:
+        ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+      bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+      
+      metrics_path: /metrics/cadvisor
+        # cAdvisor metrics endpoint
+      
+      relabel_configs:
+      - action: labelmap
+        regex: __meta_kubernetes_node_label_(.+)
+    
+    # ===== JOB 5: KUBERNETES PODS (APPLICATION METRICS) =====
+    - job_name: 'kubernetes-pods'
+      # Scrape pods with prometheus.io/scrape annotation
+      kubernetes_sd_configs:
+      - role: pod
+          # Discover all pods
+      
+      relabel_configs:
+      # Keep only pods with prometheus.io/scrape=true annotation
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+        action: keep
+        regex: true
+        # Usage in pod: Add annotation prometheus.io/scrape: "true"
+      
+      # Use custom scrape path if specified
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+        action: replace
+        target_label: __metrics_path__
+        regex: (.+)
+        # Usage: prometheus.io/path: "/custom/metrics"
+      
+      # Use custom port if specified
+      - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+        action: replace
+        regex: ([^:]+)(?::\d+)?;(\d+)
+        replacement: $1:$2
+        target_label: __address__
+        # Usage: prometheus.io/port: "8080"
+      
+      # Add pod labels as metric labels
+      - action: labelmap
+        regex: __meta_kubernetes_pod_label_(.+)
+      
+      # Add namespace as metric label
+      - source_labels: [__meta_kubernetes_namespace]
+        action: replace
+        target_label: kubernetes_namespace
+      
+      # Add pod name as metric label
+      - source_labels: [__meta_kubernetes_pod_name]
+        action: replace
+        target_label: kubernetes_pod_name
+    
+    # ===== JOB 6: KUBERNETES SERVICE ENDPOINTS =====
+    - job_name: 'kubernetes-service-endpoints'
+      # Scrape services with prometheus.io/scrape annotation
+      kubernetes_sd_configs:
+      - role: endpoints
+          # Discover service endpoints
+      
+      relabel_configs:
+      # Keep only services with prometheus.io/scrape=true annotation
+      - source_labels: [__meta_kubernetes_service_annotation_prometheus_io_scrape]
+        action: keep
+        regex: true
+      
+      # Use custom scrape path
+      - source_labels: [__meta_kubernetes_service_annotation_prometheus_io_path]
+        action: replace
+        target_label: __metrics_path__
+        regex: (.+)
+      
+      # Use custom port
+      - source_labels: [__address__, __meta_kubernetes_service_annotation_prometheus_io_port]
+        action: replace
+        regex: ([^:]+)(?::\d+)?;(\d+)
+        replacement: $1:$2
+        target_label: __address__
+      
+      # Add service labels
+      - action: labelmap
+        regex: __meta_kubernetes_service_label_(.+)
+      
+      # Add namespace
+      - source_labels: [__meta_kubernetes_namespace]
+        action: replace
+        target_label: kubernetes_namespace
+      
+      # Add service name
+      - source_labels: [__meta_kubernetes_service_name]
+        action: replace
+        target_label: kubernetes_name
+    
+    # ===== JOB 7: NODE EXPORTER (HOST METRICS) =====
+    - job_name: 'node-exporter'
+      # Scrape Node Exporter (deployed as DaemonSet)
+      kubernetes_sd_configs:
+      - role: endpoints
+      
+      relabel_configs:
+      # Keep only node-exporter service endpoints
+      - source_labels: [__meta_kubernetes_service_name]
+        action: keep
+        regex: node-exporter
+    
+    # ===== JOB 8: KUBE-STATE-METRICS =====
+    - job_name: 'kube-state-metrics'
+      # Scrape kube-state-metrics
+      # Provides metrics about Kubernetes objects (Deployments, Pods, etc.)
+      static_configs:
+      - targets: ['kube-state-metrics:8080']
+    
+    # ===== CUSTOM APPLICATION SCRAPE CONFIGS =====
+    # Add custom scrape configs for your applications:
+    
+    # MongoDB metrics (if using mongodb-exporter)
+    # - job_name: 'mongodb'
+    #   static_configs:
+    #   - targets: ['mongodb-exporter:9216']
+    
+    # Node.js API metrics (if /metrics endpoint exposed)
+    # - job_name: 'node-api'
+    #   kubernetes_sd_configs:
+    #   - role: service
+    #   relabel_configs:
+    #   - source_labels: [__meta_kubernetes_service_name]
+    #     action: keep
+    #     regex: node-api-service
+
+  # ===== ALERT RULES (OPTIONAL) =====
+  alert.rules.yml: |
+    groups:
+    - name: example_alerts
+      interval: 30s
+      rules:
+      
+      # Alert: High CPU usage
+      - alert: HighCPUUsage
+        expr: 100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage detected on {{ $labels.instance }}"
+          description: "CPU usage is above 80% (current value: {{ $value }}%)"
+      
+      # Alert: High memory usage
+      - alert: HighMemoryUsage
+        expr: (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage on {{ $labels.instance }}"
+          description: "Memory usage is above 85% (current value: {{ $value }}%)"
+      
+      # Alert: Pod crash looping
+      - alert: PodCrashLooping
+        expr: rate(kube_pod_container_status_restarts_total[15m]) > 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Pod {{ $labels.namespace }}/{{ $labels.pod }} is crash looping"
+          description: "Pod has restarted {{ $value }} times in the last 15 minutes"
+      
+      # Alert: High API error rate
+      - alert: HighAPIErrorRate
+        expr: sum(rate(http_requests_total{status=~"5.."}[5m])) / sum(rate(http_requests_total[5m])) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High API error rate detected"
+          description: "Error rate is above 5% (current value: {{ $value }})"
+
+---
+# ============================================================================
+# PART 8: PERSISTENTVOLUME - Prometheus Storage
+# ============================================================================
+# TASK: Create persistent storage for Prometheus metrics
+#
+# WHAT IT DOES:
+# - Allocates 100Gi storage for Prometheus time-series database
+# - Persists metrics across pod restarts
+# - Uses local hostPath (for development/testing)
+#
+# WHY IT'S NEEDED:
+# - Prometheus stores metrics in local TSDB
+# - Without persistent storage: Metrics lost on pod restart
+# - With persistent storage: Historical data preserved
+#
+# RETENTION:
+# - Storage size determines retention period
+# - 100Gi ≈ 15-30 days retention (depends on metrics volume)
+# - Calculation: metrics_volume × scrape_interval × retention_days
+#
+# PRODUCTION RECOMMENDATIONS:
+# - Use cloud storage: AWS EBS, GCP PD, Azure Disk
+# - Enable automated backups/snapshots
+# - Consider remote storage: Thanos, Cortex, M3DB
+#
+# SETUP REQUIRED:
+# sudo mkdir -p /mnt/data/prometheus
+# sudo chmod 777 /mnt/data/prometheus
+#
+# ============================================================================
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: prometheus-pv
+  labels:
+    app: prometheus
+spec:
+  capacity:
+    storage: 100Gi
+      # Storage size: 100 Gigabytes
+  
+  accessModes:
+    - ReadWriteOnce
+      # Single pod can read/write
+      # Prometheus runs as single instance (not clustered)
+  
+  storageClassName: prometheus-local-storage
+    # References StorageClass
+  
+  persistentVolumeReclaimPolicy: Retain
+    # Retain: Keep volume when PVC is deleted (preserve data)
+    # Alternative: Delete (data loss on PVC deletion)
+  
+  hostPath:
+    path: /mnt/data/prometheus
+      # Path on host node
+    type: DirectoryOrCreate
+  
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: kubernetes.io/hostname
+          operator: In
+          values:
+          - k8s-master
+            # Bind to k8s-master node
+            # ⚠️ Change to your node name
+
+---
+# ============================================================================
+# PART 9: STORAGECLASS - Prometheus Storage
+# ============================================================================
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: prometheus-local-storage
+provisioner: kubernetes.io/no-provisioner
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: false
+
+---
+# ============================================================================
+# PART 10: PERSISTENTVOLUMECLAIM - Prometheus Storage Request
+# ============================================================================
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: prometheus-pvc
+  namespace: monitoring
+  labels:
+    app: prometheus
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 100Gi
+  storageClassName: prometheus-local-storage
+
+---
+# ============================================================================
+# PART 11: DEPLOYMENT - Prometheus Server
+# ============================================================================
+# TASK: Deploy Prometheus server
+#
+# WHAT IT DOES:
+# - Runs Prometheus server for metrics collection
+# - Scrapes metrics from discovered targets
+# - Stores metrics in time-series database
+# - Provides query API for Grafana
+#
+# WHY SINGLE REPLICA:
+# - Prometheus is stateful (local TSDB)
+# - HA requires external storage (Thanos, Cortex)
+# - Single instance sufficient for most use cases
+#
+# KEY FEATURES:
+# - Persistent storage for metrics
+# - Service discovery via Kubernetes API
+# - RBAC for cluster-wide access
+# - Health checks and monitoring
+#
+# COMMAND LINE FLAGS:
+# - --config.file: Prometheus configuration file
+# - --storage.tsdb.path: Data directory
+# - --storage.tsdb.retention.time: How long to keep data
+# - --web.enable-lifecycle: Enable reload via HTTP POST
+# - --web.enable-admin-api: Enable admin API
+#
+# ============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus-deployment
+  namespace: monitoring
+  labels:
+    app: prometheus
+    version: "v2.45.0"
+spec:
+  replicas: 1
+    # Single replica (Prometheus is stateful)
+  
+  selector:
+    matchLabels:
+      app: prometheus
+  
+  template:
+    metadata:
+      labels:
+        app: prometheus
+        version: "v2.45.0"
+    
+    spec:
+      serviceAccountName: prometheus-sa
+        # Use ServiceAccount for RBAC
+      
+      securityContext:
+        fsGroup: 65534
+          # nobody group
+        runAsUser: 65534
+          # nobody user
+        runAsNonRoot: true
+      
+      containers:
+      - name: prometheus
+        image: prom/prometheus:v2.45.0
+          # Prometheus official image
+          # Latest stable version
+        
+        imagePullPolicy: IfNotPresent
+        
+        # ===== COMMAND & ARGS =====
+        args:
+        - '--config.file=/etc/prometheus/prometheus.yml'
+          # Configuration file location
+        - '--storage.tsdb.path=/prometheus'
+          # Data directory (mounted from PVC)
+        - '--storage.tsdb.retention.time=15d'
+          # Retention period: 15 days
+          # Adjust based on storage size
+          # 100Gi ≈ 15-30 days (depends on metrics volume)
+        - '--web.enable-lifecycle'
+          # Enable configuration reload via HTTP POST
+          # curl -X POST http://prometheus:9090/-/reload
+        - '--web.enable-admin-api'
+          # Enable admin API (delete series, snapshots)
+        - '--web.console.libraries=/etc/prometheus/console_libraries'
+          # Console library location
+        - '--web.console.templates=/etc/prometheus/consoles'
+          # Console template location
+        
+        ports:
+        - name: web
+          containerPort: 9090
+            # Prometheus web UI and API
+          protocol: TCP
+        
+        resources:
+          requests:
+            cpu: 1000m
+              # 1 CPU requested
+            memory: 2Gi
+              # 2 GiB memory requested
+          limits:
+            cpu: 2000m
+              # 2 CPUs limit
+            memory: 4Gi
+              # 4 GiB memory limit
+        
+        # ===== LIVENESS PROBE =====
+        livenessProbe:
+          httpGet:
+            path: /-/healthy
+              # Prometheus health endpoint
+            port: web
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        
+        # ===== READINESS PROBE =====
+        readinessProbe:
+          httpGet:
+            path: /-/ready
+              # Prometheus readiness endpoint
+            port: web
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 5
+          failureThreshold: 3
+        
+        # ===== VOLUME MOUNTS =====
+        volumeMounts:
+        - name: prometheus-storage
+          mountPath: /prometheus
+            # Persistent storage for TSDB
+        
+        - name: prometheus-config
+          mountPath: /etc/prometheus
+            # Configuration files
+          readOnly: true
+        
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: false
+            # Prometheus needs to write to /prometheus
+          capabilities:
+            drop:
+            - ALL
+      
+      volumes:
+      - name: prometheus-storage
+        persistentVolumeClaim:
+          claimName: prometheus-pvc
+      
+      - name: prometheus-config
+        configMap:
+          name: prometheus-config
+      
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 60
+        # Give Prometheus time to flush data
+
+---
+# ============================================================================
+# PART 12: SERVICE - Prometheus Service
+# ============================================================================
+# TASK: Expose Prometheus within cluster
+#
+# WHAT IT DOES:
+# - Creates stable endpoint for Prometheus
+# - Provides DNS name: prometheus-service.monitoring.svc.cluster.local
+# - Enables Grafana to query Prometheus
+# - Exposes web UI for internal access
+#
+# ============================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus-service
+  namespace: monitoring
+  labels:
+    app: prometheus
+  annotations:
+    prometheus.io/scrape: "true"
+      # Prometheus scrapes its own metrics
+    prometheus.io/port: "9090"
+spec:
+  type: ClusterIP
+    # Internal service only
+  
+  selector:
+    app: prometheus
+  
+  ports:
+  - name: web
+    port: 9090
+      # Service port
+    targetPort: web
+      # Pod port (9090)
+    protocol: TCP
+
+---
+# ============================================================================
+# PART 13: PERSISTENTVOLUME - Grafana Storage
+# ============================================================================
+# TASK: Create persistent storage for Grafana dashboards and data
+#
+# WHAT IT DOES:
+# - Stores Grafana configuration, dashboards, and SQLite database
+# - Persists dashboards across pod restarts
+#
+# WHY IT'S NEEDED:
+# - Preserve custom dashboards
+# - Keep user settings and preferences
+# - Maintain Grafana database
+#
+# SETUP REQUIRED:
+# sudo mkdir -p /mnt/data/grafana
+# sudo chmod 777 /mnt/data/grafana
+#
+# ============================================================================
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: grafana-pv
+  labels:
+    app: grafana
+spec:
+  capacity:
+    storage: 10Gi
+  
+  accessModes:
+    - ReadWriteOnce
+  
+  storageClassName: grafana-local-storage
+  persistentVolumeReclaimPolicy: Retain
+  
+  hostPath:
+    path: /mnt/data/grafana
+    type: DirectoryOrCreate
+  
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: kubernetes.io/hostname
+          operator: In
+          values:
+          - k8s-master
+
+---
+# ============================================================================
+# PART 14: STORAGECLASS - Grafana Storage
+# ============================================================================
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: grafana-local-storage
+provisioner: kubernetes.io/no-provisioner
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: false
+
+---
+# ============================================================================
+# PART 15: PERSISTENTVOLUMECLAIM - Grafana Storage Request
+# ============================================================================
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: grafana-pvc
+  namespace: monitoring
+  labels:
+    app: grafana
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: grafana-local-storage
+
+---
+# ============================================================================
+# PART 16: CONFIGMAP - Grafana Provisioning
+# ============================================================================
+# TASK: Configure Grafana datasources and dashboards
+#
+# WHAT IT DOES:
+# - Automatically provisions Prometheus datasource
+# - Configures dashboard providers
+# - Enables automatic dashboard loading
+#
+# WHY IT'S NEEDED:
+# - Automates Grafana setup (no manual configuration)
+# - Datasource available immediately after deployment
+# - Dashboards can be version-controlled
+#
+# PROVISIONING:
+# - Datasources: Define where Grafana gets data (Prometheus)
+# - Dashboards: Define dashboard providers (file-based, HTTP, etc.)
+#
+# ============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasources
+  namespace: monitoring
+  labels:
+    app: grafana
+data:
+  # ===== PROMETHEUS DATASOURCE =====
+  prometheus-datasource.yaml: |
+    apiVersion: 1
+    
+    datasources:
+    - name: Prometheus
+        # Datasource name in Grafana
+      type: prometheus
+        # Datasource type
+      access: proxy
+        # proxy: Grafana proxies requests
+        # direct: Browser connects directly (not recommended)
+      url: http://prometheus-service:9090
+        # Prometheus URL (Kubernetes Service DNS)
+      isDefault: true
+        # Make this the default datasource
+      editable: true
+        # Allow editing in Grafana UI
+      jsonData:
+        timeInterval: "15s"
+          # Match Prometheus scrape_interval
+        queryTimeout: "60s"
+          # Query timeout
+
+---
+# ============================================================================
+# PART 17: CONFIGMAP - Grafana Dashboards Provider
+# ============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboards-provider
+  namespace: monitoring
+  labels:
+    app: grafana
+data:
+  dashboards.yaml: |
+    apiVersion: 1
+    
+    providers:
+    - name: 'default'
+        # Provider name
+      orgId: 1
+        # Organization ID
+      folder: ''
+        # Dashboard folder (empty = root)
+      type: file
+        # Load dashboards from files
+      disableDeletion: false
+        # Allow deletion in UI
+      editable: true
+        # Allow editing in UI
+      options:
+        path: /var/lib/grafana/dashboards
+          # Dashboard files location
+
+---
+# ============================================================================
+# PART 18: SECRET - Grafana Admin Credentials
+# ============================================================================
+# TASK: Store Grafana admin password
+#
+# WHAT IT DOES:
+# - Sets admin username and password
+# - Used for initial Grafana login
+#
+# SECURITY:
+# - Change default password immediately
+# - Use strong password in production
+# - Consider integrating with LDAP/OAuth
+#
+# ============================================================================
+apiVersion: v1
+kind: Secret
+metadata:
+  name: grafana-admin-secret
+  namespace: monitoring
+  labels:
+    app: grafana
+type: Opaque
+data:
+  admin-user: YWRtaW4=
+    # Decoded: admin
+  admin-password: YWRtaW4=
+    # Decoded: admin
+    # ⚠️ WARNING: Change this password!
+    # Generate: echo -n "your-secure-password" | base64
+
+---
+# ============================================================================
+# PART 19: DEPLOYMENT - Grafana
+# ============================================================================
+# TASK: Deploy Grafana visualization platform
+#
+# WHAT IT DOES:
+# - Runs Grafana for metrics visualization
+# - Connects to Prometheus datasource
+# - Provides dashboard web UI
+# - Enables alerting and notifications
+#
+# KEY FEATURES:
+# - Auto-provisioned Prometheus datasource
+# - Persistent storage for dashboards
+# - Admin credentials from Secret
+# - Health checks
+#
+# ENVIRONMENT VARIABLES:
+# - GF_SECURITY_ADMIN_USER: Admin username
+# - GF_SECURITY_ADMIN_PASSWORD: Admin password
+# - GF_PATHS_PROVISIONING: Provisioning directory
+# - GF_SERVER_ROOT_URL: Base URL for Grafana
+# - GF_INSTALL_PLUGINS: Plugins to install on startup
+#
+# ============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana-deployment
+  namespace: monitoring
+  labels:
+    app: grafana
+    version: "10.0.0"
+spec:
+  replicas: 1
+    # Single replica (Grafana uses SQLite by default)
+  
+  selector:
+    matchLabels:
+      app: grafana
+  
+  template:
+    metadata:
+      labels:
+        app: grafana
+        version: "10.0.0"
+    
+    spec:
+      securityContext:
+        fsGroup: 472
+          # Grafana user group
+        runAsUser: 472
+          # Grafana user
+        runAsNonRoot: true
+      
+      containers:
+      - name: grafana
+        image: grafana/grafana:10.0.0
+          # Grafana official image
+        
+        imagePullPolicy: IfNotPresent
+        
+        ports:
+        - name: web
+          containerPort: 3000
+            # Grafana web UI
+          protocol: TCP
+        
+        # ===== ENVIRONMENT VARIABLES =====
+        env:
+        - name: GF_SECURITY_ADMIN_USER
+          valueFrom:
+            secretKeyRef:
+              name: grafana-admin-secret
+              key: admin-user
+        
+        - name: GF_SECURITY_ADMIN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: grafana-admin-secret
+              key: admin-password
+        
+        - name: GF_PATHS_PROVISIONING
+          value: /etc/grafana/provisioning
+            # Provisioning directory
+        
+        - name: GF_SERVER_ROOT_URL
+          value: "https://grafana.example.com"
+            # Base URL for Grafana
+            # ⚠️ Change to your domain
+        
+        - name: GF_INSTALL_PLUGINS
+          value: ""
+            # Comma-separated plugin IDs to install
+            # Example: "grafana-clock-panel,grafana-simple-json-datasource"
+        
+        resources:
+          requests:
+            cpu: 250m
+            memory: 512Mi
+          limits:
+            cpu: 500m
+            memory: 1Gi
+        
+        # ===== LIVENESS PROBE =====
+        livenessProbe:
+          httpGet:
+            path: /api/health
+              # Grafana health endpoint
+            port: web
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        
+        # ===== READINESS PROBE =====
+        readinessProbe:
+          httpGet:
+            path: /api/health
+            port: web
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 5
+          failureThreshold: 3
+        
+        # ===== VOLUME MOUNTS =====
+        volumeMounts:
+        - name: grafana-storage
+          mountPath: /var/lib/grafana
+            # Grafana data directory
+        
+        - name: grafana-datasources
+          mountPath: /etc/grafana/provisioning/datasources
+            # Datasource provisioning
+          readOnly: true
+        
+        - name: grafana-dashboards-provider
+          mountPath: /etc/grafana/provisioning/dashboards
+            # Dashboard provider config
+          readOnly: true
+        
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: false
+          capabilities:
+            drop:
+            - ALL
+      
+      volumes:
+      - name: grafana-storage
+        persistentVolumeClaim:
+          claimName: grafana-pvc
+      
+      - name: grafana-datasources
+        configMap:
+          name: grafana-datasources
+      
+      - name: grafana-dashboards-provider
+        configMap:
+          name: grafana-dashboards-provider
+      
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 30
+
+---
+# ============================================================================
+# PART 20: SERVICE - Grafana Service
+# ============================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana-service
+  namespace: monitoring
+  labels:
+    app: grafana
+spec:
+  type: ClusterIP
+  
+  selector:
+    app: grafana
+  
+  ports:
+  - name: web
+    port: 3000
+    targetPort: web
+    protocol: TCP
+
+---
+# ============================================================================
+# PART 21: INGRESS - Prometheus Ingress
+# ============================================================================
+# TASK: Expose Prometheus web UI externally
+#
+# WHAT IT DOES:
+# - Provides external HTTPS access to Prometheus
+# - Terminates TLS/SSL
+# - Routes traffic: Internet → Ingress → Prometheus Service
+#
+# SECURITY WARNING:
+# - Prometheus has no built-in authentication
+# - Consider using OAuth proxy (oauth2-proxy)
+# - Or restrict access via firewall/VPN
+# - Or use Ingress authentication annotations
+#
+# ============================================================================
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: prometheus-ingress
+  namespace: monitoring
+  labels:
+    app: prometheus
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    # SECURITY: Add authentication
+    # nginx.ingress.kubernetes.io/auth-type: basic
+    # nginx.ingress.kubernetes.io/auth-secret: prometheus-basic-auth
+    # nginx.ingress.kubernetes.io/auth-realm: "Authentication Required"
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - prometheus.example.com
+        # ⚠️ Change to your domain
+    secretName: prometheus-tls-secret
+  rules:
+  - host: prometheus.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: prometheus-service
+            port:
+              number: 9090
+
+---
+# ============================================================================
+# PART 22: INGRESS - Grafana Ingress
+# ============================================================================
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: grafana-ingress
+  namespace: monitoring
+  labels:
+    app: grafana
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - grafana.example.com
+        # ⚠️ Change to your domain
+    secretName: grafana-tls-secret
+  rules:
+  - host: grafana.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: grafana-service
+            port:
+              number: 3000
+
+---
+# ============================================================================
+# PART 23: DAEMONSET - Node Exporter
+# ============================================================================
+# TASK: Deploy Node Exporter on every node
+#
+# WHAT IT DOES:
+# - Runs on every node in cluster (DaemonSet)
+# - Collects host-level metrics (CPU, memory, disk, network)
+# - Exposes metrics for Prometheus to scrape
+#
+# WHY DAEMONSET:
+# - Need one instance per node
+# - Collects node-specific metrics
+# - Automatically deployed to new nodes
+#
+# METRICS PROVIDED:
+# - CPU: Usage, load average
+# - Memory: Total, available, cached
+# - Disk: Space, I/O operations
+# - Network: Bytes sent/received, errors
+# - Filesystem: Mount points, usage
+#
+# SECURITY:
+# - Requires hostPath volumes (read-only)
+# - Needs access to /proc, /sys filesystems
+# - Runs on host network namespace
+#
+# ============================================================================
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: node-exporter
+  namespace: monitoring
+  labels:
+    app: node-exporter
+spec:
+  selector:
+    matchLabels:
+      app: node-exporter
+  
+  template:
+    metadata:
+      labels:
+        app: node-exporter
+      annotations:
+        prometheus.io/scrape: "true"
+          # Prometheus will scrape this pod
+        prometheus.io/port: "9100"
+          # Scrape on port 9100
+    
+    spec:
+      hostNetwork: true
+        # Use host network namespace
+        # Required to collect network metrics
+      hostPID: true
+        # Use host PID namespace
+        # Required to collect process metrics
+      
+      containers:
+      - name: node-exporter
+        image: prom/node-exporter:v1.6.0
+          # Node Exporter official image
+        
+        imagePullPolicy: IfNotPresent
+        
+        args:
+        - --path.procfs=/host/proc
+          # /proc filesystem location
+        - --path.sysfs=/host/sys
+          # /sys filesystem location
+        - --path.rootfs=/host/root
+          # Root filesystem location
+        - --collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($|/)
+          # Exclude virtual filesystems
+        
+        ports:
+        - name: metrics
+          containerPort: 9100
+            # Node Exporter metrics port
+          protocol: TCP
+        
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi
+        
+        volumeMounts:
+        - name: proc
+          mountPath: /host/proc
+          readOnly: true
+        - name: sys
+          mountPath: /host/sys
+          readOnly: true
+        - name: root
+          mountPath: /host/root
+          readOnly: true
+        
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+      
+      volumes:
+      - name: proc
+        hostPath:
+          path: /proc
+            # Host /proc filesystem
+      - name: sys
+        hostPath:
+          path: /sys
+            # Host /sys filesystem
+      - name: root
+        hostPath:
+          path: /
+            # Host root filesystem
+      
+      tolerations:
+      # Allow running on master/control-plane nodes
+      - key: node-role.kubernetes.io/master
+        operator: Exists
+        effect: NoSchedule
+      - key: node-role.kubernetes.io/control-plane
+        operator: Exists
+        effect: NoSchedule
+
+---
+# ============================================================================
+# PART 24: SERVICE - Node Exporter Service
+# ============================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: node-exporter
+  namespace: monitoring
+  labels:
+    app: node-exporter
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9100"
+spec:
+  type: ClusterIP
+  clusterIP: None
+    # Headless service (no cluster IP)
+    # Prometheus discovers individual pod IPs
+  
+  selector:
+    app: node-exporter
+  
+  ports:
+  - name: metrics
+    port: 9100
+    targetPort: metrics
+    protocol: TCP
+
+# ============================================================================
+# END OF MANIFEST
+# ============================================================================
+#
+# DEPLOYMENT INSTRUCTIONS:
+# 1. Create storage directories on nodes:
+#    sudo mkdir -p /mnt/data/prometheus /mnt/data/grafana
+#    sudo chmod 777 /mnt/data/prometheus /mnt/data/grafana
+#
+# 2. Deploy monitoring stack:
+#    kubectl apply -f prometheus-monitoring.yaml
+#
+# 3. Verify deployment:
+#    kubectl get all -n monitoring
+#    kubectl get pv,pvc -n monitoring
+#
+# 4. Check pod logs:
+#    kubectl logs -n monitoring -l app=prometheus
+#    kubectl logs -n monitoring -l app=grafana
+#
+# 5. Access Prometheus (port-forward):
+#    kubectl port-forward -n monitoring svc/prometheus-service 9090:9090
+#    # Open: http://localhost:9090
+#
+# 6. Access Grafana (port-forward):
+#    kubectl port-forward -n monitoring svc/grafana-service 3000:3000
+#    # Open: http://localhost:3000
+#    # Login: admin / admin (change password!)
+#
+# 7. Configure DNS for Ingress:
+#    prometheus.example.com → <INGRESS_IP>
+#    grafana.example.com → <INGRESS_IP>
+#
+# ============================================================================
+# GRAFANA SETUP
+# ============================================================================
+#
+# 1. Login to Grafana (admin/admin)
+# 2. Change admin password (prompted on first login)
+# 3. Verify Prometheus datasource: Configuration → Data Sources
+# 4. Import dashboards:
+#    - Kubernetes Cluster Monitoring: ID 7249
+#    - Node Exporter Full: ID 1860
+#    - Prometheus Stats: ID 2
+#
+# IMPORT DASHBOARD:
+# 1. Click "+" → Import
+# 2. Enter dashboard ID (e.g., 7249)
+# 3. Select Prometheus datasource
+# 4. Click "Import"
+#
+# ============================================================================
+# TROUBLESHOOTING
+# ============================================================================
+#
+# Prometheus not discovering targets:
+# - Check ServiceAccount permissions: kubectl describe clusterrole prometheus-clusterrole
+# - Check Prometheus logs: kubectl logs -n monitoring -l app=prometheus
+# - Verify API server access: kubectl get --raw /api/v1/namespaces/default/pods
+#
+# Grafana can't connect to Prometheus:
+# - Check Service DNS: kubectl exec -n monitoring deployment/grafana-deployment -- nslookup prometheus-service
+# - Test Prometheus API: kubectl exec -n monitoring deployment/grafana-deployment -- curl http://prometheus-service:9090/api/v1/query?query=up
+#
+# Node Exporter not showing metrics:
+# - Check DaemonSet: kubectl get daemonset -n monitoring node-exporter
+# - Check pods on all nodes: kubectl get pods -n monitoring -l app=node-exporter -o wide
+# - Verify metrics endpoint: kubectl exec -n monitoring <node-exporter-pod> -- curl localhost:9100/metrics
+#
+# High memory usage:
+# - Reduce retention time: --storage.tsdb.retention.time=7d
+# - Increase scrape interval: scrape_interval: 30s
+# - Reduce number of metrics: Use metric_relabel_configs to drop unwanted metrics
+#
+# ============================================================================
+# PRODUCTION RECOMMENDATIONS
+# ============================================================================
+#
+# HIGH AVAILABILITY:
+# 1. Use Thanos or Cortex for HA Prometheus
+# 2. Deploy multiple Grafana replicas with shared database (PostgreSQL)
+# 3. Use remote storage for long-term retention
+#
+# SECURITY:
+# 1. Enable authentication on Prometheus (use OAuth proxy)
+# 2. Encrypt metrics in transit (TLS for scraping)
+# 3. Enable RBAC for Grafana (LDAP/OAuth integration)
+# 4. Restrict Ingress access (IP whitelist, VPN)
+#
+# PERFORMANCE:
+# 1. Right-size Prometheus resources based on metrics volume
+# 2. Use recording rules for expensive queries
+# 3. Tune TSDB settings (compaction, retention)
+# 4. Use remote read/write for scaling
+#
+# ALERTING:
+# 1. Deploy Alertmanager for alert routing
+# 2. Configure notification channels (Slack, email, PagerDuty)
+# 3. Create runbooks for common alerts
+# 4. Test alert firing and routing
+#
+# BACKUP & RECOVERY:
+# 1. Enable automated PV snapshots
+# 2. Export important dashboards to version control
+# 3. Document datasource configuration
+# 4. Test restore procedures
+#
+# ============================================================================

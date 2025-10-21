@@ -1,0 +1,137 @@
+## 10. Quick Reference Table
+
+| Component | Scope | Use Case | Key Feature |
+|-----------|-------|----------|-------------|
+| Namespace | Cluster | Isolation, multi-tenancy | Logical boundary |
+| ResourceQuota | Namespace | Limit consumption | Hard limits |
+| LimitRange | Namespace | Set defaults | Per-container bounds |
+| Pod | Namespace | Basic unit | Ephemeral |
+| Deployment | Namespace | Stateless apps | Rolling updates |
+| StatefulSet | Namespace | Stateful apps | Stable identity + headless svc |
+| DaemonSet | Cluster | Node agents | One per node |
+| Job | Namespace | Batch tasks | Run to completion |
+| CronJob | Namespace | Scheduled jobs | Cron syntax |
+| ConfigMap | Namespace | Non-secrets | Key-value config |
+| Secret | Namespace | Sensitive data | Base64 encoded |
+| Service | Namespace | Load balancing | Stable endpoint |
+| Ingress | Namespace | External routing | HTTP/HTTPS |
+| NetworkPolicy | Namespace | Traffic control | Allow/deny rules |
+| HPA | Namespace | Auto-scaling | Metric-driven (requires Metrics Server) |
+| VPA | Namespace | Resource tuning | Recommendation-driven |
+| PDB | Namespace | Availability | Min replicas |
+
+---
+
+## Best Practices Summary
+
+### Security
+- Always use `securityContext` with `runAsNonRoot: true`
+- Never store secrets in ConfigMaps
+- Use `NetworkPolicy` with explicit allow/deny rules (and always allow DNS)
+- Implement RBAC with least-privilege principle
+- Enable Pod Security Policies/Standards
+- Set all init containers and containers with proper security context
+
+### Reliability
+- Set resource `requests` and `limits` for all containers
+- Configure `livenessProbe` and `readinessProbe` appropriately
+- Use pod anti-affinity for better distribution (prefer for StatefulSet, required for Deployment in production)
+- Implement `PodDisruptionBudget` for critical apps
+- Monitor and alert on key metrics
+- Use headless Services with StatefulSets
+
+### Operations
+- Use explicit image tags, never `latest`
+- Store YAML in version control
+- Automate deployments with GitOps
+- Implement proper labeling scheme
+- Regular backup and disaster recovery drills
+- Test NetworkPolicy changes before applying broadly
+- Verify required components (Metrics Server, Ingress Controller, CNI) before using dependent features
+
+### Observability
+- Add Prometheus scrape annotations
+- Use structured logging with JSON format
+- Implement distributed tracing
+- Monitor resource utilization continuously
+- Audit API access for compliance
+- Verify Metrics Server with `kubectl get apiservice v1beta1.metrics.k8s.io` before HPA deployment
+
+### Scaling Strategy
+- Use HPA for horizontal scaling (replicas) with Metrics Server
+- Use VPA for vertical scaling (requests/limits)
+- NEVER use HPA and VPA together in Auto mode (they conflict, causing constant restarts)
+- Start VPA in "Initial" mode to validate recommendations before switching to "Auto"
+- Test scaling policies in non-production environments
+
+---
+
+## Troubleshooting Commands
+
+```bash
+# General diagnostics
+kubectl get all -n example-namespace
+kubectl describe pod <pod-name> -n example-namespace
+kubectl logs <pod-name> -n example-namespace
+kubectl logs <pod-name> -p -n example-namespace
+
+# Debugging
+kubectl exec -it <pod-name> -- /bin/bash -n example-namespace
+kubectl port-forward pod/<pod-name> 8080:8080 -n example-namespace
+kubectl top nodes
+kubectl top pods -n example-namespace
+
+# Events and status
+kubectl get events -n example-namespace --sort-by='.lastTimestamp'
+kubectl describe node <node-name>
+kubectl describe resourcequota -n example-namespace
+
+# RBAC validation
+kubectl auth can-i create deployments --as=system:serviceaccount:example-namespace:example-serviceaccount
+kubectl auth can-i list secrets --as=system:serviceaccount:example-namespace:example-serviceaccount
+
+# Metrics Server verification
+kubectl get apiservice v1beta1.metrics.k8s.io -o yaml
+kubectl get deployment metrics-server -n kube-system
+
+# HPA status
+kubectl get hpa -n example-namespace
+kubectl describe hpa <hpa-name> -n example-namespace
+kubectl get metrics pods -n example-namespace
+
+# VPA recommendations
+kubectl describe vpa <vpa-name> -n example-namespace
+
+# Network debugging
+kubectl get networkpolicy -n example-namespace
+kubectl describe networkpolicy <policy-name> -n example-namespace
+kubectl get pods -o wide -n example-namespace
+
+# Service resolution
+kubectl get svc -n example-namespace
+kubectl describe svc <service-name> -n example-namespace
+```
+
+---
+
+## Error Corrections & Improvements Applied
+
+1. **LimitRange Pod Limits** - Clarified Pod min/max must match or exceed Container min/max
+2. **Pod Init Container Security** - Added `runAsNonRoot: true` and `readOnlyRootFilesystem: true`
+3. **Deployment Anti-Affinity** - Used `required` with operational implications explained
+4. **StatefulSet Anti-Affinity** - Changed to `preferred` (better for persistence/stability trade-off)
+5. **StatefulSet Service** - Added headless Service definition and corrected `serviceName` reference
+6. **NetworkPolicy DNS** - Moved DNS rule to top of egress for clarity and priority
+7. **Job Restart Policy** - Clarified `Never` vs `OnFailure` vs `Always` usage
+8. **HPA Metrics Server** - Improved verification using APIService check
+9. **VPA Update Mode** - Recommended `Initial` mode before `Auto` with explicit conflict warning
+10. **VPA + HPA Conflict** - Added explicit note about constant restart loops in Common Pitfalls
+11. **PVC StorageClass** - Added warning about PVC remaining Pending if StorageClass missing
+12. **Ingress Controller** - Added requirement note about Ingress controller installation
+13. **NetworkPolicy CNI** - Emphasized CNI requirement for policy enforcement
+
+---
+
+**Last Updated:** October 2025  
+**Kubernetes Versions:** 1.24+  
+**Status:** Production Ready - All Corrections Applied & Enhanced

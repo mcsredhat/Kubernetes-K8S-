@@ -1,0 +1,445 @@
+# =============================================================================
+# KUBERNETES NAMESPACE MANAGEMENT - PRODUCTION-READY
+# =============================================================================
+# Components: Namespace, ResourceQuota, LimitRange, NetworkPolicy, RBAC, Service, Ingress
+# Level: Advanced Intermediate (8/10) - Production-Ready Setup
+# Use Case: Multi-tenant clusters, environment separation, security enforcement
+# =============================================================================
+
+---
+# 1. NAMESPACE - Production Configuration
+# Description: Logical isolation boundary for resources and teams with security
+# Use Case: Multi-tenant clusters, environment separation (dev/staging/prod)
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: example-namespace
+  labels:
+    name: example
+    environment: production
+    team: platform
+    tier: backend
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: baseline
+  annotations:
+    description: "Production namespace with security enforcement and resource controls"
+    quota-policy: "strict"
+    rbac-policy: "minimal"
+
+spec:
+  finalizers:
+  - kubernetes
+
+---
+# 2. RESOURCEQUOTA - Strict Resource Controls
+# Description: Enforces hard limits on total namespace resource consumption
+# Use Case: Preventing resource exhaustion, cost control, multi-tenant isolation
+
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: example-quota
+  namespace: example-namespace
+  labels:
+    quota-type: compute
+    priority: high
+  annotations:
+    description: "Strict quota for production workloads"
+    rationale: "Prevents namespace resource exhaustion and multi-tenant conflicts"
+
+spec:
+  hard:
+    # Compute Resources (CPU and Memory)
+    requests.cpu: "4"
+    requests.memory: "8Gi"
+    limits.cpu: "8"
+    limits.memory: "16Gi"
+
+    # Storage Resources
+    requests.ephemeral-storage: "20Gi"
+    limits.ephemeral-storage: "40Gi"
+    persistentvolumeclaims: "5"
+    requests.storage: "100Gi"
+
+    # Pod and Resource Count
+    pods: "30"
+    services: "10"
+    services.nodeports: "2"
+    services.loadbalancers: "1"
+
+    # ConfigMaps and Secrets
+    configmaps: "20"
+    secrets: "10"
+
+    # Networking
+    count/ingresses.networking.k8s.io: "5"
+    count/networkpolicies.networking.k8s.io: "10"
+
+  scopeSelector:
+    matchExpressions:
+    - operator: In
+      scopeName: PriorityClass
+      values: ["high", "medium"]
+    - operator: NotIn
+      scopeName: PriorityClass
+      values: ["system"]
+
+---
+# 3. LIMITRANGE - Per-Pod and Per-Container Controls
+# Description: Sets default, min, and max resource constraints per container/pod
+# Use Case: Preventing resource waste, enforcing deployment standards
+
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: example-limitrange
+  namespace: example-namespace
+  labels:
+    limit-type: compute
+    enforcement-level: strict
+  annotations:
+    description: "Enforces container resource standards and prevents resource misuse"
+    created-by: "platform-team"
+
+spec:
+  limits:
+  # Container-level limits
+  - type: Container
+    default:
+      cpu: 500m
+      memory: 256Mi
+    defaultRequest:
+      cpu: 200m
+      memory: 128Mi
+    max:
+      cpu: 1
+      memory: 512Mi
+    min:
+      cpu: 100m
+      memory: 64Mi
+
+  # Pod-level limits
+  - type: Pod
+    max:
+      cpu: 2
+      memory: 1Gi
+      ephemeral-storage: 10Gi
+    min:
+      cpu: 100m
+      memory: 64Mi
+      ephemeral-storage: 500Mi
+
+  # PersistentVolumeClaim limits
+  - type: PersistentVolumeClaim
+    max:
+      storage: 50Gi
+    min:
+      storage: 1Gi
+
+---
+# 4. NETWORKPOLICY - Network Segmentation and Security
+# Description: Controls inbound and outbound traffic to pods
+# Use Case: Microsegmentation, security enforcement, compliance
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: example-network-policy
+  namespace: example-namespace
+  labels:
+    security: high
+    policy-type: ingress-egress
+  annotations:
+    description: "Restricts traffic to/from pods in the namespace"
+    created-by: "security-team"
+
+spec:
+  podSelector:
+    matchLabels:
+      tier: backend
+  policyTypes:
+  - Ingress
+  - Egress
+
+  ingress:
+  # Allow traffic from frontend tier
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: example-namespace
+      podSelector:
+        matchLabels:
+          tier: frontend
+    ports:
+    - protocol: TCP
+      port: 8080
+    - protocol: TCP
+      port: 3000
+
+  # Allow traffic from ingress controller
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+    ports:
+    - protocol: TCP
+      port: 8080
+
+  egress:
+  # Allow DNS queries
+  - to:
+    - namespaceSelector: {}
+    ports:
+    - protocol: UDP
+      port: 53
+
+  # Allow traffic to other backend pods
+  - to:
+    - podSelector:
+        matchLabels:
+          tier: backend
+    ports:
+    - protocol: TCP
+      port: 8080
+
+  # Allow traffic to databases
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: databases
+    ports:
+    - protocol: TCP
+      port: 5432
+
+---
+# 5. ROLE - Define Permissions for Resource Access
+# Description: Defines granular permissions for namespace resources
+# Use Case: RBAC, principle of least privilege
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: backend-developer
+  namespace: example-namespace
+  labels:
+    role-type: developer
+    access-level: limited
+
+rules:
+# Pod access (read and list)
+- apiGroups: [""]
+  resources: ["pods", "pods/log"]
+  verbs: ["get", "list", "watch"]
+
+# Pod exec (limited debugging)
+- apiGroups: [""]
+  resources: ["pods/exec"]
+  verbs: ["create"]
+
+# ConfigMaps (read only)
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get", "list"]
+
+# Services (read only)
+- apiGroups: [""]
+  resources: ["services"]
+  verbs: ["get", "list"]
+
+# Deployments (read, create, update)
+- apiGroups: ["apps"]
+  resources: ["deployments", "deployments/rollback", "deployments/scale"]
+  verbs: ["get", "list", "create", "update", "patch"]
+
+# ReplicaSets (read only)
+- apiGroups: ["apps"]
+  resources: ["replicasets"]
+  verbs: ["get", "list"]
+
+# Events (read)
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["get", "list"]
+
+---
+# 6. ROLEBINDING - Bind Role to Users/Groups/ServiceAccounts
+# Description: Grants permissions defined in Role to subjects
+# Use Case: Team access control, service account permissions
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: backend-developer-binding
+  namespace: example-namespace
+  labels:
+    binding-type: user-role
+    team: backend
+
+subjects:
+# Bind to a group (recommended for teams)
+- kind: Group
+  name: backend-developers@company.com
+  apiGroup: rbac.authorization.k8s.io
+
+# Bind to specific service account
+- kind: ServiceAccount
+  name: backend-sa
+  namespace: example-namespace
+
+roleRef:
+  kind: Role
+  name: backend-developer
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# 7. SERVICEACCOUNT - Identity for Pods
+# Description: Provides identity and authentication for workloads
+# Use Case: Pod-to-pod communication, external service access
+
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: backend-sa
+  namespace: example-namespace
+  labels:
+    service: backend
+    tier: application
+
+automountServiceAccountToken: true
+
+---
+# 8. SERVICE - Internal Service Discovery
+# Description: Exposes pods internally to other services
+# Use Case: Internal load balancing, DNS-based service discovery
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-service
+  namespace: example-namespace
+  labels:
+    app: backend
+    tier: backend
+  annotations:
+    description: "Internal service for backend pods"
+
+spec:
+  type: ClusterIP
+  selector:
+    app: backend
+    tier: backend
+  ports:
+  - name: http
+    port: 8080
+    targetPort: 8080
+    protocol: TCP
+  - name: metrics
+    port: 9090
+    targetPort: 9090
+    protocol: TCP
+  sessionAffinity: None
+
+---
+# 9. INGRESS - External Access and Routing
+# Description: Exposes services externally with HTTP(S) routing
+# Use Case: Public API access, SSL termination, path-based routing
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: backend-ingress
+  namespace: example-namespace
+  labels:
+    app: backend
+    tier: ingress
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    description: "Exposes backend service externally with TLS"
+
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - api.example.com
+    - backend.example.com
+    secretName: backend-tls-cert
+  rules:
+  - host: api.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: backend-service
+            port:
+              number: 8080
+  - host: backend.example.com
+    http:
+      paths:
+      - path: /v1
+        pathType: Prefix
+        backend:
+          service:
+            name: backend-service
+            port:
+              number: 8080
+      - path: /health
+        pathType: Prefix
+        backend:
+          service:
+            name: backend-service
+            port:
+              number: 8080
+
+---
+# INSTALLATION AND VERIFICATION GUIDE
+# =============================================================================
+
+# Apply all resources in order:
+# kubectl apply -f namespace-management.yaml
+
+# Verify namespace creation:
+# kubectl describe ns example-namespace
+
+# Verify ResourceQuota:
+# kubectl describe resourcequota example-quota -n example-namespace
+# kubectl get resourcequota -n example-namespace -o wide
+
+# Verify LimitRange:
+# kubectl get limitranges -n example-namespace
+# kubectl describe limitrange example-limitrange -n example-namespace
+
+# Verify NetworkPolicy:
+# kubectl get networkpolicy -n example-namespace
+# kubectl describe networkpolicy example-network-policy -n example-namespace
+
+# Verify RBAC Role:
+# kubectl get roles -n example-namespace
+# kubectl describe role backend-developer -n example-namespace
+
+# Verify RoleBinding:
+# kubectl get rolebindings -n example-namespace
+# kubectl describe rolebinding backend-developer-binding -n example-namespace
+
+# Verify ServiceAccount:
+# kubectl get serviceaccounts -n example-namespace
+# kubectl describe sa backend-sa -n example-namespace
+
+# Verify Service:
+# kubectl get svc -n example-namespace
+# kubectl describe svc backend-service -n example-namespace
+
+# Verify Ingress:
+# kubectl get ingress -n example-namespace
+# kubectl describe ingress backend-ingress -n example-namespace
+
+# View all resources in namespace:
+# kubectl get all -n example-namespace
+
+# Delete all resources:
+# kubectl delete -f namespace-management.yaml

@@ -11,7 +11,7 @@
 # - Security: RBAC, SecurityContext, Network Policies
 # - Resources: Quotas, limits, and requests
 # - Monitoring: Liveness and readiness probes
-#
+#Namespace Management(Namespace, ResourceQuota, LimitRange),Storage Management(StorageClass, PV, PVC),Application Configuration(Secret, ConfigMap),Access Control management(ServiceAccount, Role, RoleBinding).
 # DEPLOYMENT ORDER:
 # 1. StorageClass → 2. Namespace → 3. ResourceQuota → 4. LimitRange
 # 5. Secret → 6. ConfigMap → 7. PV → 8. PVC → 9. ServiceAccount

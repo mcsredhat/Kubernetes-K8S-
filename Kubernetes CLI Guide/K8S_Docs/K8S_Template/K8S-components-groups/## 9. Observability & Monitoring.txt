@@ -1,0 +1,91 @@
+## 9. Observability & Monitoring
+
+### PodMonitor
+**Description:** Define Prometheus scrape targets for pod metrics
+**Use Case:** Monitoring application metrics
+
+```yaml
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: example-podmonitor
+  namespace: example-namespace
+  labels:
+    release: prometheus
+  annotations:
+    description: "Scrape metrics from labeled pods"
+spec:
+  selector:
+    matchLabels:
+      app: example
+      metrics: "true"
+  namespaceSelector:
+    matchNames:
+    - example-namespace
+  podMetricsEndpoints:
+  - port: metrics
+    path: /metrics
+    interval: 30s
+    scrapeTimeout: 10s
+    scheme: http
+    metricRelabelings:
+    - sourceLabels: [__name__]
+      action: keep
+      regex: example_.*
+    relabelings:
+    - sourceLabels: [__meta_kubernetes_pod_label_app]
+      targetLabel: application
+```
+
+**Apply Example:**
+```bash
+kubectl apply -f podmonitor.yaml -n example-namespace
+# Requires Prometheus Operator to be installed
+```
+
+**Customization Notes:**
+- Requires Prometheus Operator installed
+- Use `metricRelabelings` to filter metrics
+- Set realistic `interval` based on metric frequency
+
+---
+
+### ServiceMonitor
+**Description:** Prometheus scrape configuration for Kubernetes Services
+**Use Case:** Monitoring service endpoints
+
+```yaml
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: example-servicemonitor
+  namespace: example-namespace
+  labels:
+    release: prometheus
+  annotations:
+    description: "Scrape service endpoints"
+spec:
+  selector:
+    matchLabels:
+      app: example
+      monitoring: "true"
+  namespaceSelector:
+    matchNames:
+    - example-namespace
+  endpoints:
+  - port: metrics
+    path: /metrics
+    interval: 30s
+    scrapeTimeout: 10s
+    honorLabels: true
+    metricRelabelings:
+    - action: labeldrop
+      regex: (temporary|debug)
+```
+
+**Apply Example:**
+```bash
+kubectl apply -f servicemonitor.yaml -n example-namespace
+```
+
+---

@@ -1,0 +1,1404 @@
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kubernetes Architecture Reference Guide</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+        .card-shadow { box-shadow: 0 4px 15px rgba(0,0,0,0.1); transition: all 0.3s ease; }
+        .card-shadow:hover { transform: translateY(-5px); box-shadow: 0 8px 25px rgba(0,0,0,0.15); }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+    <!-- Navigation -->
+    <nav class="bg-slate-800 border-b border-slate-700 sticky top-0 z-40">
+        <div class="max-w-7xl mx-auto px-4">
+            <div class="flex items-center justify-between h-16">
+                <h1 class="text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-400">K8s Architecture</h1>
+                <div class="flex gap-2 overflow-x-auto scrollbar-hide">
+                    <button onclick="selectTab('overview')" class="tab-btn px-4 py-2 rounded-lg text-sm font-semibold bg-blue-600 text-white transition-all whitespace-nowrap">Overview</button>
+                    <button onclick="selectTab('layers')" class="tab-btn px-4 py-2 rounded-lg text-sm font-semibold bg-slate-700 hover:bg-slate-600 text-white transition-all whitespace-nowrap">7-Layers</button>
+                    <button onclick="selectTab('components')" class="tab-btn px-4 py-2 rounded-lg text-sm font-semibold bg-slate-700 hover:bg-slate-600 text-white transition-all whitespace-nowrap">Components</button>
+                    <button onclick="selectTab('services')" class="tab-btn px-4 py-2 rounded-lg text-sm font-semibold bg-slate-700 hover:bg-slate-600 text-white transition-all whitespace-nowrap">Services</button>
+                    <button onclick="selectTab('deployment')" class="tab-btn px-4 py-2 rounded-lg text-sm font-semibold bg-slate-700 hover:bg-slate-600 text-white transition-all whitespace-nowrap">Workflow</button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="max-w-7xl mx-auto p-4">
+        <!-- Overview Tab -->
+        <div id="overview" class="tab-content">
+            <div class="grid md:grid-cols-2 gap-6 mb-8">
+                <div class="card-shadow bg-gradient-to-br from-blue-600 to-blue-700 rounded-xl p-8 text-white">
+                    <h2 class="text-3xl font-bold mb-4">Kubernetes Architecture</h2>
+                    <p class="mb-4">Complete reference guide covering all layers, components, and services in production Kubernetes clusters.</p>
+                    <div class="space-y-2 text-sm">
+                        <div>7-layer architecture model</div>
+                        <div>40+ core components</div>
+                        <div>13 service categories</div>
+                        <div>Deployment workflows</div>
+                    </div>
+                </div>
+                <div class="bg-slate-800 rounded-xl p-8 border border-slate-700 text-white">
+                    <h3 class="text-xl font-bold mb-4">Quick Navigation</h3>
+                    <div class="space-y-3 text-sm">
+                        <div><strong>7-Layer Model:</strong> Understand architecture from infrastructure to apps</div>
+                        <div><strong>Components:</strong> Core Kubernetes resources and their purposes</div>
+                        <div><strong>Services:</strong> 13 categories of production services</div>
+                        <div><strong>Workflow:</strong> Step-by-step deployment guide</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 7-Layer Model Tab -->
+        <div id="layers" class="tab-content hidden">
+            <h2 class="text-3xl font-bold text-white mb-6">Kubernetes 7-Layer Architecture</h2>
+            <div class="space-y-4">
+                <!-- Layer 1 -->
+                <div class="card-shadow bg-gradient-to-r from-slate-700 to-slate-800 rounded-xl overflow-hidden text-white">
+                    <div class="p-6 flex items-center justify-between cursor-pointer" onclick="toggleLayer(this)">
+                        <div class="flex items-center gap-4">
+                            <div class="text-4xl font-bold opacity-30">1</div>
+                            <div>
+                                <h3 class="text-2xl font-bold">Infrastructure Layer</h3>
+                                <p class="text-sm opacity-80">Physical & Virtual Resources</p>
+                            </div>
+                        </div>
+                        <span class="toggle-arrow text-2xl">▼</span>
+                    </div>
+                    <div class="layer-details bg-black bg-opacity-20 p-6 border-t border-white border-opacity-10">
+                        <div class="grid md:grid-cols-2 gap-4 text-sm">
+                            <div><strong>Compute:</strong> Physical/virtual machines (nodes)</div>
+                            <div><strong>Storage:</strong> Local disks, SAN, cloud storage</div>
+                            <div><strong>Networking:</strong> Switches, routers, load balancers</div>
+                            <div><strong>Cloud:</strong> EC2, VMs, managed services</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Layer 2 -->
+                <div class="card-shadow bg-gradient-to-r from-green-700 to-green-800 rounded-xl overflow-hidden text-white">
+                    <div class="p-6 flex items-center justify-between cursor-pointer" onclick="toggleLayer(this)">
+                        <div class="flex items-center gap-4">
+                            <div class="text-4xl font-bold opacity-30">2</div>
+                            <div>
+                                <h3 class="text-2xl font-bold">Container Runtime Layer</h3>
+                                <p class="text-sm opacity-80">Container Execution Engine</p>
+                            </div>
+                        </div>
+                        <span class="toggle-arrow text-2xl">▼</span>
+                    </div>
+                    <div class="layer-details bg-black bg-opacity-20 p-6 border-t border-white border-opacity-10">
+                        <div class="grid md:grid-cols-2 gap-4 text-sm">
+                            <div><strong>Runtimes:</strong> Docker, containerd, CRI-O</div>
+                            <div><strong>Images:</strong> Pull, store, and manage images</div>
+                            <div><strong>Isolation:</strong> cgroups, namespaces</div>
+                            <div><strong>Resources:</strong> CPU and memory limits</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Layer 3 -->
+                <div class="card-shadow bg-gradient-to-r from-orange-700 to-orange-800 rounded-xl overflow-hidden text-white">
+                    <div class="p-6 flex items-center justify-between cursor-pointer" onclick="toggleLayer(this)">
+                        <div class="flex items-center gap-4">
+                            <div class="text-4xl font-bold opacity-30">3</div>
+                            <div>
+                                <h3 class="text-2xl font-bold">Kubernetes Control Plane</h3>
+                                <p class="text-sm opacity-80">Decision Making Components</p>
+                            </div>
+                        </div>
+                        <span class="toggle-arrow text-2xl">▼</span>
+                    </div>
+                    <div class="layer-details bg-black bg-opacity-20 p-6 border-t border-white border-opacity-10">
+                        <div class="grid md:grid-cols-2 gap-4 text-sm">
+                            <div><strong>API Server:</strong> Frontend for all operations</div>
+                            <div><strong>etcd:</strong> Distributed key-value store</div>
+                            <div><strong>Controller Manager:</strong> Maintains desired state</div>
+                            <div><strong>Scheduler:</strong> Assigns pods to nodes</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Layer 4 -->
+                <div class="card-shadow bg-gradient-to-r from-teal-700 to-teal-800 rounded-xl overflow-hidden text-white">
+                    <div class="p-6 flex items-center justify-between cursor-pointer" onclick="toggleLayer(this)">
+                        <div class="flex items-center gap-4">
+                            <div class="text-4xl font-bold opacity-30">4</div>
+                            <div>
+                                <h3 class="text-2xl font-bold">Kubernetes Data Plane</h3>
+                                <p class="text-sm opacity-80">Node-Level Components</p>
+                            </div>
+                        </div>
+                        <span class="toggle-arrow text-2xl">▼</span>
+                    </div>
+                    <div class="layer-details bg-black bg-opacity-20 p-6 border-t border-white border-opacity-10">
+                        <div class="grid md:grid-cols-2 gap-4 text-sm">
+                            <div><strong>kubelet:</strong> Node agent managing pods</div>
+                            <div><strong>kube-proxy:</strong> Network proxy for services</div>
+                            <div><strong>CNI:</strong> Container Network Interface</div>
+                            <div><strong>CSI:</strong> Container Storage Interface</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Layer 5 -->
+                <div class="card-shadow bg-gradient-to-r from-blue-700 to-blue-800 rounded-xl overflow-hidden text-white">
+                    <div class="p-6 flex items-center justify-between cursor-pointer" onclick="toggleLayer(this)">
+                        <div class="flex items-center gap-4">
+                            <div class="text-4xl font-bold opacity-30">5</div>
+                            <div>
+                                <h3 class="text-2xl font-bold">Kubernetes Resource Layer</h3>
+                                <p class="text-sm opacity-80">Building Blocks & Blueprints</p>
+                            </div>
+                        </div>
+                        <span class="toggle-arrow text-2xl">▼</span>
+                    </div>
+                    <div class="layer-details bg-black bg-opacity-20 p-6 border-t border-white border-opacity-10">
+                        <div class="grid md:grid-cols-2 gap-4 text-sm">
+                            <div><strong>Workloads:</strong> Deployments, StatefulSets, DaemonSets</div>
+                            <div><strong>Core:</strong> Pods, Services, ConfigMaps, Secrets</div>
+                            <div><strong>Networking:</strong> Ingress, NetworkPolicies</div>
+                            <div><strong>Storage:</strong> PVs, PVCs, StorageClasses</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Layer 6 -->
+                <div class="card-shadow bg-gradient-to-r from-purple-700 to-purple-800 rounded-xl overflow-hidden text-white">
+                    <div class="p-6 flex items-center justify-between cursor-pointer" onclick="toggleLayer(this)">
+                        <div class="flex items-center gap-4">
+                            <div class="text-4xl font-bold opacity-30">6</div>
+                            <div>
+                                <h3 class="text-2xl font-bold">Platform Services Layer</h3>
+                                <p class="text-sm opacity-80">Production-Ready Utilities</p>
+                            </div>
+                        </div>
+                        <span class="toggle-arrow text-2xl">▼</span>
+                    </div>
+                    <div class="layer-details bg-black bg-opacity-20 p-6 border-t border-white border-opacity-10">
+                        <div class="grid md:grid-cols-2 gap-4 text-sm">
+                            <div><strong>Monitoring:</strong> Prometheus, Grafana</div>
+                            <div><strong>Logging:</strong> ELK Stack, Fluentd</div>
+                            <div><strong>Service Mesh:</strong> Istio, Linkerd</div>
+                            <div><strong>CI/CD:</strong> ArgoCD, Tekton, Jenkins</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Layer 7 -->
+                <div class="card-shadow bg-gradient-to-r from-red-700 to-red-800 rounded-xl overflow-hidden text-white">
+                    <div class="p-6 flex items-center justify-between cursor-pointer" onclick="toggleLayer(this)">
+                        <div class="flex items-center gap-4">
+                            <div class="text-4xl font-bold opacity-30">7</div>
+                            <div>
+                                <h3 class="text-2xl font-bold">Application Layer</h3>
+                                <p class="text-sm opacity-80">Business Logic & Applications</p>
+                            </div>
+                        </div>
+                        <span class="toggle-arrow text-2xl">▼</span>
+                    </div>
+                    <div class="layer-details bg-black bg-opacity-20 p-6 border-t border-white border-opacity-10">
+                        <div class="grid md:grid-cols-2 gap-4 text-sm">
+                            <div><strong>Microservices:</strong> Business logic containers</div>
+                            <div><strong>Web Apps:</strong> Frontend UIs and APIs</div>
+                            <div><strong>Databases:</strong> MySQL, PostgreSQL, MongoDB</div>
+                            <div><strong>Message Queues:</strong> RabbitMQ, Kafka</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Components Tab -->
+        <div id="components" class="tab-content hidden">
+            <h2 class="text-3xl font-bold text-white mb-6">Kubernetes Core Components</h2>
+            <div class="space-y-6">
+                <div class="card-shadow bg-purple-900 bg-opacity-50 border border-purple-700 rounded-xl p-6 text-white">
+                    <h3 class="text-2xl font-bold mb-4">Namespace Management</h3>
+                    <div class="grid md:grid-cols-3 gap-4">
+                        <div class="bg-black bg-opacity-30 p-4 rounded-lg">
+                            <div class="font-bold text-purple-300 mb-2">Namespace</div>
+                            <p class="text-sm">Logical isolation boundary for resources</p>
+                        </div>
+                        <div class="bg-black bg-opacity-30 p-4 rounded-lg">
+                            <div class="font-bold text-purple-300 mb-2">ResourceQuota</div>
+                            <p class="text-sm">Limit total resource consumption</p>
+                        </div>
+                        <div class="bg-black bg-opacity-30 p-4 rounded-lg">
+                            <div class="font-bold text-purple-300 mb-2">LimitRange</div>
+                            <p class="text-sm">Default/min/max resources per Pod</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card-shadow bg-blue-900 bg-opacity-50 border border-blue-700 rounded-xl p-6 text-white">
+                    <h3 class="text-2xl font-bold mb-4">Configuration Management</h3>
+                    <div class="grid md:grid-cols-3 gap-4">
+                        <div class="bg-black bg-opacity-30 p-4 rounded-lg">
+                            <div class="font-bold text-blue-300 mb-2">ConfigMap</div>
+                            <p class="text-sm">Non-sensitive configuration data</p>
+                        </div>
+                        <div class="bg-black bg-opacity-30 p-4 rounded-lg">
+                            <div class="font-bold text-blue-300 mb-2">Secret</div>
+                            <p class="text-sm">Sensitive data with encryption</p>
+                        </div>
+                        <div class="bg-black bg-opacity-30 p-4 rounded-lg">
+                            <div class="font-bold text-blue-300 mb-2">Volume</div>
+                            <p class="text-sm">Mount data storage into containers</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card-shadow bg-green-900 bg-opacity-50 border border-green-700 rounded-xl p-6 text-white">
+                    <h3 class="text-2xl font-bold mb-4">Workload Management</h3>
+                    <div class="grid md:grid-cols-4 gap-4">
+                        <div class="bg-black bg-opacity-30 p-4 rounded-lg">
+                            <div class="font-bold text-green-300 mb-2">Deployment</div>
+                            <p class="text-sm">Stateless apps with rolling updates</p>
+                        </div>
+                        <div class="bg-black bg-opacity-30 p-4 rounded-lg">
+                            <div class="font-bold text-green-300 mb-2">StatefulSet</div>
+                            <p class="text-sm">Stateful apps with persistent identity</p>
+                        </div>
+                        <div class="bg-black bg-opacity-30 p-4 rounded-lg">
+                            <div class="font-bold text-green-300 mb-2">DaemonSet</div>
+                            <p class="text-sm">Run pod on every node</p>
+                        </div>
+                        <div class="bg-black bg-opacity-30 p-4 rounded-lg">
+                            <div class="font-bold text-green-300 mb-2">Job/CronJob</div>
+                            <p class="text-sm">Run tasks once or on schedule</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card-shadow bg-cyan-900 bg-opacity-50 border border-cyan-700 rounded-xl p-6 text-white">
+                    <h3 class="text-2xl font-bold mb-4">Networking & Service Exposure</h3>
+                    <div class="grid md:grid-cols-3 gap-4">
+                        <div class="bg-black bg-opacity-30 p-4 rounded-lg">
+                            <div class="font-bold text-cyan-300 mb-2">Service (ClusterIP)</div>
+                            <p class="text-sm">Internal DNS name for pod communication</p>
+                        </div>
+                        <div class="bg-black bg-opacity-30 p-4 rounded-lg">
+                            <div class="font-bold text-cyan-300 mb-2">Ingress</div>
+                            <p class="text-sm">HTTP/HTTPS routing with SSL</p>
+                        </div>
+                        <div class="bg-black bg-opacity-30 p-4 rounded-lg">
+                            <div class="font-bold text-cyan-300 mb-2">NetworkPolicy</div>
+                            <p class="text-sm">Control pod-to-pod communication</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card-shadow bg-orange-900 bg-opacity-50 border border-orange-700 rounded-xl p-6 text-white">
+                    <h3 class="text-2xl font-bold mb-4">Storage Management</h3>
+                    <div class="grid md:grid-cols-3 gap-4">
+                        <div class="bg-black bg-opacity-30 p-4 rounded-lg">
+                            <div class="font-bold text-orange-300 mb-2">StorageClass</div>
+                            <p class="text-sm">Define provisioner and parameters</p>
+                        </div>
+                        <div class="bg-black bg-opacity-30 p-4 rounded-lg">
+                            <div class="font-bold text-orange-300 mb-2">PersistentVolume</div>
+                            <p class="text-sm">Cluster-level storage resource</p>
+                        </div>
+                        <div class="bg-black bg-opacity-30 p-4 rounded-lg">
+                            <div class="font-bold text-orange-300 mb-2">PersistentVolumeClaim</div>
+                            <p class="text-sm">Request storage from StorageClass</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card-shadow bg-red-900 bg-opacity-50 border border-red-700 rounded-xl p-6 text-white">
+                    <h3 class="text-2xl font-bold mb-4">Security & Access Control</h3>
+                    <div class="grid md:grid-cols-4 gap-4">
+                        <div class="bg-black bg-opacity-30 p-4 rounded-lg">
+                            <div class="font-bold text-red-300 mb-2">ServiceAccount</div>
+                            <p class="text-sm">Pod identity within cluster</p>
+                        </div>
+                        <div class="bg-black bg-opacity-30 p-4 rounded-lg">
+                            <div class="font-bold text-red-300 mb-2">Role/ClusterRole</div>
+                            <p class="text-sm">Define permissions for resources</p>
+                        </div>
+                        <div class="bg-black bg-opacity-30 p-4 rounded-lg">
+                            <div class="font-bold text-red-300 mb-2">RoleBinding</div>
+                            <p class="text-sm">Bind roles to accounts</p>
+                        </div>
+                        <div class="bg-black bg-opacity-30 p-4 rounded-lg">
+                            <div class="font-bold text-red-300 mb-2">PodSecurityPolicy</div>
+                            <p class="text-sm">Enforce security standards</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card-shadow bg-yellow-900 bg-opacity-50 border border-yellow-700 rounded-xl p-6 text-white">
+                    <h3 class="text-2xl font-bold mb-4">Autoscaling & Reliability</h3>
+                    <div class="grid md:grid-cols-3 gap-4">
+                        <div class="bg-black bg-opacity-30 p-4 rounded-lg">
+                            <div class="font-bold text-yellow-300 mb-2">HorizontalPodAutoscaler</div>
+                            <p class="text-sm">Auto-scale based on CPU/memory</p>
+                        </div>
+                        <div class="bg-black bg-opacity-30 p-4 rounded-lg">
+                            <div class="font-bold text-yellow-300 mb-2">VerticalPodAutoscaler</div>
+                            <p class="text-sm">Recommend resource requests</p>
+                        </div>
+                        <div class="bg-black bg-opacity-30 p-4 rounded-lg">
+                            <div class="font-bold text-yellow-300 mb-2">PodDisruptionBudget</div>
+                            <p class="text-sm">Ensure minimum availability</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Services Tab -->
+        <div id="services" class="tab-content hidden">
+            <h2 class="text-3xl font-bold text-white mb-6">Production Services by Category</h2>
+            <p class="text-gray-300 mb-6">13 categories of services that run on Kubernetes. Click on a service name for Kubernetes resource recommendations.</p>
+            
+            <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div class="card-shadow bg-slate-800 border border-slate-700 rounded-lg p-6 text-white">
+                    <h3 class="font-bold mb-2">Frontend & Web Servers</h3>
+                    <p class="text-sm text-gray-400 space-x-1">
+                        <span class="service-link cursor-pointer text-blue-400 hover:underline" data-service="nginx">NGINX</span>,
+                        <span class="service-link cursor-pointer text-blue-400 hover:underline" data-service="apache">Apache</span>,
+                        <span class="service-link cursor-pointer text-blue-400 hover:underline" data-service="react">React</span>/<span class="service-link cursor-pointer text-blue-400 hover:underline" data-service="vue">Vue</span>/<span class="service-link cursor-pointer text-blue-400 hover:underline" data-service="angular">Angular</span>
+                    </p>
+                </div>
+                <div class="card-shadow bg-slate-800 border border-slate-700 rounded-lg p-6 text-white">
+                    <h3 class="font-bold mb-2">Backend APIs</h3>
+                    <p class="text-sm text-gray-400 space-x-1">
+                        <span class="service-link cursor-pointer text-blue-400 hover:underline" data-service="nodejs">Node.js</span>,
+                        <span class="service-link cursor-pointer text-blue-400 hover:underline" data-service="python">Python</span>,
+                        <span class="service-link cursor-pointer text-blue-400 hover:underline" data-service="java">Java</span>,
+                        <span class="service-link cursor-pointer text-blue-400 hover:underline" data-service="go">Go</span>,
+                        <span class="service-link cursor-pointer text-blue-400 hover:underline" data-service="php">PHP</span>,
+                        <span class="service-link cursor-pointer text-blue-400 hover:underline" data-service="dotnet">.NET</span>
+                    </p>
+                </div>
+                <div class="card-shadow bg-slate-800 border border-slate-700 rounded-lg p-6 text-white">
+                    <h3 class="font-bold mb-2">Databases</h3>
+                    <p class="text-sm text-gray-400 space-x-1">
+                        <span class="service-link cursor-pointer text-blue-400 hover:underline" data-service="postgresql">PostgreSQL</span>,
+                        <span class="service-link cursor-pointer text-blue-400 hover:underline" data-service="mysql">MySQL</span>,
+                        <span class="service-link cursor-pointer text-blue-400 hover:underline" data-service="mongodb">MongoDB</span>,
+                        <span class="service-link cursor-pointer text-blue-400 hover:underline" data-service="cockroachdb">CockroachDB</span>
+                    </p>
+                </div>
+                <div class="card-shadow bg-slate-800 border border-slate-700 rounded-lg p-6 text-white">
+                    <h3 class="font-bold mb-2">Caching & In-Memory</h3>
+                    <p class="text-sm text-gray-400 space-x-1">
+                        <span class="service-link cursor-pointer text-blue-400 hover:underline" data-service="redis">Redis</span>,
+                        <span class="service-link cursor-pointer text-blue-400 hover:underline" data-service="memcached">Memcached</span>,
+                        <span class="service-link cursor-pointer text-blue-400 hover:underline" data-service="valkey">Valkey</span>
+                    </p>
+                </div>
+                <div class="card-shadow bg-slate-800 border border-slate-700 rounded-lg p-6 text-white">
+                    <h3 class="font-bold mb-2">Message Queues</h3>
+                    <p class="text-sm text-gray-400 space-x-1">
+                        <span class="service-link cursor-pointer text-blue-400 hover:underline" data-service="rabbitmq">RabbitMQ</span>,
+                        <span class="service-link cursor-pointer text-blue-400 hover:underline" data-service="kafka">Kafka</span>,
+                        <span class="service-link cursor-pointer text-blue-400 hover:underline" data-service="nats">NATS</span>,
+                        <span class="service-link cursor-pointer text-blue-400 hover:underline" data-service="activemq">ActiveMQ</span>
+                    </p>
+                </div>
+                <div class="card-shadow bg-slate-800 border border-slate-700 rounded-lg p-6 text-white">
+                    <h3 class="font-bold mb-2">Search & Analytics</h3>
+                    <p class="text-sm text-gray-400 space-x-1">
+                        <span class="service-link cursor-pointer text-blue-400 hover:underline" data-service="elasticsearch">Elasticsearch</span>,
+                        <span class="service-link cursor-pointer text-blue-400 hover:underline" data-service="solr">Solr</span>
+                    </p>
+                </div>
+                <div class="card-shadow bg-slate-800 border border-slate-700 rounded-lg p-6 text-white">
+                    <h3 class="font-bold mb-2">Monitoring & Observability</h3>
+                    <p class="text-sm text-gray-400 space-x-1">
+                        <span class="service-link cursor-pointer text-blue-400 hover:underline" data-service="prometheus">Prometheus</span>,
+                        <span class="service-link cursor-pointer text-blue-400 hover:underline" data-service="grafana">Grafana</span>,
+                        <span class="service-link cursor-pointer text-blue-400 hover:underline" data-service="jaeger">Jaeger</span>,
+                        <span class="service-link cursor-pointer text-blue-400 hover:underline" data-service="datadog">Datadog</span>
+                    </p>
+                </div>
+                <div class="card-shadow bg-slate-800 border border-slate-700 rounded-lg p-6 text-white">
+                    <h3 class="font-bold mb-2">CI/CD & DevOps</h3>
+                    <p class="text-sm text-gray-400 space-x-1">
+                        <span class="service-link cursor-pointer text-blue-400 hover:underline" data-service="jenkins">Jenkins</span>,
+                        <span class="service-link cursor-pointer text-blue-400 hover:underline" data-service="gitlab-runner">GitLab Runner</span>,
+                        <span class="service-link cursor-pointer text-blue-400 hover:underline" data-service="argocd">ArgoCD</span>,
+                        <span class="service-link cursor-pointer text-blue-400 hover:underline" data-service="tekton">Tekton</span>
+                    </p>
+                </div>
+                <div class="card-shadow bg-slate-800 border border-slate-700 rounded-lg p-6 text-white">
+                    <h3 class="font-bold mb-2">Security & Identity</h3>
+                    <p class="text-sm text-gray-400 space-x-1">
+                        <span class="service-link cursor-pointer text-blue-400 hover:underline" data-service="keycloak">Keycloak</span>,
+                        <span class="service-link cursor-pointer text-blue-400 hover:underline" data-service="vault">Vault</span>,
+                        <span class="service-link cursor-pointer text-blue-400 hover:underline" data-service="cert-manager">Cert-Manager</span>
+                    </p>
+                </div>
+                <div class="card-shadow bg-slate-800 border border-slate-700 rounded-lg p-6 text-white">
+                    <h3 class="font-bold mb-2">Storage & File Systems</h3>
+                    <p class="text-sm text-gray-400 space-x-1">
+                        <span class="service-link cursor-pointer text-blue-400 hover:underline" data-service="minio">MinIO</span>,
+                        <span class="service-link cursor-pointer text-blue-400 hover:underline" data-service="nextcloud">Nextcloud</span>,
+                        <span class="service-link cursor-pointer text-blue-400 hover:underline" data-service="nfs-server">NFS Server</span>
+                    </p>
+                </div>
+                <div class="card-shadow bg-slate-800 border border-slate-700 rounded-lg p-6 text-white">
+                    <h3 class="font-bold mb-2">Workflow Orchestration</h3>
+                    <p class="text-sm text-gray-400 space-x-1">
+                        <span class="service-link cursor-pointer text-blue-400 hover:underline" data-service="airflow">Airflow</span>,
+                        <span class="service-link cursor-pointer text-blue-400 hover:underline" data-service="temporal">Temporal</span>,
+                        <span class="service-link cursor-pointer text-blue-400 hover:underline" data-service="prefect">Prefect</span>
+                    </p>
+                </div>
+                <div class="card-shadow bg-slate-800 border border-slate-700 rounded-lg p-6 text-white">
+                    <h3 class="font-bold mb-2">Quality & Testing</h3>
+                    <p class="text-sm text-gray-400 space-x-1">
+                        <span class="service-link cursor-pointer text-blue-400 hover:underline" data-service="sonarqube">SonarQube</span>,
+                        <span class="service-link cursor-pointer text-blue-400 hover:underline" data-service="selenium-grid">Selenium Grid</span>
+                    </p>
+                </div>
+                <div class="card-shadow bg-slate-800 border border-slate-700 rounded-lg p-6 text-white">
+                    <h3 class="font-bold mb-2">Networking & Ingress</h3>
+                    <p class="text-sm text-gray-400 space-x-1">
+                        <span class="service-link cursor-pointer text-blue-400 hover:underline" data-service="traefik">Traefik</span>,
+                        <span class="service-link cursor-pointer text-blue-400 hover:underline" data-service="nginx-ingress">NGINX Ingress</span>,
+                        <span class="service-link cursor-pointer text-blue-400 hover:underline" data-service="istio">Istio</span>
+                    </p>
+                </div>
+            </div>
+
+            <!-- Service Modal -->
+            <div id="service-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50">
+                <div class="bg-slate-800 rounded-xl p-6 max-w-lg w-full m-4 max-h-[80vh] overflow-y-auto">
+                    <h3 id="modal-title" class="text-xl font-bold mb-4 text-white"></h3>
+                    <div id="modal-content" class="space-y-4 text-sm text-white"></div>
+                    <button onclick="closeModal()" class="mt-4 bg-blue-600 px-4 py-2 rounded text-white hover:bg-blue-700">Close</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Deployment Tab -->
+        <div id="deployment" class="tab-content hidden">
+            <h2 class="text-3xl font-bold text-white mb-6">Production Deployment Workflow</h2>
+            
+            <div class="bg-slate-800 rounded-xl p-8 border border-slate-700 text-white mb-8">
+                <h3 class="text-2xl font-bold mb-6">Step-by-Step Deployment</h3>
+                <div class="space-y-4">
+                    <div class="flex gap-4">
+                        <div class="bg-blue-600 rounded-full w-10 h-10 flex items-center justify-center font-bold flex-shrink-0">1</div>
+                        <div>
+                            <h4 class="font-bold mb-2">Setup Namespace & Quotas</h4>
+                            <p class="text-gray-300">Create namespace, ResourceQuota, LimitRange for isolation</p>
+                        </div>
+                    </div>
+                    <div class="flex gap-4">
+                        <div class="bg-blue-600 rounded-full w-10 h-10 flex items-center justify-center font-bold flex-shrink-0">2</div>
+                        <div>
+                            <h4 class="font-bold mb-2">Configure Storage</h4>
+                            <p class="text-gray-300">Define StorageClass if persistent data needed</p>
+                        </div>
+                    </div>
+                    <div class="flex gap-4">
+                        <div class="bg-blue-600 rounded-full w-10 h-10 flex items-center justify-center font-bold flex-shrink-0">3</div>
+                        <div>
+                            <h4 class="font-bold mb-2">Deploy Configuration</h4>
+                            <p class="text-gray-300">Apply ConfigMaps and Secrets for settings</p>
+                        </div>
+                    </div>
+                    <div class="flex gap-4">
+                        <div class="bg-blue-600 rounded-full w-10 h-10 flex items-center justify-center font-bold flex-shrink-0">4</div>
+                        <div>
+                            <h4 class="font-bold mb-2">Setup Security</h4>
+                            <p class="text-gray-300">Create ServiceAccount, Role, RoleBinding</p>
+                        </div>
+                    </div>
+                    <div class="flex gap-4">
+                        <div class="bg-blue-600 rounded-full w-10 h-10 flex items-center justify-center font-bold flex-shrink-0">5</div>
+                        <div>
+                            <h4 class="font-bold mb-2">Deploy Stateful Services</h4>
+                            <p class="text-gray-300">Deploy databases and queues (StatefulSets) first</p>
+                        </div>
+                    </div>
+                    <div class="flex gap-4">
+                        <div class="bg-blue-600 rounded-full w-10 h-10 flex items-center justify-center font-bold flex-shrink-0">6</div>
+                        <div>
+                            <h4 class="font-bold mb-2">Deploy Applications</h4>
+                            <p class="text-gray-300">Deploy Deployments and DaemonSets</p>
+                        </div>
+                    </div>
+                    <div class="flex gap-4">
+                        <div class="bg-blue-600 rounded-full w-10 h-10 flex items-center justify-center font-bold flex-shrink-0">7</div>
+                        <div>
+                            <h4 class="font-bold mb-2">Configure Networking</h4>
+                            <p class="text-gray-300">Create Services, NetworkPolicies, Ingress</p>
+                        </div>
+                    </div>
+                    <div class="flex gap-4">
+                        <div class="bg-blue-600 rounded-full w-10 h-10 flex items-center justify-center font-bold flex-shrink-0">8</div>
+                        <div>
+                            <h4 class="font-bold mb-2">Enable Autoscaling</h4>
+                            <p class="text-gray-300">Add HPA, VPA, PodDisruptionBudgets</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid md:grid-cols-2 gap-8">
+                <div class="bg-green-900 bg-opacity-30 border border-green-700 rounded-xl p-6 text-white">
+                    <h3 class="text-2xl font-bold mb-4">Best Practices</h3>
+                    <ul class="space-y-3 text-sm">
+                        <li class="flex gap-2"><span class="text-green-400">✓</span> Always set resource requests and limits</li>
+                        <li class="flex gap-2"><span class="text-green-400">✓</span> Use namespaces for environment separation</li>
+                        <li class="flex gap-2"><span class="text-green-400">✓</span> Never hardcode secrets in images</li>
+                        <li class="flex gap-2"><span class="text-green-400">✓</span> Implement RBAC with minimal permissions</li>
+                        <li class="flex gap-2"><span class="text-green-400">✓</span> Enable monitoring and centralized logging</li>
+                        <li class="flex gap-2"><span class="text-green-400">✓</span> Define readiness and liveness probes</li>
+                        <li class="flex gap-2"><span class="text-green-400">✓</span> Use health checks for auto-recovery</li>
+                        <li class="flex gap-2"><span class="text-green-400">✓</span> Plan for multi-replica deployments</li>
+                    </ul>
+                </div>
+
+                <div class="bg-slate-800 border border-slate-700 rounded-xl p-6 text-white">
+                    <h3 class="text-2xl font-bold mb-4">Essential kubectl Commands</h3>
+                    <div class="space-y-2 font-mono text-xs bg-black bg-opacity-50 p-4 rounded">
+                        <div><span class="text-gray-500">#</span> <span class="text-green-400">kubectl apply -f file.yaml</span></div>
+                        <div><span class="text-gray-500">#</span> <span class="text-green-400">kubectl get all -n prod</span></div>
+                        <div><span class="text-gray-500">#</span> <span class="text-green-400">kubectl logs -f deploy/app</span></div>
+                        <div><span class="text-gray-500">#</span> <span class="text-green-400">kubectl describe pod name</span></div>
+                        <div><span class="text-gray-500">#</span> <span class="text-green-400">kubectl scale deploy/app --replicas=5</span></div>
+                        <div><span class="text-gray-500">#</span> <span class="text-green-400">kubectl exec -it pod -- /bin/sh</span></div>
+                        <div><span class="text-gray-500">#</span> <span class="text-green-400">kubectl port-forward pod 8080:8080</span></div>
+                        <div><span class="text-gray-500">#</span> <span class="text-green-400">kubectl rollout undo deploy/app</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-slate-800 border border-slate-700 rounded-xl p-6 text-white mt-8">
+                <h3 class="text-2xl font-bold mb-4">Key Patterns & Relationships</h3>
+                <div class="grid md:grid-cols-2 gap-6">
+                    <div>
+                        <h4 class="font-bold text-blue-300 mb-2">Storage Flow</h4>
+                        <div class="bg-black bg-opacity-30 p-4 rounded font-mono text-sm">
+                            StorageClass → PV → PVC → Pod
+                        </div>
+                    </div>
+                    <div>
+                        <h4 class="font-bold text-green-300 mb-2">Workload Hierarchy</h4>
+                        <div class="bg-black bg-opacity-30 p-4 rounded font-mono text-sm">
+                            Deployment → ReplicaSet → Pod
+                        </div>
+                    </div>
+                    <div>
+                        <h4 class="font-bold text-purple-300 mb-2">Configuration Injection</h4>
+                        <div class="bg-black bg-opacity-30 p-4 rounded font-mono text-sm">
+                            ConfigMap/Secret → Pod
+                        </div>
+                    </div>
+                    <div>
+                        <h4 class="font-bold text-orange-300 mb-2">Network Routing</h4>
+                        <div class="bg-black bg-opacity-30 p-4 rounded font-mono text-sm">
+                            Service (Labels) → Pod → Traffic
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function selectTab(tabName) {
+            // Hide all tabs
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.add('hidden');
+            });
+
+            // Show selected tab
+            const selectedTab = document.getElementById(tabName);
+            if (selectedTab) {
+                selectedTab.classList.remove('hidden');
+            }
+
+            // Update button styles
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('bg-blue-600');
+                btn.classList.add('bg-slate-700', 'hover:bg-slate-600');
+            });
+            event.target.classList.remove('bg-slate-700', 'hover:bg-slate-600');
+            event.target.classList.add('bg-blue-600');
+        }
+
+        function toggleLayer(element) {
+            const details = element.querySelector('.layer-details');
+            const arrow = element.querySelector('.toggle-arrow');
+            
+            if (details.style.display === 'none' || details.style.display === '') {
+                details.style.display = 'block';
+                arrow.textContent = '▼';
+            } else {
+                details.style.display = 'none';
+                arrow.textContent = '▶';
+            }
+        }
+
+        // Service Modal Functions
+        const serviceData = {
+            nginx: {
+                required: [
+                    {name: 'Deployment', desc: 'Manages NGINX pods and replicas'},
+                    {name: 'Service', desc: 'Exposes NGINX to network (ClusterIP/LoadBalancer)'}
+                ],
+                optional: [
+                    {name: 'ConfigMap', desc: 'Store nginx.conf and custom configurations'},
+                    {name: 'Ingress', desc: 'External HTTP/HTTPS routing rules'},
+                    {name: 'HPA', desc: 'Auto-scale based on CPU/traffic'},
+                    {name: 'PDB', desc: 'Ensure minimum replicas during updates'}
+                ],
+                notused: [
+                    {name: 'Secret', desc: 'Not needed unless using TLS certificates'},
+                    {name: 'PVC', desc: 'Stateless - no persistent storage needed'},
+                    {name: 'NetworkPolicy', desc: 'Optional for network segmentation'}
+                ]
+            },
+            apache: {
+                required: [
+                    {name: 'Deployment', desc: 'Manages Apache pods and replicas'},
+                    {name: 'Service', desc: 'Exposes Apache to network (ClusterIP/LoadBalancer)'}
+                ],
+                optional: [
+                    {name: 'ConfigMap', desc: 'Store httpd.conf and custom configurations'},
+                    {name: 'Ingress', desc: 'External HTTP/HTTPS routing rules'},
+                    {name: 'HPA', desc: 'Auto-scale based on CPU/traffic'},
+                    {name: 'PDB', desc: 'Ensure minimum replicas during updates'}
+                ],
+                notused: [
+                    {name: 'Secret', desc: 'Not needed unless using TLS certificates'},
+                    {name: 'PVC', desc: 'Stateless - no persistent storage needed'},
+                    {name: 'NetworkPolicy', desc: 'Optional for network segmentation'}
+                ]
+            },
+            react: {
+                required: [
+                    {name: 'Deployment', desc: 'Manages React app pods and replicas'},
+                    {name: 'Service', desc: 'Exposes React app to network'}
+                ],
+                optional: [
+                    {name: 'ConfigMap', desc: 'Store environment-specific configurations'},
+                    {name: 'Ingress', desc: 'External routing for static assets and API'},
+                    {name: 'HPA', desc: 'Auto-scale based on traffic'}
+                ],
+                notused: [
+                    {name: 'PVC', desc: 'Stateless frontend - no persistent storage'},
+                    {name: 'StatefulSet', desc: 'Not applicable for stateless apps'}
+                ]
+            },
+            vue: {
+                required: [
+                    {name: 'Deployment', desc: 'Manages Vue app pods and replicas'},
+                    {name: 'Service', desc: 'Exposes Vue app to network'}
+                ],
+                optional: [
+                    {name: 'ConfigMap', desc: 'Store environment-specific configurations'},
+                    {name: 'Ingress', desc: 'External routing for static assets and API'},
+                    {name: 'HPA', desc: 'Auto-scale based on traffic'}
+                ],
+                notused: [
+                    {name: 'PVC', desc: 'Stateless frontend - no persistent storage'},
+                    {name: 'StatefulSet', desc: 'Not applicable for stateless apps'}
+                ]
+            },
+            angular: {
+                required: [
+                    {name: 'Deployment', desc: 'Manages Angular app pods and replicas'},
+                    {name: 'Service', desc: 'Exposes Angular app to network'}
+                ],
+                optional: [
+                    {name: 'ConfigMap', desc: 'Store environment-specific configurations'},
+                    {name: 'Ingress', desc: 'External routing for static assets and API'},
+                    {name: 'HPA', desc: 'Auto-scale based on traffic'}
+                ],
+                notused: [
+                    {name: 'PVC', desc: 'Stateless frontend - no persistent storage'},
+                    {name: 'StatefulSet', desc: 'Not applicable for stateless apps'}
+                ]
+            },
+            nodejs: {
+                required: [
+                    {name: 'Deployment', desc: 'Manages Node.js API pods and replicas'},
+                    {name: 'Service', desc: 'Exposes API endpoints'}
+                ],
+                optional: [
+                    {name: 'ConfigMap', desc: 'Store app configurations'},
+                    {name: 'Ingress', desc: 'External API routing'},
+                    {name: 'HPA', desc: 'Auto-scale based on CPU/memory'}
+                ],
+                notused: [
+                    {name: 'PVC', desc: 'Typically stateless - no persistent storage'},
+                    {name: 'StatefulSet', desc: 'Use for stateless microservices'}
+                ]
+            },
+            python: {
+                required: [
+                    {name: 'Deployment', desc: 'Manages Python app pods and replicas'},
+                    {name: 'Service', desc: 'Exposes app endpoints'}
+                ],
+                optional: [
+                    {name: 'ConfigMap', desc: 'Store Python app configs'},
+                    {name: 'Ingress', desc: 'External routing'},
+                    {name: 'HPA', desc: 'Auto-scale based on metrics'}
+                ],
+                notused: [
+                    {name: 'PVC', desc: 'Stateless unless custom persistence'},
+                    {name: 'StatefulSet', desc: 'Not typical for APIs'}
+                ]
+            },
+            java: {
+                required: [
+                    {name: 'Deployment', desc: 'Manages Java app pods and replicas'},
+                    {name: 'Service', desc: 'Exposes Java service'}
+                ],
+                optional: [
+                    {name: 'ConfigMap', desc: 'JVM and app configurations'},
+                    {name: 'Ingress', desc: 'Routing rules'},
+                    {name: 'HPA', desc: 'Scale on CPU'}
+                ],
+                notused: [
+                    {name: 'PVC', desc: 'Stateless deployment'},
+                    {name: 'DaemonSet', desc: 'Not node-specific'}
+                ]
+            },
+            go: {
+                required: [
+                    {name: 'Deployment', desc: 'Manages Go app pods'},
+                    {name: 'Service', desc: 'Exposes Go service'}
+                ],
+                optional: [
+                    {name: 'ConfigMap', desc: 'App configs'},
+                    {name: 'HPA', desc: 'Auto-scaling'}
+                ],
+                notused: [
+                    {name: 'PVC', desc: 'Lightweight and stateless'},
+                    {name: 'StatefulSet', desc: 'Not needed'}
+                ]
+            },
+            php: {
+                required: [
+                    {name: 'Deployment', desc: 'Manages PHP pods'},
+                    {name: 'Service', desc: 'Exposes PHP app'}
+                ],
+                optional: [
+                    {name: 'ConfigMap', desc: 'PHP.ini configs'},
+                    {name: 'Ingress', desc: 'Web routing'}
+                ],
+                notused: [
+                    {name: 'PVC', desc: 'Stateless unless sessions persisted'},
+                    {name: 'StatefulSet', desc: 'Use Deployment'}
+                ]
+            },
+            dotnet: {
+                required: [
+                    {name: 'Deployment', desc: 'Manages .NET pods'},
+                    {name: 'Service', desc: 'Exposes .NET API'}
+                ],
+                optional: [
+                    {name: 'ConfigMap', desc: 'App settings'},
+                    {name: 'HPA', desc: 'Scale on metrics'}
+                ],
+                notused: [
+                    {name: 'PVC', desc: 'Stateless apps'},
+                    {name: 'StatefulSet', desc: 'Not typical'}
+                ]
+            },
+            postgresql: {
+                required: [
+                    {name: 'StatefulSet', desc: 'Manages PostgreSQL with persistent identity'},
+                    {name: 'PVC', desc: 'Persistent storage for data'},
+                    {name: 'Service', desc: 'Headless for discovery, ClusterIP for access'}
+                ],
+                optional: [
+                    {name: 'ConfigMap', desc: 'Database configurations'},
+                    {name: 'Secret', desc: 'Store credentials'},
+                    {name: 'HPA', desc: 'Limited scaling for DB'}
+                ],
+                notused: [
+                    {name: 'Deployment', desc: 'Use StatefulSet for stateful DB'},
+                    {name: 'Ingress', desc: 'Not for DB exposure'}
+                ]
+            },
+            mysql: {
+                required: [
+                    {name: 'StatefulSet', desc: 'Manages MySQL with replicas'},
+                    {name: 'PVC', desc: 'Persistent data storage'},
+                    {name: 'Service', desc: 'Exposes MySQL'}
+                ],
+                optional: [
+                    {name: 'ConfigMap', desc: 'MySQL configs'},
+                    {name: 'Secret', desc: 'Passwords and keys'}
+                ],
+                notused: [
+                    {name: 'Deployment', desc: 'Stateful nature requires StatefulSet'},
+                    {name: 'Ingress', desc: 'Internal service only'}
+                ]
+            },
+            mongodb: {
+                required: [
+                    {name: 'StatefulSet', desc: 'Manages MongoDB replica set'},
+                    {name: 'PVC', desc: 'Data persistence'},
+                    {name: 'Service', desc: 'Headless for replica set'}
+                ],
+                optional: [
+                    {name: 'ConfigMap', desc: 'MongoDB settings'},
+                    {name: 'Secret', desc: 'Auth credentials'}
+                ],
+                notused: [
+                    {name: 'Deployment', desc: 'Use StatefulSet for clustering'},
+                    {name: 'NetworkPolicy', desc: 'Restrict but not core'}
+                ]
+            },
+            cockroachdb: {
+                required: [
+                    {name: 'StatefulSet', desc: 'Distributed SQL with state'},
+                    {name: 'PVC', desc: 'Per-node storage'},
+                    {name: 'Service', desc: 'Load-balanced access'}
+                ],
+                optional: [
+                    {name: 'ConfigMap', desc: 'Cluster configs'},
+                    {name: 'Ingress', desc: 'Admin UI exposure'}
+                ],
+                notused: [
+                    {name: 'DaemonSet', desc: 'Not node-daemon like'},
+                    {name: 'Job', desc: 'Not batch'}
+                ]
+            },
+            redis: {
+                required: [
+                    {name: 'Deployment', desc: 'Manages Redis pods (or StatefulSet for cluster)'},
+                    {name: 'Service', desc: 'Exposes Redis port'}
+                ],
+                optional: [
+                    {name: 'PVC', desc: 'For persistence if enabled'},
+                    {name: 'ConfigMap', desc: 'Redis.conf'},
+                    {name: 'HPA', desc: 'Scale on memory'}
+                ],
+                notused: [
+                    {name: 'Ingress', desc: 'Not HTTP-based'},
+                    {name: 'Secret', desc: 'Unless auth enabled'}
+                ]
+            },
+            memcached: {
+                required: [
+                    {name: 'Deployment', desc: 'Manages Memcached replicas'},
+                    {name: 'Service', desc: 'Exposes cache service'}
+                ],
+                optional: [
+                    {name: 'HPA', desc: 'Auto-scale on usage'},
+                    {name: 'NetworkPolicy', desc: 'Secure access'}
+                ],
+                notused: [
+                    {name: 'PVC', desc: 'Volatile in-memory, no persistence'},
+                    {name: 'StatefulSet', desc: 'Stateless'}
+                ]
+            },
+            valkey: {
+                required: [
+                    {name: 'Deployment', desc: 'Manages Valkey pods'},
+                    {name: 'Service', desc: 'Exposes cache'}
+                ],
+                optional: [
+                    {name: 'PVC', desc: 'Optional persistence'},
+                    {name: 'HPA', desc: 'Scale on load'}
+                ],
+                notused: [
+                    {name: 'Ingress', desc: 'Protocol not HTTP'},
+                    {name: 'StatefulSet', desc: 'Unless clustered'}
+                ]
+            },
+            rabbitmq: {
+                required: [
+                    {name: 'StatefulSet', desc: 'Manages RabbitMQ with queues'},
+                    {name: 'PVC', desc: 'Persistent queue data'},
+                    {name: 'Service', desc: 'AMQP and management ports'}
+                ],
+                optional: [
+                    {name: 'ConfigMap', desc: 'RabbitMQ configs'},
+                    {name: 'Secret', desc: 'Credentials'}
+                ],
+                notused: [
+                    {name: 'Deployment', desc: 'Stateful for durability'},
+                    {name: 'Ingress', desc: 'Not web'}
+                ]
+            },
+            kafka: {
+                required: [
+                    {name: 'StatefulSet', desc: 'Manages Kafka brokers'},
+                    {name: 'PVC', desc: 'Log storage'},
+                    {name: 'Service', desc: 'Headless for Zookeeper, bootstrap'}
+                ],
+                optional: [
+                    {name: 'ConfigMap', desc: 'Broker settings'},
+                    {name: 'Secret', desc: 'SASL/SSL'}
+                ],
+                notused: [
+                    {name: 'Ingress', desc: 'Internal messaging'},
+                    {name: 'HPA', desc: 'Manual scaling preferred'}
+                ]
+            },
+            nats: {
+                required: [
+                    {name: 'Deployment', desc: 'Manages NATS servers'},
+                    {name: 'Service', desc: 'Exposes NATS port'}
+                ],
+                optional: [
+                    {name: 'ConfigMap', desc: 'NATS configs'},
+                    {name: 'HPA', desc: 'Scale on messages/sec'}
+                ],
+                notused: [
+                    {name: 'PVC', desc: 'In-memory by default'},
+                    {name: 'StatefulSet', desc: 'Stateless unless clustered'}
+                ]
+            },
+            activemq: {
+                required: [
+                    {name: 'StatefulSet', desc: 'Manages ActiveMQ with persistence'},
+                    {name: 'PVC', desc: 'Message store'},
+                    {name: 'Service', desc: 'JMS ports'}
+                ],
+                optional: [
+                    {name: 'Secret', desc: 'Auth configs'},
+                    {name: 'Ingress', desc: 'Web console'}
+                ],
+                notused: [
+                    {name: 'Deployment', desc: 'Use StatefulSet for persistence'},
+                    {name: 'DaemonSet', desc: 'Not node-specific'}
+                ]
+            },
+            elasticsearch: {
+                required: [
+                    {name: 'StatefulSet', desc: 'Manages ES nodes'},
+                    {name: 'PVC', desc: 'Index storage'},
+                    {name: 'Service', desc: 'Headless discovery'}
+                ],
+                optional: [
+                    {name: 'ConfigMap', desc: 'ES configs'},
+                    {name: 'Secret', desc: 'Security'}
+                ],
+                notused: [
+                    {name: 'Deployment', desc: 'Stateful cluster'},
+                    {name: 'Ingress', desc: 'Internal queries'}
+                ]
+            },
+            solr: {
+                required: [
+                    {name: 'StatefulSet', desc: 'Manages SolrCloud nodes'},
+                    {name: 'PVC', desc: 'Core data'},
+                    {name: 'Service', desc: 'Query ports'}
+                ],
+                optional: [
+                    {name: 'ConfigMap', desc: 'Solr configs'},
+                    {name: 'Ingress', desc: 'Admin UI'}
+                ],
+                notused: [
+                    {name: 'HPA', desc: 'Manual node management'},
+                    {name: 'DaemonSet', desc: 'Cluster-wide'}
+                ]
+            },
+            prometheus: {
+                required: [
+                    {name: 'Deployment', desc: 'Manages Prometheus server'},
+                    {name: 'Service', desc: 'Exposes metrics endpoint'},
+                    {name: 'PVC', desc: 'Time-series storage'}
+                ],
+                optional: [
+                    {name: 'ConfigMap', desc: 'Prometheus.yml'},
+                    {name: 'Ingress', desc: 'UI access'},
+                    {name: 'Secret', desc: 'Remote write auth'}
+                ],
+                notused: [
+                    {name: 'StatefulSet', desc: 'Deployment sufficient'},
+                    {name: 'NetworkPolicy', desc: 'Core but optional'}
+                ]
+            },
+            grafana: {
+                required: [
+                    {name: 'Deployment', desc: 'Manages Grafana pods'},
+                    {name: 'Service', desc: 'Exposes dashboard port'}
+                ],
+                optional: [
+                    {name: 'PVC', desc: 'Dashboard persistence'},
+                    {name: 'Ingress', desc: 'External access'},
+                    {name: 'ConfigMap', desc: 'Datasources'}
+                ],
+                notused: [
+                    {name: 'StatefulSet', desc: 'Stateless UI'},
+                    {name: 'HPA', desc: 'Low traffic typically'}
+                ]
+            },
+            jaeger: {
+                required: [
+                    {name: 'Deployment', desc: 'Manages Jaeger components (collector, query)'},
+                    {name: 'Service', desc: 'Exposes tracing endpoints'}
+                ],
+                optional: [
+                    {name: 'PVC', desc: 'Storage backend'},
+                    {name: 'Ingress', desc: 'UI access'}
+                ],
+                notused: [
+                    {name: 'StatefulSet', desc: 'Deployment for services'},
+                    {name: 'Secret', desc: 'Unless auth enabled'}
+                ]
+            },
+            datadog: {
+                required: [
+                    {name: 'DaemonSet', desc: 'Agent on every node'},
+                    {name: 'Deployment', desc: 'For central components'}
+                ],
+                optional: [
+                    {name: 'ConfigMap', desc: 'Agent configs'},
+                    {name: 'Secret', desc: 'API keys'}
+                ],
+                notused: [
+                    {name: 'PVC', desc: 'Cloud-forwarded'},
+                    {name: 'Ingress', desc: 'Internal agent'}
+                ]
+            },
+            jenkins: {
+                required: [
+                    {name: 'Deployment', desc: 'Manages Jenkins controller'},
+                    {name: 'PVC', desc: 'Job history and plugins'},
+                    {name: 'Service', desc: 'Exposes Jenkins UI'}
+                ],
+                optional: [
+                    {name: 'Ingress', desc: 'External access'},
+                    {name: 'Secret', desc: 'Credentials'}
+                ],
+                notused: [
+                    {name: 'StatefulSet', desc: 'Deployment with persistence'},
+                    {name: 'HPA', desc: 'Single instance typically'}
+                ]
+            },
+            'gitlab-runner': {
+                required: [
+                    {name: 'Deployment', desc: 'Manages runner pods'},
+                    {name: 'Service', desc: 'Internal communication'}
+                ],
+                optional: [
+                    {name: 'ConfigMap', desc: 'Runner config.toml'},
+                    {name: 'Secret', desc: 'Registration token'}
+                ],
+                notused: [
+                    {name: 'PVC', desc: 'Ephemeral jobs'},
+                    {name: 'Ingress', desc: 'Internal'}
+                ]
+            },
+            argocd: {
+                required: [
+                    {name: 'Deployment', desc: 'Manages ArgoCD components'},
+                    {name: 'Service', desc: 'Exposes API and UI'}
+                ],
+                optional: [
+                    {name: 'Ingress', desc: 'External UI'},
+                    {name: 'Secret', desc: 'Repo credentials'}
+                ],
+                notused: [
+                    {name: 'PVC', desc: 'Git-based, no local state'},
+                    {name: 'StatefulSet', desc: 'Stateless'}
+                ]
+            },
+            tekton: {
+                required: [
+                    {name: 'Deployment', desc: 'Manages Tekton controllers'},
+                    {name: 'Service', desc: 'Internal services'}
+                ],
+                optional: [
+                    {name: 'ConfigMap', desc: 'Pipeline configs'},
+                    {name: 'PVC', desc: 'Workspace for tasks'}
+                ],
+                notused: [
+                    {name: 'Ingress', desc: 'Webhook-based'},
+                    {name: 'HPA', desc: 'Controller scaling'}
+                ]
+            },
+            keycloak: {
+                required: [
+                    {name: 'Deployment', desc: 'Manages Keycloak server'},
+                    {name: 'Service', desc: 'Exposes auth endpoints'},
+                    {name: 'PVC', desc: 'Realm persistence'}
+                ],
+                optional: [
+                    {name: 'Ingress', desc: 'External access'},
+                    {name: 'Secret', desc: 'Admin credentials'}
+                ],
+                notused: [
+                    {name: 'StatefulSet', desc: 'Deployment with DB backend'},
+                    {name: 'DaemonSet', desc: 'Centralized'}
+                ]
+            },
+            vault: {
+                required: [
+                    {name: 'StatefulSet', desc: 'Manages Vault HA cluster'},
+                    {name: 'PVC', desc: 'Secret storage'},
+                    {name: 'Service', desc: 'Exposes Vault API'}
+                ],
+                optional: [
+                    {name: 'ConfigMap', desc: 'Vault configs'},
+                    {name: 'Ingress', desc: 'Secure access'}
+                ],
+                notused: [
+                    {name: 'Deployment', desc: 'HA requires StatefulSet'},
+                    {name: 'HPA', desc: 'Fixed replicas'}
+                ]
+            },
+            'cert-manager': {
+                required: [
+                    {name: 'Deployment', desc: 'Manages cert-manager controller'},
+                    {name: 'ServiceAccount', desc: 'RBAC for cert ops'}
+                ],
+                optional: [
+                    {name: 'ClusterIssuer', desc: 'Certificate authorities'},
+                    {name: 'Secret', desc: 'Store certs'}
+                ],
+                notused: [
+                    {name: 'PVC', desc: 'No local storage'},
+                    {name: 'Ingress', desc: 'Operator only'}
+                ]
+            },
+            minio: {
+                required: [
+                    {name: 'StatefulSet', desc: 'Manages MinIO distributed'},
+                    {name: 'PVC', desc: 'Object storage'},
+                    {name: 'Service', desc: 'S3 API endpoint'}
+                ],
+                optional: [
+                    {name: 'Ingress', desc: 'Console access'},
+                    {name: 'Secret', desc: 'Access keys'}
+                ],
+                notused: [
+                    {name: 'Deployment', desc: 'Stateful for objects'},
+                    {name: 'HPA', desc: 'Manual scaling'}
+                ]
+            },
+            nextcloud: {
+                required: [
+                    {name: 'Deployment', desc: 'Manages Nextcloud app'},
+                    {name: 'PVC', desc: 'File storage'},
+                    {name: 'Service', desc: 'Web access'}
+                ],
+                optional: [
+                    {name: 'Ingress', desc: 'External HTTPS'},
+                    {name: 'Secret', desc: 'DB creds'}
+                ],
+                notused: [
+                    {name: 'StatefulSet', desc: 'Deployment with external DB'},
+                    {name: 'DaemonSet', desc: 'Central app'}
+                ]
+            },
+            'nfs-server': {
+                required: [
+                    {name: 'StatefulSet', desc: 'Manages NFS server'},
+                    {name: 'PVC', desc: 'Shared storage'},
+                    {name: 'Service', desc: 'NFS port exposure'}
+                ],
+                optional: [
+                    {name: 'ConfigMap', desc: 'Exports config'},
+                    {name: 'NetworkPolicy', desc: 'Restrict access'}
+                ],
+                notused: [
+                    {name: 'Ingress', desc: 'Not HTTP'},
+                    {name: 'HPA', desc: 'Single instance'}
+                ]
+            },
+            airflow: {
+                required: [
+                    {name: 'Deployment', desc: 'Manages Airflow components (scheduler, webserver)'},
+                    {name: 'PVC', desc: 'DAGs and logs'},
+                    {name: 'Service', desc: 'UI and API'}
+                ],
+                optional: [
+                    {name: 'Ingress', desc: 'External UI'},
+                    {name: 'Secret', desc: 'DB/Fernet keys'}
+                ],
+                notused: [
+                    {name: 'StatefulSet', desc: 'Multiple deployments'},
+                    {name: 'DaemonSet', desc: 'Centralized'}
+                ]
+            },
+            temporal: {
+                required: [
+                    {name: 'Deployment', desc: 'Manages Temporal services'},
+                    {name: 'PVC', desc: 'History persistence'},
+                    {name: 'Service', desc: 'Frontend and matching'}
+                ],
+                optional: [
+                    {name: 'ConfigMap', desc: 'Service configs'},
+                    {name: 'Secret', desc: 'TLS certs'}
+                ],
+                notused: [
+                    {name: 'Ingress', desc: 'gRPC internal'},
+                    {name: 'HPA', desc: 'Component-specific'}
+                ]
+            },
+            prefect: {
+                required: [
+                    {name: 'Deployment', desc: 'Manages Prefect server'},
+                    {name: 'Service', desc: 'API and UI'},
+                    {name: 'PVC', desc: 'Flow storage'}
+                ],
+                optional: [
+                    {name: 'Ingress', desc: 'External access'},
+                    {name: 'Secret', desc: 'Auth'}
+                ],
+                notused: [
+                    {name: 'StatefulSet', desc: 'Deployment sufficient'},
+                    {name: 'DaemonSet', desc: 'Central'}
+                ]
+            },
+            sonarqube: {
+                required: [
+                    {name: 'Deployment', desc: 'Manages SonarQube server'},
+                    {name: 'PVC', desc: 'Analysis data'},
+                    {name: 'Service', desc: 'Web port'}
+                ],
+                optional: [
+                    {name: 'Ingress', desc: 'External UI'},
+                    {name: 'Secret', desc: 'DB creds'}
+                ],
+                notused: [
+                    {name: 'StatefulSet', desc: 'With external DB'},
+                    {name: 'HPA', desc: 'Resource intensive'}
+                ]
+            },
+            'selenium-grid': {
+                required: [
+                    {name: 'Deployment', desc: 'Manages hub and nodes'},
+                    {name: 'Service', desc: 'Selenium ports'}
+                ],
+                optional: [
+                    {name: 'ConfigMap', desc: 'Node configs'},
+                    {name: 'HPA', desc: 'Scale nodes on demand'}
+                ],
+                notused: [
+                    {name: 'PVC', desc: 'Ephemeral tests'},
+                    {name: 'Ingress', desc: 'Internal grid'}
+                ]
+            },
+            traefik: {
+                required: [
+                    {name: 'Deployment', desc: 'Manages Traefik instance'},
+                    {name: 'Service', desc: 'LoadBalancer for ingress'}
+                ],
+                optional: [
+                    {name: 'ConfigMap', desc: 'Traefik.toml'},
+                    {name: 'Secret', desc: 'TLS certs'}
+                ],
+                notused: [
+                    {name: 'PVC', desc: 'Stateless proxy'},
+                    {name: 'StatefulSet', desc: 'Deployment fine'}
+                ]
+            },
+            'nginx-ingress': {
+                required: [
+                    {name: 'Deployment', desc: 'Manages NGINX Ingress controller'},
+                    {name: 'Service', desc: 'LoadBalancer exposure'}
+                ],
+                optional: [
+                    {name: 'ConfigMap', desc: 'Controller configs'},
+                    {name: 'Secret', desc: 'Default SSL'}
+                ],
+                notused: [
+                    {name: 'PVC', desc: 'No persistence'},
+                    {name: 'HPA', desc: 'Auto-scale on traffic'}
+                ]
+            },
+            istio: {
+                required: [
+                    {name: 'Deployment', desc: 'Manages Istio control plane (pilot, citadel, etc.)'},
+                    {name: 'Service', desc: 'Internal services'}
+                ],
+                optional: [
+                    {name: 'ConfigMap', desc: 'Mesh configs'},
+                    {name: 'Gateway', desc: 'Ingress/egress'}
+                ],
+                notused: [
+                    {name: 'PVC', desc: 'Config-driven'},
+                    {name: 'StatefulSet', desc: 'Deployments for components'}
+                ]
+            }
+        };
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const overviewTab = document.getElementById('overview');
+            if (overviewTab) {
+                overviewTab.classList.remove('hidden');
+            }
+
+            // Add click listeners for service links
+            document.querySelectorAll('.service-link').forEach(link => {
+                link.addEventListener('click', function() {
+                    const service = this.getAttribute('data-service');
+                    showModal(service);
+                });
+            });
+        });
+
+        function showModal(service) {
+            const data = serviceData[service];
+            if (!data) return;
+
+            document.getElementById('modal-title').textContent = service.toUpperCase();
+            const content = document.getElementById('modal-content');
+            content.innerHTML = '';
+
+            // Required section
+            if (data.required && data.required.length > 0) {
+                let section = '<div class="mb-4"><h4 class="font-bold text-green-400 mb-2">✅ REQUIRED</h4><ul class="space-y-1">';
+                data.required.forEach(item => {
+                    section += `<li><strong>${item.name}:</strong> ${item.desc}</li>`;
+                });
+                section += '</ul></div>';
+                content.innerHTML += section;
+            }
+
+            // Optional section
+            if (data.optional && data.optional.length > 0) {
+                let section = '<div class="mb-4"><h4 class="font-bold text-blue-400 mb-2">🔵 OPTIONAL</h4><ul class="space-y-1">';
+                data.optional.forEach(item => {
+                    section += `<li><strong>${item.name}:</strong> ${item.desc}</li>`;
+                });
+                section += '</ul></div>';
+                content.innerHTML += section;
+            }
+
+            // Not used section
+            if (data.notused && data.notused.length > 0) {
+                let section = '<div class="mb-4"><h4 class="font-bold text-gray-400 mb-2">⚫ NOT USED</h4><ul class="space-y-1">';
+                data.notused.forEach(item => {
+                    section += `<li><strong>${item.name}:</strong> ${item.desc}</li>`;
+                });
+                section += '</ul></div>';
+                content.innerHTML += section;
+            }
+
+            document.getElementById('service-modal').classList.remove('hidden');
+        }
+
+        function closeModal() {
+            document.getElementById('service-modal').classList.add('hidden');
+        }
+
+        // Close modal on outside click
+        document.getElementById('service-modal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeModal();
+            }
+        });
+    </script>
+</body>
+</html>
+```

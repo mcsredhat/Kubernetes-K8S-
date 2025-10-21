@@ -1,0 +1,198 @@
+## 6. Security & Access Control
+
+### ServiceAccount
+**Description:** Pod identity for Kubernetes API access
+**Use Case:** RBAC enforcement, pod authentication
+
+```yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: example-serviceaccount
+  namespace: example-namespace
+  labels:
+    account: app
+  annotations:
+    description: "Service account for app pods"
+automountServiceAccountToken: true
+imagePullSecrets:
+- name: registry-credentials
+```
+
+**Apply Example:**
+```bash
+kubectl apply -f serviceaccount.yaml -n example-namespace
+kubectl get serviceaccount -n example-namespace
+kubectl describe serviceaccount example-serviceaccount -n example-namespace
+```
+
+**Customization Notes:**
+- Set `automountServiceAccountToken: false` for high-security requirements
+- Link to cloud IAM for extended permissions (GCP, AWS, Azure)
+- Use separate ServiceAccounts per application
+
+**Common Pitfalls:**
+- Using default ServiceAccount for all pods
+- Binding overly permissive Roles to ServiceAccounts
+- Token accessible to compromised container = cluster compromise
+
+---
+
+### Role
+**Description:** Define API permissions (namespace-scoped)
+**Use Case:** Least-privilege access control
+
+```yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: example-namespace
+  name: example-role
+  labels:
+    role: read-write
+  annotations:
+    description: "Permissions for app access"
+rules:
+- apiGroups: [""]
+  resources: ["pods", "services", "configmaps"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["pods/log"]
+  verbs: ["get"]
+- apiGroups: ["batch"]
+  resources: ["jobs"]
+  verbs: ["create", "list", "get"]
+- apiGroups: [""]
+  resources: ["secrets"]
+  resourceNames: ["app-secret"]
+  verbs: ["get"]
+```
+
+**Apply Example:**
+```bash
+kubectl apply -f role.yaml -n example-namespace
+kubectl get roles -n example-namespace
+kubectl describe role example-role -n example-namespace
+```
+
+**Customization Notes:**
+- Use `resourceNames` for single-resource access
+- Separate read-only and admin roles
+- Audit role usage regularly
+
+**Common Pitfalls:**
+- Using wildcards `*` in verbs (disable all safety)
+- Granting cluster-admin unnecessarily
+- Not reviewing permissions after updates
+
+---
+
+### ClusterRole
+**Description:** Define cluster-wide API permissions
+**Use Case:** System components, multi-namespace access
+
+```yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: example-clusterrole
+  labels:
+    role: cluster-wide
+  annotations:
+    description: "Cluster-wide monitoring permissions"
+rules:
+- apiGroups: [""]
+  resources: ["nodes"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["persistentvolumes"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["apps"]
+  resources: ["deployments", "daemonsets", "statefulsets"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["batch"]
+  resources: ["jobs", "cronjobs"]
+  verbs: ["get", "list", "watch"]
+```
+
+**Apply Example:**
+```bash
+kubectl apply -f clusterrole.yaml
+kubectl get clusterrole example-clusterrole
+kubectl describe clusterrole example-clusterrole
+```
+
+---
+
+### RoleBinding
+**Description:** Attach roles to ServiceAccounts (namespace-scoped)
+**Use Case:** RBAC enforcement in specific namespace
+
+```yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: example-rolebinding
+  namespace: example-namespace
+  labels:
+    binding: app
+  annotations:
+    description: "Bind role to service account"
+subjects:
+- kind: ServiceAccount
+  name: example-serviceaccount
+  namespace: example-namespace
+roleRef:
+  kind: Role
+  name: example-role
+  apiGroup: rbac.authorization.k8s.io
+```
+
+**Apply Example:**
+```bash
+kubectl apply -f rolebinding.yaml -n example-namespace
+kubectl get rolebindings -n example-namespace
+kubectl auth can-i get pods --as=system:serviceaccount:example-namespace:example-serviceaccount
+```
+
+**Customization Notes:**
+- Test permissions with `kubectl auth can-i`
+- Use audit logs to validate RBAC policies
+- Regularly review and rotate access
+
+---
+
+### ClusterRoleBinding
+**Description:** Attach cluster roles to subjects (cluster-wide)
+**Use Case:** System-level permissions across namespaces
+
+```yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: example-clusterrolebinding
+  labels:
+    binding: system
+  annotations:
+    description: "Cluster-wide admin binding"
+subjects:
+- kind: ServiceAccount
+  name: example-serviceaccount
+  namespace: example-namespace
+roleRef:
+  kind: ClusterRole
+  name: example-clusterrole
+  apiGroup: rbac.authorization.k8s.io
+```
+
+**Apply Example:**
+```bash
+kubectl apply -f clusterrolebinding.yaml
+kubectl get clusterrolebindings | grep example
+```
+
+**Customization Notes:**
+- Minimize ClusterRoleBindings (use namespaced alternatives)
+- Audit cluster-admin bindings monthly
+
+---

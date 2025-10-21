@@ -1,0 +1,2422 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kubernetes Combined Reference Guide</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            text-align: center;
+            color: white;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .subtitle {
+            text-align: center;
+            color: rgba(255,255,255,0.9);
+            margin-bottom: 30px;
+            font-size: 1.2em;
+        }
+
+        .legend {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: white;
+            padding: 10px 20px;
+            border-radius: 25px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .legend-box {
+            width: 30px;
+            height: 30px;
+            border-radius: 5px;
+        }
+
+        .required-color { background: #e74c3c; }
+        .optional-color { background: #3498db; }
+        .notused-color { background: #95a5a6; }
+
+        .category-section {
+            background: rgba(255,255,255,0.95);
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 25px;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.2);
+        }
+
+        .category-header {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 3px solid;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .category-header:hover {
+            opacity: 0.8;
+        }
+
+        .category-icon {
+            font-size: 2.5em;
+        }
+
+        .category-title {
+            font-size: 1.8em;
+            font-weight: bold;
+            flex: 1;
+        }
+
+        .category-count {
+            background: rgba(0,0,0,0.1);
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.9em;
+        }
+
+        .collapse-icon {
+            font-size: 1.5em;
+            transition: transform 0.3s ease;
+        }
+
+        .category-header.collapsed .collapse-icon {
+            transform: rotate(-90deg);
+        }
+
+        .tier-frontend { border-color: #3498db; }
+        .tier-backend { border-color: #2ecc71; }
+        .tier-database { border-color: #e74c3c; }
+        .tier-cache { border-color: #f39c12; }
+        .tier-message { border-color: #9b59b6; }
+        .tier-search { border-color: #1abc9c; }
+        .tier-monitoring { border-color: #34495e; }
+        .tier-cicd { border-color: #e67e22; }
+        .tier-security { border-color: #c0392b; }
+        .tier-storage { border-color: #16a085; }
+        .tier-workflow { border-color: #8e44ad; }
+        .tier-quality { border-color: #27ae60; }
+        .tier-networking { border-color: #2980b9; }
+
+        .tier-frontend .category-title { color: #3498db; }
+        .tier-backend .category-title { color: #2ecc71; }
+        .tier-database .category-title { color: #e74c3c; }
+        .tier-cache .category-title { color: #f39c12; }
+        .tier-message .category-title { color: #9b59b6; }
+        .tier-search .category-title { color: #1abc9c; }
+        .tier-monitoring .category-title { color: #34495e; }
+        .tier-cicd .category-title { color: #e67e22; }
+        .tier-security .category-title { color: #c0392b; }
+        .tier-storage .category-title { color: #16a085; }
+        .tier-workflow .category-title { color: #8e44ad; }
+        .tier-quality .category-title { color: #27ae60; }
+        .tier-networking .category-title { color: #2980b9; }
+
+        .deployments-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .deployment-card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+            border: 2px solid transparent;
+        }
+
+        .deployment-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.2);
+        }
+
+        .deployment-card.active {
+            border-color: #667eea;
+            transform: scale(1.02);
+        }
+
+        .deployment-icon {
+            font-size: 2.5em;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+
+        .deployment-name {
+            text-align: center;
+            font-size: 1.1em;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+
+        .detail-panel {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            max-width: 1200px;
+            max-height: 85vh;
+            overflow-y: auto;
+            z-index: 1000;
+            width: 90%;
+        }
+
+        .detail-panel.active {
+            display: block;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.7);
+            z-index: 999;
+        }
+
+        .overlay.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translate(-50%, -45%); }
+            to { opacity: 1; transform: translate(-50%, -50%); }
+        }
+
+        .detail-header {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 3px solid #667eea;
+        }
+
+        .detail-icon {
+            font-size: 4em;
+        }
+
+        .detail-title {
+            font-size: 2em;
+            color: #2c3e50;
+            flex: 1;
+        }
+
+        .detail-desc {
+            font-size: 1.1em;
+            color: #7f8c8d;
+            margin-top: 5px;
+        }
+
+        .close-btn {
+            background: #e74c3c;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1em;
+            transition: background 0.3s ease;
+        }
+
+        .close-btn:hover {
+            background: #c0392b;
+        }
+
+        .resources-section {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 20px;
+        }
+
+        .resource-category {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 20px;
+        }
+
+        .category-title-detail {
+            font-size: 1.3em;
+            font-weight: bold;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid;
+        }
+
+        .required-title { 
+            color: #e74c3c; 
+            border-color: #e74c3c;
+        }
+
+        .optional-title { 
+            color: #3498db; 
+            border-color: #3498db;
+        }
+
+        .notused-title { 
+            color: #95a5a6; 
+            border-color: #95a5a6;
+        }
+
+        .resource-item {
+            background: white;
+            padding: 12px 15px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            border-left: 4px solid;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .resource-item.required { border-color: #e74c3c; }
+        .resource-item.optional { border-color: #3498db; }
+        .resource-item.notused { border-color: #95a5a6; }
+
+        .resource-name {
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 5px;
+        }
+
+        .resource-desc {
+            font-size: 0.9em;
+            color: #7f8c8d;
+        }
+
+        .search-container {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 25px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            color: #2c3e50;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 15px 20px;
+            font-size: 1.1em;
+            border: 2px solid #ddd;
+            border-radius: 30px;
+            outline: none;
+            transition: border-color 0.3s ease;
+            color: #2c3e50;
+        }
+
+        .search-input:focus {
+            border-color: #667eea;
+        }
+
+        .filter-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .filter-btn {
+            padding: 8px 20px;
+            border: 2px solid #ddd;
+            background: white;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 0.9em;
+            color: #2c3e50;
+        }
+
+        .filter-btn:hover {
+            background: #f8f9fa;
+        }
+
+        .filter-btn.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        .category-content {
+            max-height: 2000px;
+            overflow: hidden;
+            transition: max-height 0.5s ease;
+        }
+
+        .category-content.collapsed {
+            max-height: 0;
+        }
+
+        @media (max-width: 768px) {
+            .deployments-grid {
+                grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            }
+            
+            .detail-panel {
+                width: 95%;
+                max-height: 90vh;
+                padding: 20px;
+            }
+        }
+
+        .category-section, .legend-item, .detail-panel {
+            color: #2c3e50;
+        }
+    </style>
+<style>
+        body { margin: 0; padding: 0; }
+        pre { overflow-x: auto; }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white">
+    <nav class="bg-slate-800 p-4 shadow-lg">
+        <div class="max-w-7xl mx-auto flex gap-4">
+            <button onclick="showTab('tier')" class="px-6 py-2 rounded font-semibold bg-blue-600">Resources by Tier</button>
+            <button onclick="showTab('components')" class="px-6 py-2 rounded font-semibold bg-slate-700 hover:bg-slate-600">Components Guide</button>
+        </div>
+    </nav>
+
+    <div id="tier" style="display: block; padding: 20px;">
+<div class="overlay" id="overlay" onclick="closeDetail()"></div>
+    
+    <div class="container">
+        <h1>🚀 Kubernetes Resources by Architecture Tier</h1>
+        <div class="subtitle">Organized by deployment patterns and infrastructure layers</div>
+        
+        <div class="search-container">
+            <input 
+                type="text" 
+                class="search-input" 
+                id="searchInput" 
+                placeholder="🔍 Search services (e.g., postgres, nginx, redis)..."
+                oninput="filterServices()"
+            >
+            <div class="filter-buttons">
+                <button class="filter-btn active" onclick="filterByTier('all')">All Services</button>
+                <button class="filter-btn" onclick="filterByTier('stateful')">Stateful Only</button>
+                <button class="filter-btn" onclick="filterByTier('stateless')">Stateless Only</button>
+            </div>
+        </div>
+
+        <div class="legend">
+            <div class="legend-item">
+                <div class="legend-box required-color"></div>
+                <strong>REQUIRED</strong>
+            </div>
+            <div class="legend-item">
+                <div class="legend-box optional-color"></div>
+                <strong>OPTIONAL</strong>
+            </div>
+            <div class="legend-item">
+                <div class="legend-box notused-color"></div>
+                <strong>NOT USED</strong>
+            </div>
+        </div>
+
+        <div id="categoriesContainer"></div>
+    </div>
+
+    <div class="detail-panel" id="detailPanel">
+        <div class="detail-header">
+            <div class="detail-icon" id="detailIcon"></div>
+            <div class="detail-title" id="detailTitle"></div>
+            <div class="detail-desc" id="detailDesc"></div>
+            <button class="close-btn" onclick="closeDetail()">✕</button>
+        </div>
+        
+        <div class="resources-section" id="resourcesSection"></div>
+    </div>
+    </div>
+
+    <div id="components" style="display: none;">
+<div id="app"></div>
+    </div>
+
+    <script>
+        function showTab(tab) {
+            document.getElementById('tier').style.display = tab === 'tier' ? 'block' : 'none';
+            document.getElementById('components').style.display = tab === 'components' ? 'block' : 'none';
+        }
+    </script>
+
+<script>
+        const categories = [
+            {
+                name: 'Frontend & Web Servers',
+                icon: '🌐',
+                tier: 'tier-frontend',
+                services: [
+                    {
+                        name: 'NGINX',
+                        icon: '🌐',
+                        stateful: false,
+                        desc: 'High-performance web server, reverse proxy, and load balancer for serving static content and routing traffic.',
+                        required: [
+                            { name: 'Deployment', desc: 'Manages NGINX pods and replicas' },
+                            { name: 'Service', desc: 'Exposes NGINX to network' }
+                        ],
+                        optional: [
+                            { name: 'ConfigMap', desc: 'nginx.conf and custom configurations' },
+                            { name: 'Ingress', desc: 'External HTTP/HTTPS routing' },
+                            { name: 'HPA', desc: 'Auto-scale based on CPU/traffic' },
+                            { name: 'PDB', desc: 'Ensure minimum replicas during updates' }
+                        ],
+                        notused: [
+                            { name: 'Secret', desc: 'Only needed for TLS certificates' },
+                            { name: 'PVC', desc: 'Stateless - no persistent storage' },
+                            { name: 'NetworkPolicy', desc: 'Usually publicly accessible' }
+                        ]
+                    },
+                    {
+                        name: 'Apache HTTP',
+                        icon: '🪶',
+                        stateful: false,
+                        desc: 'Flexible web server for hosting dynamic websites and APIs with module support.',
+                        required: [
+                            { name: 'Deployment', desc: 'Runs Apache HTTP server pods' },
+                            { name: 'Service', desc: 'Exposes HTTP/HTTPS endpoints' }
+                        ],
+                        optional: [
+                            { name: 'ConfigMap', desc: 'httpd.conf and virtual host configs' },
+                            { name: 'Ingress', desc: 'External routing and SSL termination' },
+                            { name: 'HPA', desc: 'Scale based on request load' },
+                            { name: 'PDB', desc: 'Maintain availability during updates' }
+                        ],
+                        notused: [
+                            { name: 'Secret', desc: 'Only needed for TLS/SSL certificates' },
+                            { name: 'PVC', desc: 'Stateless web server' },
+                            { name: 'NetworkPolicy', desc: 'Usually publicly accessible' }
+                        ]
+                    },
+                    {
+                        name: 'React/Vue/Angular',
+                        icon: '⚛️',
+                        stateful: false,
+                        desc: 'JavaScript frameworks for building interactive user interfaces, served as static assets.',
+                        required: [
+                            { name: 'Deployment', desc: 'Runs containerized build (served via nginx)' },
+                            { name: 'Service', desc: 'Exposes the frontend application' }
+                        ],
+                        optional: [
+                            { name: 'ConfigMap', desc: 'Environment variables (API URLs, flags)' },
+                            { name: 'Ingress', desc: 'External access with domain routing' },
+                            { name: 'HPA', desc: 'Scale based on traffic patterns' }
+                        ],
+                        notused: [
+                            { name: 'Secret', desc: 'No sensitive data in frontend code' },
+                            { name: 'PVC', desc: 'Static files - no persistence needed' },
+                            { name: 'PDB', desc: 'Usually not critical for frontend' },
+                            { name: 'NetworkPolicy', desc: 'Rarely needed for public frontend' }
+                        ]
+                    }
+                ]
+            },
+            {
+                name: 'Backend & Application Services',
+                icon: '⚙️',
+                tier: 'tier-backend',
+                services: [
+                    {
+                        name: 'Node.js API',
+                        icon: '💚',
+                        stateful: false,
+                        desc: 'Server-side JavaScript runtime for building scalable network applications and APIs.',
+                        required: [
+                            { name: 'Deployment', desc: 'Runs Express/NestJS/Fastify application' },
+                            { name: 'Service', desc: 'ClusterIP for internal API routing' }
+                        ],
+                        optional: [
+                            { name: 'ConfigMap', desc: 'Environment config (NODE_ENV, ports)' },
+                            { name: 'Secret', desc: 'JWT secrets, API keys, DB credentials' },
+                            { name: 'HPA', desc: 'Scale based on CPU/memory/requests' },
+                            { name: 'Ingress', desc: 'External API access with SSL' },
+                            { name: 'PDB', desc: 'High availability for critical APIs' },
+                            { name: 'NetworkPolicy', desc: 'Security isolation' }
+                        ],
+                        notused: [
+                            { name: 'PVC', desc: 'Stateless microservices pattern' }
+                        ]
+                    },
+                    {
+                        name: 'Python API',
+                        icon: '🐍',
+                        stateful: false,
+                        desc: 'Versatile scripting language for web APIs, data processing, and backend services.',
+                        required: [
+                            { name: 'Deployment', desc: 'Runs Flask/FastAPI/Django application' },
+                            { name: 'Service', desc: 'Internal ClusterIP for API access' }
+                        ],
+                        optional: [
+                            { name: 'ConfigMap', desc: 'App settings, database URLs, flags' },
+                            { name: 'Secret', desc: 'API keys, JWT secrets, DB passwords' },
+                            { name: 'HPA', desc: 'Auto-scale based on request load' },
+                            { name: 'Ingress', desc: 'If exposing API externally' },
+                            { name: 'PDB', desc: 'Maintain availability during updates' },
+                            { name: 'NetworkPolicy', desc: 'Restrict to authorized services' }
+                        ],
+                        notused: [
+                            { name: 'PVC', desc: 'Stateless - uses external databases' }
+                        ]
+                    },
+                    {
+                        name: 'Java Spring Boot',
+                        icon: '☕',
+                        stateful: false,
+                        desc: 'Enterprise Java framework for building robust microservices and APIs.',
+                        required: [
+                            { name: 'Deployment', desc: 'Enterprise Java application server' },
+                            { name: 'Service', desc: 'REST API and microservice endpoints' }
+                        ],
+                        optional: [
+                            { name: 'ConfigMap', desc: 'application.properties/yml configuration' },
+                            { name: 'Secret', desc: 'Database credentials, OAuth secrets' },
+                            { name: 'HPA', desc: 'Scale based on CPU and memory' },
+                            { name: 'Ingress', desc: 'External API gateway access' },
+                            { name: 'PDB', desc: 'Ensure service availability' },
+                            { name: 'NetworkPolicy', desc: 'Microservice security boundaries' }
+                        ],
+                        notused: [
+                            { name: 'PVC', desc: 'Stateless design pattern' }
+                        ]
+                    },
+                    {
+                        name: 'Go API',
+                        icon: '🔷',
+                        stateful: false,
+                        desc: 'Efficient language for building high-performance, concurrent backend services.',
+                        required: [
+                            { name: 'Deployment', desc: 'High-performance Go service' },
+                            { name: 'Service', desc: 'gRPC or REST endpoints' }
+                        ],
+                        optional: [
+                            { name: 'ConfigMap', desc: 'Service configuration' },
+                            { name: 'Secret', desc: 'API credentials and tokens' },
+                            { name: 'HPA', desc: 'Efficient horizontal scaling' },
+                            { name: 'Ingress', desc: 'External API access' },
+                            { name: 'PDB', desc: 'High availability' },
+                            { name: 'NetworkPolicy', desc: 'Network isolation' }
+                        ],
+                        notused: [
+                            { name: 'PVC', desc: 'Stateless microservice' }
+                        ]
+                    },
+                    {
+                        name: 'PHP API',
+                        icon: '🐘',
+                        stateful: false,
+                        desc: 'Server-side scripting language commonly used for web development and APIs with frameworks like Laravel or Symfony.',
+                        required: [
+                            { name: 'Deployment', desc: 'Manages PHP pods with FPM or Apache mod_php' },
+                            { name: 'Service', desc: 'Exposes the API endpoints' }
+                        ],
+                        optional: [
+                            { name: 'ConfigMap', desc: 'php.ini configurations and env variables' },
+                            { name: 'Secret', desc: 'Sensitive data like DB connections' },
+                            { name: 'HPA', desc: 'Auto-scaling for web traffic' },
+                            { name: 'Ingress', desc: 'External routing with path rewriting' },
+                            { name: 'PDB', desc: 'Protect during rolling updates' },
+                            { name: 'NetworkPolicy', desc: 'Restrict inbound traffic' }
+                        ],
+                        notused: [
+                            { name: 'PVC', desc: 'Stateless - storage in external services' }
+                        ]
+                    },
+                    {
+                        name: '.NET API',
+                        icon: '🟣',
+                        stateful: false,
+                        desc: 'Microsoft framework for building cross-platform web APIs and services with ASP.NET Core.',
+                        required: [
+                            { name: 'Deployment', desc: 'Runs ASP.NET Core application' },
+                            { name: 'Service', desc: 'Exposes HTTP/HTTPS endpoints' }
+                        ],
+                        optional: [
+                            { name: 'ConfigMap', desc: 'appsettings.json environment overrides' },
+                            { name: 'Secret', desc: 'Connection strings and secrets' },
+                            { name: 'HPA', desc: 'Scale based on custom metrics' },
+                            { name: 'Ingress', desc: 'External access with host rules' },
+                            { name: 'PDB', desc: 'Maintain API availability' },
+                            { name: 'NetworkPolicy', desc: 'Secure microservice communication' }
+                        ],
+                        notused: [
+                            { name: 'PVC', desc: 'Stateless API layer' }
+                        ]
+                    }
+                ]
+            },
+            {
+                name: 'Databases',
+                icon: '🗄️',
+                tier: 'tier-database',
+                services: [
+                    {
+                        name: 'PostgreSQL',
+                        icon: '🐘',
+                        stateful: true,
+                        desc: 'Object-relational database system known for reliability and feature richness.',
+                        required: [
+                            { name: 'StatefulSet', desc: 'Manages database with stable identity' },
+                            { name: 'Service', desc: 'Headless service for database connection' },
+                            { name: 'PVC', desc: 'Persistent storage for database files' },
+                            { name: 'Secret', desc: 'Database passwords and credentials' }
+                        ],
+                        optional: [
+                            { name: 'ConfigMap', desc: 'PostgreSQL configuration (postgresql.conf)' },
+                            { name: 'PDB', desc: 'Prevent data loss during node failures' },
+                            { name: 'NetworkPolicy', desc: 'Restrict access to specific pods only' }
+                        ],
+                        notused: [
+                            { name: 'Ingress', desc: 'Databases should not be publicly exposed' },
+                            { name: 'HPA', desc: 'Databases scale vertically, not horizontally' }
+                        ]
+                    },
+                    {
+                        name: 'MySQL/MariaDB',
+                        icon: '🐬',
+                        stateful: true,
+                        desc: 'Popular relational database for web applications and data storage.',
+                        required: [
+                            { name: 'StatefulSet', desc: 'Relational database with persistence' },
+                            { name: 'Service', desc: 'Database connection endpoint' },
+                            { name: 'PVC', desc: 'Data storage volumes' },
+                            { name: 'Secret', desc: 'Root and user passwords' }
+                        ],
+                        optional: [
+                            { name: 'ConfigMap', desc: 'my.cnf configuration' },
+                            { name: 'PDB', desc: 'Cluster availability protection' },
+                            { name: 'NetworkPolicy', desc: 'Database access control' }
+                        ],
+                        notused: [
+                            { name: 'Ingress', desc: 'Internal database only' },
+                            { name: 'HPA', desc: 'Vertical scaling preferred' }
+                        ]
+                    },
+                    {
+                        name: 'MongoDB',
+                        icon: '🍃',
+                        stateful: true,
+                        desc: 'NoSQL document database for flexible schema and high-volume data.',
+                        required: [
+                            { name: 'StatefulSet', desc: 'NoSQL database with stable network IDs' },
+                            { name: 'Service', desc: 'Headless service for replica set' },
+                            { name: 'PVC', desc: 'Persistent volumes for data storage' },
+                            { name: 'Secret', desc: 'Root password and user credentials' }
+                        ],
+                        optional: [
+                            { name: 'ConfigMap', desc: 'MongoDB config and init scripts' },
+                            { name: 'PDB', desc: 'Ensure quorum during maintenance' },
+                            { name: 'NetworkPolicy', desc: 'Restrict to application tier only' }
+                        ],
+                        notused: [
+                            { name: 'Ingress', desc: 'Never expose databases externally' },
+                            { name: 'HPA', desc: 'Use replica sets, not auto-scaling' }
+                        ]
+                    },
+                    {
+                        name: 'CockroachDB',
+                        icon: '🪳',
+                        stateful: true,
+                        desc: 'Distributed SQL database designed for consistency and scalability.',
+                        required: [
+                            { name: 'StatefulSet', desc: 'Distributed SQL database' },
+                            { name: 'Service', desc: 'SQL and admin UI endpoints' },
+                            { name: 'PVC', desc: 'Distributed storage volumes' },
+                            { name: 'Secret', desc: 'Cluster certificates and credentials' }
+                        ],
+                        optional: [
+                            { name: 'ConfigMap', desc: 'Cluster configuration' },
+                            { name: 'PDB', desc: 'Maintain cluster quorum' },
+                            { name: 'NetworkPolicy', desc: 'Secure inter-node communication' }
+                        ],
+                        notused: [
+                            { name: 'Ingress', desc: 'Internal database cluster' },
+                            { name: 'HPA', desc: 'Manual cluster scaling' }
+                        ]
+                    }
+                ]
+            },
+            {
+                name: 'Caching & In-Memory Stores',
+                icon: '⚡',
+                tier: 'tier-cache',
+                services: [
+                    {
+                        name: 'Redis',
+                        icon: '🔴',
+                        stateful: true,
+                        desc: 'In-memory key-value store used for caching, sessions, and real-time data.',
+                        required: [
+                            { name: 'StatefulSet', desc: 'For Redis with persistence' },
+                            { name: 'Service', desc: 'ClusterIP for internal cache access' }
+                        ],
+                        optional: [
+                            { name: 'ConfigMap', desc: 'Redis configuration (redis.conf)' },
+                            { name: 'Secret', desc: 'Redis password if AUTH enabled' },
+                            { name: 'PVC', desc: 'If using Redis persistence (RDB/AOF)' },
+                            { name: 'NetworkPolicy', desc: 'Limit access to backend services' }
+                        ],
+                        notused: [
+                            { name: 'Ingress', desc: 'Never expose cache publicly' },
+                            { name: 'HPA', desc: 'Redis scales vertically' },
+                            { name: 'PDB', desc: 'Cache can tolerate brief downtime' }
+                        ]
+                    },
+                    {
+                        name: 'Memcached',
+                        icon: '🧊',
+                        stateful: false,
+                        desc: 'Simple in-memory caching system for speeding up dynamic web applications.',
+                        required: [
+                            { name: 'Deployment', desc: 'Distributed memory caching' },
+                            { name: 'Service', desc: 'Cache endpoint' }
+                        ],
+                        optional: [
+                            { name: 'ConfigMap', desc: 'Memory limits and settings' },
+                            { name: 'HPA', desc: 'Scale cache nodes' },
+                            { name: 'NetworkPolicy', desc: 'Restrict cache access' }
+                        ],
+                        notused: [
+                            { name: 'Secret', desc: 'No built-in authentication' },
+                            { name: 'PVC', desc: 'Ephemeral in-memory only' },
+                            { name: 'Ingress', desc: 'Internal cache service' },
+                            { name: 'PDB', desc: 'Cache can be rebuilt' }
+                        ]
+                    },
+                    {
+                        name: 'Valkey',
+                        icon: '🔑',
+                        stateful: true,
+                        desc: 'Redis-compatible in-memory store for caching and data structures.',
+                        required: [
+                            { name: 'StatefulSet', desc: 'Redis-compatible key-value store' },
+                            { name: 'Service', desc: 'Cache access endpoint' }
+                        ],
+                        optional: [
+                            { name: 'ConfigMap', desc: 'Valkey configuration' },
+                            { name: 'Secret', desc: 'Authentication credentials' },
+                            { name: 'PVC', desc: 'Optional persistence' },
+                            { name: 'NetworkPolicy', desc: 'Access control' }
+                        ],
+                        notused: [
+                            { name: 'Ingress', desc: 'Internal service only' },
+                            { name: 'HPA', desc: 'Vertical scaling pattern' },
+                            { name: 'PDB', desc: 'Cache resilience' }
+                        ]
+                    }
+                ]
+            },
+            {
+                name: 'Message Queues & Event Streaming',
+                icon: '📨',
+                tier: 'tier-message',
+                services: [
+                    {
+                        name: 'RabbitMQ',
+                        icon: '🐰',
+                        stateful: true,
+                        desc: 'Message broker for implementing reliable asynchronous communication.',
+                        required: [
+                            { name: 'StatefulSet', desc: 'Message broker with persistent queues' },
+                            { name: 'Service', desc: 'AMQP protocol access and management UI' },
+                            { name: 'Secret', desc: 'Admin credentials and erlang cookie' }
+                        ],
+                        optional: [
+                            { name: 'ConfigMap', desc: 'RabbitMQ configuration and policies' },
+                            { name: 'PVC', desc: 'If using durable queues' },
+                            { name: 'Ingress', desc: 'For management UI access' },
+                            { name: 'PDB', desc: 'Maintain cluster quorum' },
+                            { name: 'NetworkPolicy', desc: 'Control producer/consumer access' }
+                        ],
+                        notused: [
+                            { name: 'HPA', desc: 'Use static cluster sizing' }
+                        ]
+                    },
+                    {
+                        name: 'Kafka',
+                        icon: '📨',
+                        stateful: true,
+                        desc: 'Distributed streaming platform for high-throughput data pipelines.',
+                        required: [
+                            { name: 'StatefulSet', desc: 'Distributed streaming platform with brokers' },
+                            { name: 'Service', desc: 'Headless service for broker discovery' },
+                            { name: 'PVC', desc: 'Message logs and topic partitions' },
+                            { name: 'ConfigMap', desc: 'Broker configuration (server.properties)' }
+                        ],
+                        optional: [
+                            { name: 'Secret', desc: 'SASL/SSL credentials for authentication' },
+                            { name: 'PDB', desc: 'Maintain minimum replicas for HA' },
+                            { name: 'NetworkPolicy', desc: 'Control producer/consumer access' }
+                        ],
+                        notused: [
+                            { name: 'Ingress', desc: 'Use Kafka protocol, not HTTP' },
+                            { name: 'HPA', desc: 'Manual cluster expansion required' }
+                        ]
+                    },
+                    {
+                        name: 'NATS',
+                        icon: '📬',
+                        stateful: true,
+                        desc: 'Lightweight messaging system for building distributed applications.',
+                        required: [
+                            { name: 'StatefulSet', desc: 'High-performance messaging system' },
+                            { name: 'Service', desc: 'Client connections and clustering' }
+                        ],
+                        optional: [
+                            { name: 'ConfigMap', desc: 'NATS server configuration' },
+                            { name: 'Secret', desc: 'Authentication tokens' },
+                            { name: 'PVC', desc: 'JetStream persistence' },
+                            { name: 'PDB', desc: 'Cluster availability' },
+                            { name: 'NetworkPolicy', desc: 'Access control' }
+                        ],
+                        notused: [
+                            { name: 'Ingress', desc: 'NATS protocol only' },
+                            { name: 'HPA', desc: 'Static cluster size' }
+                        ]
+                    },
+                    {
+                        name: 'ActiveMQ',
+                        icon: '📮',
+                        stateful: true,
+                        desc: 'Message broker supporting JMS for enterprise messaging.',
+                        required: [
+                            { name: 'StatefulSet', desc: 'JMS message broker' },
+                            { name: 'Service', desc: 'OpenWire, AMQP, STOMP protocols' },
+                            { name: 'PVC', desc: 'Persistent message store' }
+                        ],
+                        optional: [
+                            { name: 'ConfigMap', desc: 'activemq.xml configuration' },
+                            { name: 'Secret', desc: 'Admin credentials' },
+                            { name: 'Ingress', desc: 'Web console access' },
+                            { name: 'PDB', desc: 'High availability' },
+                            { name: 'NetworkPolicy', desc: 'Network security' }
+                        ],
+                        notused: [
+                            { name: 'HPA', desc: 'Manual scaling' }
+                        ]
+                    }
+                ]
+            },
+            {
+                name: 'Search & Analytics',
+                icon: '🔍',
+                tier: 'tier-search',
+                services: [
+                    {
+                        name: 'Elasticsearch',
+                        icon: '🔍',
+                        stateful: true,
+                        desc: 'Distributed search engine for full-text search and analytics.',
+                        required: [
+                            { name: 'StatefulSet', desc: 'Search cluster with master/data nodes' },
+                            { name: 'Service', desc: 'Headless service for cluster communication' },
+                            { name: 'PVC', desc: 'Persistent indices and data storage' }
+                        ],
+                        optional: [
+                            { name: 'ConfigMap', desc: 'elasticsearch.yml and JVM settings' },
+                            { name: 'Secret', desc: 'X-Pack security credentials' },
+                            { name: 'PDB', desc: 'Prevent cluster instability' },
+                            { name: 'NetworkPolicy', desc: 'Restrict to logging/search services' }
+                        ],
+                        notused: [
+                            { name: 'Ingress', desc: 'Use Kibana for external access instead' },
+                            { name: 'HPA', desc: 'Manual cluster scaling required' }
+                        ]
+                    },
+                    {
+                        name: 'Solr',
+                        icon: '☀️',
+                        stateful: true,
+                        desc: 'Open-source search platform for enterprise search applications.',
+                        required: [
+                            { name: 'StatefulSet', desc: 'Enterprise search platform' },
+                            { name: 'Service', desc: 'SolrCloud coordination' },
+                            { name: 'PVC', desc: 'Index data storage' }
+                        ],
+                        optional: [
+                            { name: 'ConfigMap', desc: 'solr.xml and core configurations' },
+                            { name: 'Secret', desc: 'Admin credentials' },
+                            { name: 'PDB', desc: 'Cluster quorum protection' },
+                            { name: 'NetworkPolicy', desc: 'Access control' }
+                        ],
+                        notused: [
+                            { name: 'Ingress', desc: 'Internal search service' },
+                            { name: 'HPA', desc: 'Manual node management' }
+                        ]
+                    }
+                ]
+            },
+            {
+                name: 'Monitoring & Observability',
+                icon: '📊',
+                tier: 'tier-monitoring',
+                services: [
+                    {
+                        name: 'Prometheus',
+                        icon: '📊',
+                        stateful: false,
+                        desc: 'Open-source monitoring system for metrics collection and alerting.',
+                        required: [
+                            { name: 'Deployment', desc: 'Metrics collection and storage' },
+                            { name: 'Service', desc: 'Scrape targets and query interface' },
+                            { name: 'PVC', desc: 'Time-series data persistence' },
+                            { name: 'ConfigMap', desc: 'Scrape configs and alerting rules' }
+                        ],
+                        optional: [
+                            { name: 'Ingress', desc: 'External access to Prometheus UI' },
+                            { name: 'Secret', desc: 'Remote write credentials' },
+                            { name: 'NetworkPolicy', desc: 'Control metric scraping access' }
+                        ],
+                        notused: [
+                            { name: 'HPA', desc: 'Monitoring should be stable' },
+                            { name: 'PDB', desc: 'Acceptable brief monitoring gaps' }
+                        ]
+                    },
+                    {
+                        name: 'Grafana',
+                        icon: '📈',
+                        stateful: false,
+                        desc: 'Platform for visualizing metrics, logs, and traces from various sources.',
+                        required: [
+                            { name: 'Deployment', desc: 'Visualization and dashboard platform' },
+                            { name: 'Service', desc: 'Web UI access' }
+                        ],
+                        optional: [
+                            { name: 'ConfigMap', desc: 'Datasource configs and dashboards' },
+                            { name: 'Secret', desc: 'Admin password and datasource credentials' },
+                            { name: 'PVC', desc: 'Persist custom dashboards and settings' },
+                            { name: 'Ingress', desc: 'External HTTPS access with domain' },
+                            { name: 'HPA', desc: 'Scale for many concurrent users' },
+                            { name: 'NetworkPolicy', desc: 'Restrict datasource access' }
+                        ],
+                        notused: [
+                            { name: 'PDB', desc: 'Brief downtime acceptable for dashboards' }
+                        ]
+                    },
+                    {
+                        name: 'Jaeger',
+                        icon: '🔎',
+                        stateful: false,
+                        desc: 'End-to-end distributed tracing system for microservices.',
+                        required: [
+                            { name: 'Deployment', desc: 'Distributed tracing system' },
+                            { name: 'Service', desc: 'Collector, query, and agent services' }
+                        ],
+                        optional: [
+                            { name: 'ConfigMap', desc: 'Sampling strategies and configuration' },
+                            { name: 'PVC', desc: 'If using persistent storage backend' },
+                            { name: 'Secret', desc: 'Storage backend credentials' },
+                            { name: 'Ingress', desc: 'External UI access for traces' },
+                            { name: 'HPA', desc: 'Scale collector based on trace volume' },
+                            { name: 'NetworkPolicy', desc: 'Control trace collection access' }
+                        ],
+                        notused: [
+                            { name: 'PDB', desc: 'Brief gaps in tracing acceptable' }
+                        ]
+                    },
+                    {
+                        name: 'Datadog Agent',
+                        icon: '🐕',
+                        stateful: false,
+                        desc: 'Agent for collecting metrics, logs, and traces in cloud environments.',
+                        required: [
+                            { name: 'Deployment', desc: 'Monitoring and observability agent' },
+                            { name: 'Service', desc: 'Metrics aggregation' },
+                            { name: 'Secret', desc: 'Datadog API key' }
+                        ],
+                        optional: [
+                            { name: 'ConfigMap', desc: 'Agent and check configurations' },
+                            { name: 'NetworkPolicy', desc: 'Control agent communication' }
+                        ],
+                        notused: [
+                            { name: 'PVC', desc: 'Cloud-based storage' },
+                            { name: 'Ingress', desc: 'Outbound only' },
+                            { name: 'HPA', desc: 'DaemonSet pattern usually used' },
+                            { name: 'PDB', desc: 'Tolerate agent restarts' }
+                        ]
+                    },
+                    {
+                        name: 'New Relic Agent',
+                        icon: '🔬',
+                        stateful: false,
+                        desc: 'APM agent for performance monitoring and error tracking.',
+                        required: [
+                            { name: 'Deployment', desc: 'APM monitoring agent' },
+                            { name: 'Service', desc: 'Agent communication' },
+                            { name: 'Secret', desc: 'New Relic license key' }
+                        ],
+                        optional: [
+                            { name: 'ConfigMap', desc: 'Agent configuration' },
+                            { name: 'NetworkPolicy', desc: 'Outbound monitoring traffic' }
+                        ],
+                        notused: [
+                            { name: 'PVC', desc: 'Agent stores no data locally' },
+                            { name: 'Ingress', desc: 'Outbound-only communication' },
+                            { name: 'HPA', desc: 'Static agent deployment' },
+                            { name: 'PDB', desc: 'Agent can restart without issues' }
+                        ]
+                    }
+                ]
+            },
+            {
+                name: 'CI/CD & DevOps Tools',
+                icon: '🔨',
+                tier: 'tier-cicd',
+                services: [
+                    {
+                        name: 'Jenkins',
+                        icon: '🔨',
+                        stateful: false,
+                        desc: 'Automation server for continuous integration and delivery pipelines.',
+                        required: [
+                            { name: 'Deployment', desc: 'CI/CD automation server' },
+                            { name: 'Service', desc: 'Web UI and agent connections' },
+                            { name: 'PVC', desc: 'Jobs, plugins, and build history' }
+                        ],
+                        optional: [
+                            { name: 'ConfigMap', desc: 'Jenkins configuration as code (JCasC)' },
+                            { name: 'Secret', desc: 'Credentials, API tokens, SSH keys' },
+                            { name: 'Ingress', desc: 'External access with SSL' },
+                            { name: 'NetworkPolicy', desc: 'Security isolation for builds' },
+                            { name: 'PDB', desc: 'Prevent disruption during deployments' }
+                        ],
+                        notused: [
+                            { name: 'HPA', desc: 'Use static sizing with dynamic agents' }
+                        ]
+                    },
+                    {
+                        name: 'GitLab Runner',
+                        icon: '🏃',
+                        stateful: false,
+                        desc: 'Executor for running CI/CD jobs in GitLab pipelines.',
+                        required: [
+                            { name: 'Deployment', desc: 'CI/CD job executor' },
+                            { name: 'Service', desc: 'Internal communication if needed' },
+                            { name: 'Secret', desc: 'GitLab registration token' },
+                            { name: 'ConfigMap', desc: 'Runner configuration (config.toml)' }
+                        ],
+                        optional: [
+                            { name: 'PVC', desc: 'Cache for builds and dependencies' },
+                            { name: 'NetworkPolicy', desc: 'Isolate runner network access' },
+                            { name: 'HPA', desc: 'Scale runners based on job queue' }
+                        ],
+                        notused: [
+                            { name: 'Ingress', desc: 'Runners connect outbound to GitLab' },
+                            { name: 'PDB', desc: 'Jobs can be rescheduled on failure' }
+                        ]
+                    },
+                    {
+                        name: 'ArgoCD',
+                        icon: '🔄',
+                        stateful: false,
+                        desc: 'Declarative GitOps tool for Kubernetes deployments.',
+                        required: [
+                            { name: 'Deployment', desc: 'GitOps continuous delivery' },
+                            { name: 'Service', desc: 'Web UI and API server' },
+                            { name: 'Secret', desc: 'Git credentials and cluster secrets' }
+                        ],
+                        optional: [
+                            { name: 'ConfigMap', desc: 'ArgoCD configuration and repositories' },
+                            { name: 'PVC', desc: 'Cache Git repos (improves performance)' },
+                            { name: 'Ingress', desc: 'External GitOps dashboard access' },
+                            { name: 'NetworkPolicy', desc: 'Secure cluster access control' },
+                            { name: 'PDB', desc: 'High availability for deployments' }
+                        ],
+                        notused: [
+                            { name: 'HPA', desc: 'Use static replicas for stability' }
+                        ]
+                    },
+                    {
+                        name: 'Tekton Pipelines',
+                        icon: '⚙️',
+                        stateful: false,
+                        desc: 'Kubernetes-native framework for creating CI/CD pipelines.',
+                        required: [
+                            { name: 'Deployment', desc: 'Cloud-native CI/CD pipelines' },
+                            { name: 'Service', desc: 'Pipeline controller and webhooks' }
+                        ],
+                        optional: [
+                            { name: 'ConfigMap', desc: 'Pipeline and task definitions' },
+                            { name: 'Secret', desc: 'Git and registry credentials' },
+                            { name: 'PVC', desc: 'Workspace persistence between tasks' },
+                            { name: 'Ingress', desc: 'Webhook receivers' },
+                            { name: 'NetworkPolicy', desc: 'Pipeline execution security' }
+                        ],
+                        notused: [
+                            { name: 'HPA', desc: 'Controller uses fixed resources' },
+                            { name: 'PDB', desc: 'Can tolerate brief controller downtime' }
+                        ]
+                    },
+                    {
+                        name: 'Drone CI',
+                        icon: '🚁',
+                        stateful: false,
+                        desc: 'Container-native CI platform for automated testing and deployments.',
+                        required: [
+                            { name: 'Deployment', desc: 'Container-native CI platform' },
+                            { name: 'Service', desc: 'Web UI and webhook receiver' },
+                            { name: 'Secret', desc: 'GitHub/GitLab OAuth credentials' }
+                        ],
+                        optional: [
+                            { name: 'ConfigMap', desc: 'Drone server configuration' },
+                            { name: 'PVC', desc: 'Build logs if not using external storage' },
+                            { name: 'Ingress', desc: 'External access and webhooks' },
+                            { name: 'NetworkPolicy', desc: 'Security boundaries' }
+                        ],
+                        notused: [
+                            { name: 'HPA', desc: 'Runners scale separately' },
+                            { name: 'PDB', desc: 'Builds can be retried' }
+                        ]
+                    }
+                ]
+            },
+            {
+                name: 'Security & Identity Management',
+                icon: '🔐',
+                tier: 'tier-security',
+                services: [
+                    {
+                        name: 'Keycloak',
+                        icon: '🔐',
+                        stateful: false,
+                        desc: 'Open-source identity and access management for SSO and authentication.',
+                        required: [
+                            { name: 'Deployment', desc: 'Identity and access management' },
+                            { name: 'Service', desc: 'Authentication endpoints' },
+                            { name: 'Secret', desc: 'Admin credentials and DB password' }
+                        ],
+                        optional: [
+                            { name: 'ConfigMap', desc: 'Realm configs and theme customization' },
+                            { name: 'PVC', desc: 'If using H2 database (not recommended)' },
+                            { name: 'Ingress', desc: 'External SSO access with SSL' },
+                            { name: 'HPA', desc: 'Scale for high authentication load' },
+                            { name: 'PDB', desc: 'High availability for auth service' },
+                            { name: 'NetworkPolicy', desc: 'Secure communication channels' }
+                        ],
+                        notused: []
+                    },
+                    {
+                        name: 'Vault',
+                        icon: '🔒',
+                        stateful: true,
+                        desc: 'Tool for secrets management, encryption, and access control.',
+                        required: [
+                            { name: 'StatefulSet', desc: 'Secrets management and encryption' },
+                            { name: 'Service', desc: 'API access for secret operations' },
+                            { name: 'Secret', desc: 'Unseal keys and root token' },
+                            { name: 'PVC', desc: 'Encrypted secrets storage backend' }
+                        ],
+                        optional: [
+                            { name: 'ConfigMap', desc: 'Vault server configuration' },
+                            { name: 'Ingress', desc: 'External API access (use with caution)' },
+                            { name: 'PDB', desc: 'Critical for HA deployments' },
+                            { name: 'NetworkPolicy', desc: 'Strict access control required' }
+                        ],
+                        notused: [
+                            { name: 'HPA', desc: 'Use HA cluster with fixed size' }
+                        ]
+                    },
+                    {
+                        name: 'Cert-Manager',
+                        icon: '📜',
+                        stateful: false,
+                        desc: 'Kubernetes add-on for automating certificate issuance and renewal.',
+                        required: [
+                            { name: 'Deployment', desc: 'Automatic TLS certificate management' },
+                            { name: 'Service', desc: 'Webhook for certificate validation' }
+                        ],
+                        optional: [
+                            { name: 'ConfigMap', desc: 'Issuer configurations' },
+                            { name: 'Secret', desc: 'ACME credentials, CA private keys' },
+                            { name: 'NetworkPolicy', desc: 'Control webhook access' }
+                        ],
+                        notused: [
+                            { name: 'PVC', desc: 'No persistent storage needed' },
+                            { name: 'Ingress', desc: 'Internal controller only' },
+                            { name: 'HPA', desc: 'Low resource controller' },
+                            { name: 'PDB', desc: 'Brief downtime acceptable' }
+                        ]
+                    }
+                ]
+            },
+            {
+                name: 'Storage & File Systems',
+                icon: '💾',
+                tier: 'tier-storage',
+                services: [
+                    {
+                        name: 'MinIO',
+                        icon: '🪣',
+                        stateful: true,
+                        desc: 'S3-compatible object storage for cloud-native applications.',
+                        required: [
+                            { name: 'StatefulSet', desc: 'S3-compatible object storage' },
+                            { name: 'Service', desc: 'API and console access' },
+                            { name: 'PVC', desc: 'Object storage volumes' },
+                            { name: 'Secret', desc: 'Root credentials (access/secret keys)' }
+                        ],
+                        optional: [
+                            { name: 'ConfigMap', desc: 'MinIO configuration and policies' },
+                            { name: 'Ingress', desc: 'External S3 API access' },
+                            { name: 'PDB', desc: 'Ensure erasure coding quorum' },
+                            { name: 'NetworkPolicy', desc: 'Restrict to authorized applications' }
+                        ],
+                        notused: [
+                            { name: 'HPA', desc: 'Scale by adding nodes to cluster' }
+                        ]
+                    },
+                    {
+                        name: 'Nextcloud',
+                        icon: '☁️',
+                        stateful: false,
+                        desc: 'Self-hosted file sync and share platform for collaboration.',
+                        required: [
+                            { name: 'Deployment', desc: 'Self-hosted cloud storage platform' },
+                            { name: 'Service', desc: 'Web interface and WebDAV' },
+                            { name: 'PVC', desc: 'User files and application data' },
+                            { name: 'Secret', desc: 'Admin credentials and DB password' }
+                        ],
+                        optional: [
+                            { name: 'ConfigMap', desc: 'PHP and Nextcloud configuration' },
+                            { name: 'Ingress', desc: 'External HTTPS access required' },
+                            { name: 'PDB', desc: 'Maintain service during updates' },
+                            { name: 'NetworkPolicy', desc: 'Protect user data access' }
+                        ],
+                        notused: [
+                            { name: 'HPA', desc: 'File storage scales vertically' }
+                        ]
+                    },
+                    {
+                        name: 'NFS Server',
+                        icon: '📁',
+                        stateful: true,
+                        desc: 'Network file system for sharing files across pods and nodes.',
+                        required: [
+                            { name: 'StatefulSet', desc: 'Network file system server' },
+                            { name: 'Service', desc: 'NFS protocol endpoint' },
+                            { name: 'PVC', desc: 'Backing storage for exports' }
+                        ],
+                        optional: [
+                            { name: 'ConfigMap', desc: 'exports configuration' },
+                            { name: 'NetworkPolicy', desc: 'Control NFS client access' },
+                            { name: 'PDB', desc: 'Prevent data access issues' }
+                        ],
+                        notused: [
+                            { name: 'Secret', desc: 'NFS typically no authentication' },
+                            { name: 'Ingress', desc: 'NFS protocol, not HTTP' },
+                            { name: 'HPA', desc: 'Single server model' }
+                        ]
+                    }
+                ]
+            },
+            {
+                name: 'Workflow Orchestration',
+                icon: '🔄',
+                tier: 'tier-workflow',
+                services: [
+                    {
+                        name: 'Airflow',
+                        icon: '🌬️',
+                        stateful: false,
+                        desc: 'Platform for programmatically authoring, scheduling, and monitoring workflows.',
+                        required: [
+                            { name: 'Deployment', desc: 'Webserver, scheduler, and workers' },
+                            { name: 'Service', desc: 'Web UI and worker communication' },
+                            { name: 'Secret', desc: 'Database credentials and Fernet key' },
+                            { name: 'ConfigMap', desc: 'Airflow configuration (airflow.cfg)' }
+                        ],
+                        optional: [
+                            { name: 'PVC', desc: 'Logs and DAG persistence' },
+                            { name: 'Ingress', desc: 'External web UI access' },
+                            { name: 'HPA', desc: 'Scale workers based on task queue' },
+                            { name: 'PDB', desc: 'Maintain scheduler availability' },
+                            { name: 'NetworkPolicy', desc: 'Control task execution network' }
+                        ],
+                        notused: []
+                    },
+                    {
+                        name: 'Temporal',
+                        icon: '⏰',
+                        stateful: false,
+                        desc: 'Durable execution engine for workflows and activities.',
+                        required: [
+                            { name: 'Deployment', desc: 'Workflow orchestration engine' },
+                            { name: 'Service', desc: 'Frontend and worker services' },
+                            { name: 'Secret', desc: 'Database credentials' },
+                            { name: 'ConfigMap', desc: 'Temporal server configuration' }
+                        ],
+                        optional: [
+                            { name: 'PVC', desc: 'If using embedded persistence' },
+                            { name: 'Ingress', desc: 'Web UI and gRPC access' },
+                            { name: 'HPA', desc: 'Scale workers based on task queue' },
+                            { name: 'PDB', desc: 'High availability for workflows' },
+                            { name: 'NetworkPolicy', desc: 'Secure workflow execution' }
+                        ],
+                        notused: []
+                    },
+                    {
+                        name: 'Prefect',
+                        icon: '💧',
+                        stateful: false,
+                        desc: 'Modern workflow orchestration tool for data pipelines.',
+                        required: [
+                            { name: 'Deployment', desc: 'Modern workflow orchestration' },
+                            { name: 'Service', desc: 'API and UI services' },
+                            { name: 'Secret', desc: 'Database and API credentials' }
+                        ],
+                        optional: [
+                            { name: 'ConfigMap', desc: 'Prefect configuration' },
+                            { name: 'PVC', desc: 'Flow storage and logs' },
+                            { name: 'Ingress', desc: 'External UI access' },
+                            { name: 'HPA', desc: 'Scale agents dynamically' },
+                            { name: 'NetworkPolicy', desc: 'Control flow execution' }
+                        ],
+                        notused: [
+                            { name: 'PDB', desc: 'Flows can be rescheduled' }
+                        ]
+                    }
+                ]
+            },
+            {
+                name: 'Code Quality & Testing',
+                icon: '🧪',
+                tier: 'tier-quality',
+                services: [
+                    {
+                        name: 'SonarQube',
+                        icon: '🔬',
+                        stateful: false,
+                        desc: 'Platform for continuous code quality inspection and security analysis.',
+                        required: [
+                            { name: 'Deployment', desc: 'Code quality and security analysis' },
+                            { name: 'Service', desc: 'Web UI and scanner API' },
+                            { name: 'Secret', desc: 'Database credentials and admin password' },
+                            { name: 'PVC', desc: 'Extensions and analysis data' }
+                        ],
+                        optional: [
+                            { name: 'ConfigMap', desc: 'SonarQube properties and settings' },
+                            { name: 'Ingress', desc: 'External developer access' },
+                            { name: 'NetworkPolicy', desc: 'Restrict to CI/CD pipelines' },
+                            { name: 'PDB', desc: 'Maintain availability during scans' }
+                        ],
+                        notused: [
+                            { name: 'HPA', desc: 'Resource-intensive, use vertical scaling' }
+                        ]
+                    },
+                    {
+                        name: 'Selenium Grid',
+                        icon: '🧪',
+                        stateful: false,
+                        desc: 'Tool for distributed browser automation and testing.',
+                        required: [
+                            { name: 'Deployment', desc: 'Browser automation hub and nodes' },
+                            { name: 'Service', desc: 'Hub endpoint for tests' }
+                        ],
+                        optional: [
+                            { name: 'ConfigMap', desc: 'Grid configuration and capabilities' },
+                            { name: 'HPA', desc: 'Scale browser nodes for parallel tests' },
+                            { name: 'Ingress', desc: 'External test execution' },
+                            { name: 'NetworkPolicy', desc: 'Isolate test environment' }
+                        ],
+                        notused: [
+                            { name: 'Secret', desc: 'No authentication typically' },
+                            { name: 'PVC', desc: 'Ephemeral test sessions' },
+                            { name: 'PDB', desc: 'Tests can be retried' }
+                        ]
+                    }
+                ]
+            },
+            {
+                name: 'Networking & Ingress Controllers',
+                icon: '🌐',
+                tier: 'tier-networking',
+                services: [
+                    {
+                        name: 'Traefik',
+                        icon: '🚦',
+                        stateful: false,
+                        desc: 'Modern HTTP reverse proxy and load balancer for microservices.',
+                        required: [
+                            { name: 'Deployment', desc: 'Cloud-native edge router and ingress' },
+                            { name: 'Service', desc: 'LoadBalancer for external traffic' }
+                        ],
+                        optional: [
+                            { name: 'ConfigMap', desc: 'Static configuration and middleware' },
+                            { name: 'Secret', desc: 'TLS certificates and API credentials' },
+                            { name: 'HPA', desc: 'Scale based on connection count' },
+                            { name: 'PDB', desc: 'Ensure minimum ingress replicas' },
+                            { name: 'NetworkPolicy', desc: 'Control ingress traffic flow' }
+                        ],
+                        notused: [
+                            { name: 'PVC', desc: 'Stateless proxy - no storage needed' },
+                            { name: 'Ingress', desc: 'Traefik IS the ingress controller' }
+                        ]
+                    },
+                    {
+                        name: 'NGINX Ingress',
+                        icon: '🚪',
+                        stateful: false,
+                        desc: 'Kubernetes ingress controller based on NGINX for traffic routing.',
+                        required: [
+                            { name: 'Deployment', desc: 'Ingress controller for routing' },
+                            { name: 'Service', desc: 'LoadBalancer for external access' }
+                        ],
+                        optional: [
+                            { name: 'ConfigMap', desc: 'Global NGINX configuration' },
+                            { name: 'Secret', desc: 'Default SSL certificates' },
+                            { name: 'HPA', desc: 'Scale for high traffic' },
+                            { name: 'PDB', desc: 'Maintain routing availability' },
+                            { name: 'NetworkPolicy', desc: 'Control traffic flow' }
+                        ],
+                        notused: [
+                            { name: 'PVC', desc: 'Stateless routing' },
+                            { name: 'Ingress', desc: 'This IS the ingress controller' }
+                        ]
+                    },
+                    {
+                        name: 'Istio Service Mesh',
+                        icon: '🕸️',
+                        stateful: false,
+                        desc: 'Service mesh for managing microservices communication, security, and observability.',
+                        required: [
+                            { name: 'Deployment', desc: 'Control plane (istiod)' },
+                            { name: 'Service', desc: 'Service mesh communication' }
+                        ],
+                        optional: [
+                            { name: 'ConfigMap', desc: 'Mesh configuration' },
+                            { name: 'Secret', desc: 'mTLS certificates' },
+                            { name: 'NetworkPolicy', desc: 'Additional network policies' },
+                            { name: 'PDB', desc: 'Control plane availability' }
+                        ],
+                        notused: [
+                            { name: 'PVC', desc: 'Control plane is stateless' },
+                            { name: 'Ingress', desc: 'Uses Gateway resources' },
+                            { name: 'HPA', desc: 'Fixed control plane size' }
+                        ]
+                    }
+                ]
+            }
+        ];
+
+        let allServices = [];
+        categories.forEach(cat => {
+            cat.services.forEach(svc => {
+                allServices.push({...svc, category: cat.name});
+            });
+        });
+
+        function renderCategories() {
+            const container = document.getElementById('categoriesContainer');
+            container.innerHTML = categories.map((cat, catIdx) => `
+                <div class="category-section" data-category="${cat.name}">
+                    <div class="category-header ${cat.tier}" onclick="toggleCategory(${catIdx})">
+                        <div class="category-icon">${cat.icon}</div>
+                        <div class="category-title">${cat.name}</div>
+                        <div class="category-count">${cat.services.length} services</div>
+                        <div class="collapse-icon">▼</div>
+                    </div>
+                    <div class="category-content" id="category-${catIdx}">
+                        <div class="deployments-grid">
+                            ${cat.services.map((svc, svcIdx) => `
+                                <div class="deployment-card" data-service="${svc.name}" onclick="showDetail('${cat.name}', ${svcIdx})">
+                                    <div class="deployment-icon">${svc.icon}</div>
+                                    <div class="deployment-name">${svc.name}</div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function toggleCategory(index) {
+            const content = document.getElementById(`category-${index}`);
+            const header = content.previousElementSibling;
+            
+            content.classList.toggle('collapsed');
+            header.classList.toggle('collapsed');
+        }
+
+        function showDetail(categoryName, serviceIndex) {
+            const category = categories.find(cat => cat.name === categoryName);
+            const service = category.services[serviceIndex];
+            
+            document.querySelectorAll('.deployment-card').forEach(card => {
+                card.classList.remove('active');
+            });
+            event.currentTarget.classList.add('active');
+
+            document.getElementById('detailIcon').textContent = service.icon;
+            document.getElementById('detailTitle').textContent = service.name;
+            document.getElementById('detailDesc').textContent = service.desc || '';
+
+            const resourcesHtml = `
+                <div class="resource-category">
+                    <div class="category-title-detail required-title">✅ REQUIRED</div>
+                    ${service.required.map(r => `
+                        <div class="resource-item required">
+                            <div class="resource-name">${r.name}</div>
+                            <div class="resource-desc">${r.desc}</div>
+                        </div>
+                    `).join('')}
+                </div>
+                
+                <div class="resource-category">
+                    <div class="category-title-detail optional-title">🔵 OPTIONAL</div>
+                    ${service.optional.map(r => `
+                        <div class="resource-item optional">
+                            <div class="resource-name">${r.name}</div>
+                            <div class="resource-desc">${r.desc}</div>
+                        </div>
+                    `).join('')}
+                </div>
+                
+                <div class="resource-category">
+                    <div class="category-title-detail notused-title">⚫ NOT USED</div>
+                    ${service.notused.map(r => `
+                        <div class="resource-item notused">
+                            <div class="resource-name">${r.name}</div>
+                            <div class="resource-desc">${r.desc}</div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+
+            document.getElementById('resourcesSection').innerHTML = resourcesHtml;
+            document.getElementById('detailPanel').classList.add('active');
+            document.getElementById('overlay').classList.add('active');
+        }
+
+        function closeDetail() {
+            document.getElementById('detailPanel').classList.remove('active');
+            document.getElementById('overlay').classList.remove('active');
+            document.querySelectorAll('.deployment-card').forEach(card => {
+                card.classList.remove('active');
+            });
+        }
+
+        function filterServices() {
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            
+            document.querySelectorAll('.category-section').forEach(section => {
+                let hasVisibleServices = false;
+                
+                section.querySelectorAll('.deployment-card').forEach(card => {
+                    const serviceName = card.dataset.service.toLowerCase();
+                    const matches = serviceName.includes(searchTerm);
+                    
+                    card.style.display = matches ? 'block' : 'none';
+                    if (matches) hasVisibleServices = true;
+                });
+                
+                section.style.display = hasVisibleServices ? 'block' : 'none';
+            });
+        }
+
+        function filterByTier(type) {
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+
+            document.querySelectorAll('.category-section').forEach(section => {
+                section.querySelectorAll('.deployment-card').forEach(card => {
+                    const serviceName = card.dataset.service;
+                    const service = allServices.find(s => s.name === serviceName);
+                    
+                    if (type === 'all') {
+                        card.style.display = 'block';
+                    } else if (type === 'stateful') {
+                        card.style.display = service.stateful ? 'block' : 'none';
+                    } else if (type === 'stateless') {
+                        card.style.display = !service.stateful ? 'block' : 'none';
+                    }
+                });
+
+                // Hide category if no visible services
+                const visibleServices = Array.from(section.querySelectorAll('.deployment-card'))
+                    .filter(card => card.style.display !== 'none');
+                section.style.display = visibleServices.length > 0 ? 'block' : 'none';
+            });
+        }
+
+        // Initialize
+        renderCategories();
+
+        // Keyboard shortcut to close detail panel
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                closeDetail();
+            }
+        });
+    </script>
+<script>
+        const state = {
+            activeTab: 'overview',
+            expandedSections: {}
+        };
+
+        const componentGroups = [
+            {
+                id: 'namespace',
+                title: '1. Namespace Management',
+                color: 'from-purple-500 to-purple-600',
+                description: 'Organize and isolate environments',
+                components: [
+                    {
+                        name: 'Namespace',
+                        purpose: 'Logical isolation boundary for resources',
+                        example: `apiVersion: v1
+kind: Namespace
+metadata:
+  name: production
+  labels:
+    environment: prod
+    team: backend`
+                    },
+                    {
+                        name: 'ResourceQuota',
+                        purpose: 'Limit total resource consumption in namespace',
+                        example: `apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: prod-quota
+  namespace: production
+spec:
+  hard:
+    requests.cpu: "100"
+    requests.memory: 200Gi
+    persistentvolumeclaims: "10"
+    pods: "50"`
+                    },
+                    {
+                        name: 'LimitRange',
+                        purpose: 'Define default/min/max resources per Pod',
+                        example: `apiVersion: v1
+kind: LimitRange
+metadata:
+  name: prod-limits
+  namespace: production
+spec:
+  limits:
+  - max:
+      cpu: "2"
+      memory: 4Gi
+    min:
+      cpu: 100m
+      memory: 128Mi
+    default:
+      cpu: 500m
+      memory: 512Mi
+    type: Container`
+                    }
+                ]
+            },
+            {
+                id: 'config',
+                title: '2. Configuration Management',
+                color: 'from-blue-500 to-blue-600',
+                description: 'Externalize app configuration',
+                components: [
+                    {
+                        name: 'ConfigMap',
+                        purpose: 'Store non-sensitive configuration data',
+                        example: `apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: production
+data:
+  APP_ENV: "production"
+  API_URL: "https://api.example.com"
+  LOG_LEVEL: "info"
+  config.json: |
+    {
+      "database": {
+        "host": "db.example.com",
+        "port": 5432
+      }
+    }`
+                    },
+                    {
+                        name: 'Secret',
+                        purpose: 'Store sensitive data (encrypted at rest)',
+                        example: `apiVersion: v1
+kind: Secret
+metadata:
+  name: db-credentials
+  namespace: production
+type: Opaque
+data:
+  username: YWRtaW4=
+  password: cGFzc3dvcmQxMjM=
+stringData:
+  connection-string: "postgresql://user:pass@host/db"`
+                    }
+                ]
+            },
+            {
+                id: 'storage',
+                title: '3. Storage Management',
+                color: 'from-green-500 to-green-600',
+                description: 'Persist data beyond Pod lifecycle',
+                components: [
+                    {
+                        name: 'StorageClass',
+                        purpose: 'Define storage provisioner and parameters',
+                        example: `apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: fast-ssd
+provisioner: kubernetes.io/aws-ebs
+parameters:
+  type: gp3
+  iops: "3000"
+  throughput: "125"
+reclaimPolicy: Retain
+allowVolumeExpansion: true`
+                    },
+                    {
+                        name: 'PersistentVolumeClaim',
+                        purpose: 'Request storage from StorageClass',
+                        example: `apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: db-data
+  namespace: production
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: fast-ssd
+  resources:
+    requests:
+      storage: 50Gi`
+                    }
+                ]
+            },
+            {
+                id: 'workload',
+                title: '4. Workload Management',
+                color: 'from-orange-500 to-orange-600',
+                description: 'Deploy and manage applications',
+                components: [
+                    {
+                        name: 'Deployment',
+                        purpose: 'Manage stateless applications with rolling updates',
+                        example: `apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-app
+  namespace: production
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: web
+  template:
+    metadata:
+      labels:
+        app: web
+    spec:
+      serviceAccountName: app-runner
+      containers:
+      - name: web
+        image: myapp:v1.2.3
+        ports:
+        - containerPort: 8080`
+                    },
+                    {
+                        name: 'StatefulSet',
+                        purpose: 'Manage stateful applications like databases',
+                        example: `apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  namespace: production
+spec:
+  serviceName: postgres
+  replicas: 3
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:15
+        ports:
+        - containerPort: 5432
+        volumeMounts:
+        - name: data
+          mountPath: /var/lib/postgresql/data
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      storageClassName: fast-ssd
+      resources:
+        requests:
+          storage: 10Gi`
+                    }
+                ]
+            },
+            {
+                id: 'networking',
+                title: '5. Networking & Exposure',
+                color: 'from-cyan-500 to-cyan-600',
+                description: 'Connect and expose services',
+                components: [
+                    {
+                        name: 'Service (ClusterIP)',
+                        purpose: 'Internal service discovery',
+                        example: `apiVersion: v1
+kind: Service
+metadata:
+  name: web-service
+  namespace: production
+spec:
+  type: ClusterIP
+  selector:
+    app: web
+  ports:
+  - port: 80
+    targetPort: 8080
+    protocol: TCP`
+                    },
+                    {
+                        name: 'Ingress',
+                        purpose: 'HTTP/HTTPS routing with SSL termination',
+                        example: `apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: web-ingress
+  namespace: production
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - app.example.com
+    secretName: tls-secret
+  rules:
+  - host: app.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: web-service
+            port:
+              number: 80`
+                    }
+                ]
+            },
+            {
+                id: 'security',
+                title: '6. Security & Access Control',
+                color: 'from-red-500 to-red-600',
+                description: 'Manage permissions and identities',
+                components: [
+                    {
+                        name: 'ServiceAccount',
+                        purpose: 'Identity for Pods within cluster',
+                        example: `apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: app-runner
+  namespace: production
+automountServiceAccountToken: true`
+                    },
+                    {
+                        name: 'Role',
+                        purpose: 'Define permissions within namespace',
+                        example: `apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: secret-reader
+  namespace: production
+rules:
+- apiGroups: [""]
+  resources: ["secrets", "configmaps"]
+  verbs: ["get", "list"]`
+                    },
+                    {
+                        name: 'RoleBinding',
+                        purpose: 'Bind Role to ServiceAccount',
+                        example: `apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: read-secrets
+  namespace: production
+subjects:
+- kind: ServiceAccount
+  name: app-runner
+  namespace: production
+roleRef:
+  kind: Role
+  name: secret-reader
+  apiGroup: rbac.authorization.k8s.io`
+                    }
+                ]
+            },
+            {
+                id: 'advanced',
+                title: '7. Advanced Features',
+                color: 'from-yellow-500 to-yellow-600',
+                description: 'Auto-scaling and high availability',
+                components: [
+                    {
+                        name: 'HorizontalPodAutoscaler',
+                        purpose: 'Auto-scale based on CPU/Memory metrics',
+                        example: `apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: web-hpa
+  namespace: production
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: web-app
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70`
+                    },
+                    {
+                        name: 'PodDisruptionBudget',
+                        purpose: 'Ensure availability during disruptions',
+                        example: `apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: web-pdb
+  namespace: production
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: web`
+                    }
+                ]
+            }
+        ];
+
+        function toggleSection(sectionId) {
+            state.expandedSections[sectionId] = !state.expandedSections[sectionId];
+            render();
+        }
+
+        function setActiveTab(tab) {
+            state.activeTab = tab;
+            render();
+        }
+
+        function renderOverview() {
+            return `
+                <div class="bg-slate-800 rounded-xl p-8 shadow-2xl">
+                    <h2 class="text-3xl font-bold mb-6">Component Groups Overview</h2>
+                    <div class="grid md:grid-cols-2 gap-6">
+                        ${componentGroups.map((group) => `
+                            <div class="bg-slate-700 rounded-lg p-6 hover:shadow-xl transition-all cursor-pointer" onclick="setActiveTab('components')">
+                                <div class="inline-flex p-3 rounded-lg bg-gradient-to-r ${group.color} mb-4">
+                                    <span class="text-2xl">${getGroupIcon(group.id)}</span>
+                                </div>
+                                <h3 class="text-xl font-bold mb-2">${group.title}</h3>
+                                <p class="text-gray-300">${group.description}</p>
+                                <div class="mt-4 text-sm text-gray-400">
+                                    ${group.components.length} components
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderArchitecture() {
+            return `
+                <div class="bg-slate-800 rounded-xl p-8 shadow-2xl">
+                    <h2 class="text-3xl font-bold mb-6">Kubernetes Architecture</h2>
+                    
+                    <div class="bg-slate-900 rounded-lg p-6 mb-8 overflow-x-auto">
+                        <pre class="text-green-400 text-xs font-mono whitespace-pre">
+┌──────────────────────────────────────────────────┐
+│  CLUSTER LEVEL (Admin Scope)                    │
+│  StorageClass | ClusterRole | ClusterRoleBinding│
+│  PersistentVolume | IngressController           │
+└────────────────┬─────────────────────────────────┘
+                 ↓
+┌──────────────────────────────────────────────────┐
+│  NAMESPACE LEVEL (Developer Scope)               │
+│  Namespace | ResourceQuota | LimitRange          │
+│  ConfigMap | Secret | PVC | ServiceAccount       │
+│  Role | RoleBinding | NetworkPolicy              │
+└────────────────┬─────────────────────────────────┘
+                 ↓
+┌──────────────────────────────────────────────────┐
+│  WORKLOAD RESOURCES                              │
+│  Deployment → ReplicaSet → Pod                   │
+│  StatefulSet → Pod                               │
+│  Job | CronJob → Pod                             │
+└────────────────┬─────────────────────────────────┘
+                 ↓
+┌──────────────────────────────────────────────────┐
+│  POD INTERNALS                                   │
+│  Container(s):                                   │
+│   - Mounted ConfigMap (env/files)                │
+│   - Mounted Secret (env/files)                   │
+│   - Mounted PVC (persistent storage)             │
+│   - ServiceAccount token                         │
+└────────────────┬─────────────────────────────────┘
+                 ↓
+┌──────────────────────────────────────────────────┐
+│  NETWORKING LAYER                                │
+│  Service (ClusterIP/NodePort/LoadBalancer)       │
+│  Ingress → Routes HTTP/S to Services             │
+│  NetworkPolicy → Controls Pod communication      │
+└──────────────────────────────────────────────────┘
+                        </pre>
+                    </div>
+
+                    <div class="bg-slate-700 rounded-lg p-6">
+                        <h3 class="text-xl font-bold mb-4">Key Relationships</h3>
+                        <div class="space-y-4 text-gray-300">
+                            <div class="flex items-start gap-3">
+                                <div class="w-2 h-2 bg-blue-400 rounded-full mt-2"></div>
+                                <div>
+                                    <strong class="text-white">StorageClass → PV → PVC → Pod</strong>
+                                    <p class="text-sm mt-1">Storage provisioning flow</p>
+                                </div>
+                            </div>
+                            <div class="flex items-start gap-3">
+                                <div class="w-2 h-2 bg-green-400 rounded-full mt-2"></div>
+                                <div>
+                                    <strong class="text-white">Deployment → ReplicaSet → Pod</strong>
+                                    <p class="text-sm mt-1">Workload management hierarchy</p>
+                                </div>
+                            </div>
+                            <div class="flex items-start gap-3">
+                                <div class="w-2 h-2 bg-purple-400 rounded-full mt-2"></div>
+                                <div>
+                                    <strong class="text-white">ConfigMap/Secret → Pod</strong>
+                                    <p class="text-sm mt-1">Configuration injection</p>
+                                </div>
+                            </div>
+                            <div class="flex items-start gap-3">
+                                <div class="w-2 h-2 bg-orange-400 rounded-full mt-2"></div>
+                                <div>
+                                    <strong class="text-white">Service → Pod (via selector)</strong>
+                                    <p class="text-sm mt-1">Network routing based on labels</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderComponents() {
+            return `
+                <div class="space-y-6">
+                    ${componentGroups.map((group) => `
+                        <div class="bg-slate-800 rounded-xl shadow-2xl overflow-hidden">
+                            <div class="bg-gradient-to-r ${group.color} p-6 cursor-pointer flex items-center justify-between" onclick="toggleSection('${group.id}')">
+                                <div class="flex items-center gap-4">
+                                    <span class="text-3xl">${getGroupIcon(group.id)}</span>
+                                    <div>
+                                        <h3 class="text-2xl font-bold">${group.title}</h3>
+                                        <p class="text-white/80 mt-1">${group.description}</p>
+                                    </div>
+                                </div>
+                                <span class="text-2xl">${state.expandedSections[group.id] ? '▼' : '▶'}</span>
+                            </div>
+
+                            ${state.expandedSections[group.id] ? `
+                                <div class="p-6 space-y-6">
+                                    ${group.components.map((component) => `
+                                        <div class="bg-slate-700 rounded-lg p-6">
+                                            <div class="mb-4">
+                                                <h4 class="text-xl font-bold text-blue-400">${component.name}</h4>
+                                                <p class="text-gray-300 mt-2">${component.purpose}</p>
+                                            </div>
+                                            <div class="bg-slate-900 rounded-lg p-4 overflow-x-auto">
+                                                <pre class="text-sm text-green-400"><code>${escapeHtml(component.example)}</code></pre>
+                                            </div>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            ` : ''}
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        function renderWorkflow() {
+            return `
+                <div class="bg-slate-800 rounded-xl p-8 shadow-2xl">
+                    <h2 class="text-3xl font-bold mb-6">Complete Production Workflow</h2>
+                    
+                    <div class="grid md:grid-cols-2 gap-6 mb-8">
+                        <div class="bg-slate-700 rounded-lg p-6">
+                            <h3 class="text-xl font-bold mb-4 text-cyan-400">Deployment Order</h3>
+                            <ol class="space-y-3 text-gray-300">
+                                <li class="flex items-start gap-3">
+                                    <span class="bg-blue-600 rounded-full w-6 h-6 flex items-center justify-center flex-shrink-0 text-sm font-bold">1</span>
+                                    <div>
+                                        <strong class="text-white">Namespace & Limits</strong>
+                                        <p class="text-sm mt-1">Create namespace, ResourceQuota, LimitRange</p>
+                                    </div>
+                                </li>
+                                <li class="flex items-start gap-3">
+                                    <span class="bg-blue-600 rounded-full w-6 h-6 flex items-center justify-center flex-shrink-0 text-sm font-bold">2</span>
+                                    <div>
+                                        <strong class="text-white">Storage Infrastructure</strong>
+                                        <p class="text-sm mt-1">Create StorageClass if needed</p>
+                                    </div>
+                                </li>
+                                <li class="flex items-start gap-3">
+                                    <span class="bg-blue-600 rounded-full w-6 h-6 flex items-center justify-center flex-shrink-0 text-sm font-bold">3</span>
+                                    <div>
+                                        <strong class="text-white">Configuration</strong>
+                                        <p class="text-sm mt-1">Deploy ConfigMaps and Secrets</p>
+                                    </div>
+                                </li>
+                                <li class="flex items-start gap-3">
+                                    <span class="bg-blue-600 rounded-full w-6 h-6 flex items-center justify-center flex-shrink-0 text-sm font-bold">4</span>
+                                    <div>
+                                        <strong class="text-white">Security</strong>
+                                        <p class="text-sm mt-1">Create ServiceAccount, Role, RoleBinding</p>
+                                    </div>
+                                </li>
+                                <li class="flex items-start gap-3">
+                                    <span class="bg-blue-600 rounded-full w-6 h-6 flex items-center justify-center flex-shrink-0 text-sm font-bold">5</span>
+                                    <div>
+                                        <strong class="text-white">Workloads</strong>
+                                        <p class="text-sm mt-1">Deploy StatefulSets, then Deployments</p>
+                                    </div>
+                                </li>
+                                <li class="flex items-start gap-3">
+                                    <span class="bg-blue-600 rounded-full w-6 h-6 flex items-center justify-center flex-shrink-0 text-sm font-bold">6</span>
+                                    <div>
+                                        <strong class="text-white">Networking</strong>
+                                        <p class="text-sm mt-1">Create Services, NetworkPolicies, Ingress</p>
+                                    </div>
+                                </li>
+                                <li class="flex items-start gap-3">
+                                    <span class="bg-blue-600 rounded-full w-6 h-6 flex items-center justify-center flex-shrink-0 text-sm font-bold">7</span>
+                                    <div>
+                                        <strong class="text-white">Advanced Features</strong>
+                                        <p class="text-sm mt-1">Add HPA, PDB, CronJobs</p>
+                                    </div>
+                                </li>
+                            </ol>
+                        </div>
+
+                        <div class="bg-slate-700 rounded-lg p-6">
+                            <h3 class="text-xl font-bold mb-4 text-green-400">Best Practices</h3>
+                            <div class="space-y-4 text-gray-300">
+                                <div class="flex items-start gap-3">
+                                    <div class="w-2 h-2 bg-green-400 rounded-full mt-2 flex-shrink-0"></div>
+                                    <div>
+                                        <strong class="text-white">Set resource requests/limits</strong>
+                                        <p class="text-sm mt-1">Prevents resource starvation</p>
+                                    </div>
+                                </div>
+                                <div class="flex items-start gap-3">
+                                    <div class="w-2 h-2 bg-green-400 rounded-full mt-2 flex-shrink-0"></div>
+                                    <div>
+                                        <strong class="text-white">Use namespaces for isolation</strong>
+                                        <p class="text-sm mt-1">Separate dev, staging, prod</p>
+                                    </div>
+                                </div>
+                                <div class="flex items-start gap-3">
+                                    <div class="w-2 h-2 bg-green-400 rounded-full mt-2 flex-shrink-0"></div>
+                                    <div>
+                                        <strong class="text-white">Never hardcode secrets</strong>
+                                        <p class="text-sm mt-1">Always use Secret objects</p>
+                                    </div>
+                                </div>
+                                <div class="flex items-start gap-3">
+                                    <div class="w-2 h-2 bg-green-400 rounded-full mt-2 flex-shrink-0"></div>
+                                    <div>
+                                        <strong class="text-white">Implement RBAC</strong>
+                                        <p class="text-sm mt-1">Use ServiceAccounts with minimal permissions</p>
+                                    </div>
+                                </div>
+                                <div class="flex items-start gap-3">
+                                    <div class="w-2 h-2 bg-green-400 rounded-full mt-2 flex-shrink-0"></div>
+                                    <div>
+                                        <strong class="text-white">Enable monitoring & logging</strong>
+                                        <p class="text-sm mt-1">Use Prometheus and centralized logging</p>
+                                    </div>
+                                </div>
+                                <div class="flex items-start gap-3">
+                                    <div class="w-2 h-2 bg-green-400 rounded-full mt-2 flex-shrink-0"></div>
+                                    <div>
+                                        <strong class="text-white">Use health checks</strong>
+                                        <p class="text-sm mt-1">Define readiness and liveness probes</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-slate-700 rounded-lg p-6">
+                        <h3 class="text-xl font-bold mb-4 text-yellow-400">Command Cheat Sheet</h3>
+                        <div class="grid md:grid-cols-2 gap-4">
+                            <div class="bg-slate-800 rounded p-4 font-mono text-sm">
+                                <p class="text-gray-400 mb-2"># Apply resources</p>
+                                <p class="text-green-400">kubectl apply -f namespace.yaml</p>
+                            </div>
+                            <div class="bg-slate-800 rounded p-4 font-mono text-sm">
+                                <p class="text-gray-400 mb-2"># Check status</p>
+                                <p class="text-green-400">kubectl get all -n production</p>
+                            </div>
+                            <div class="bg-slate-800 rounded p-4 font-mono text-sm">
+                                <p class="text-gray-400 mb-2"># View logs</p>
+                                <p class="text-green-400">kubectl logs -f deploy/web-app</p>
+                            </div>
+                            <div class="bg-slate-800 rounded p-4 font-mono text-sm">
+                                <p class="text-gray-400 mb-2"># Scale manually</p>
+                                <p class="text-green-400">kubectl scale deploy/web-app --replicas=5</p>
+                            </div>
+                            <div class="bg-slate-800 rounded p-4 font-mono text-sm">
+                                <p class="text-gray-400 mb-2"># Describe resource</p>
+                                <p class="text-green-400">kubectl describe pod web-app-xyz</p>
+                            </div>
+                            <div class="bg-slate-800 rounded p-4 font-mono text-sm">
+                                <p class="text-gray-400 mb-2"># Execute in pod</p>
+                                <p class="text-green-400">kubectl exec -it pod-name -- /bin/sh</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function getGroupIcon(groupId) {
+            const icons = {
+                'namespace': '📦',
+                'config': '⚙️',
+                'storage': '💾',
+                'workload': '🚀',
+                'networking': '🌐',
+                'security': '🔒',
+                'advanced': '⚡'
+            };
+            return icons[groupId] || '•';
+        }
+
+        function escapeHtml(text) {
+            const map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            };
+            return text.replace(/[&<>"']/g, m => map[m]);
+        }
+
+        function render() {
+            const app = document.getElementById('app');
+            
+            let content = '';
+            
+            if (state.activeTab === 'overview') {
+                content = renderOverview();
+            } else if (state.activeTab === 'architecture') {
+                content = renderArchitecture();
+            } else if (state.activeTab === 'components') {
+                content = renderComponents();
+            } else if (state.activeTab === 'workflow') {
+                content = renderWorkflow();
+            }
+
+            app.innerHTML = `
+                <div class="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white p-4 md:p-8">
+                    <div class="max-w-7xl mx-auto">
+                        <div class="text-center mb-12">
+                            <h1 class="text-4xl md:text-5xl font-bold bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">
+                                Kubernetes Components Guide
+                            </h1>
+                            <p class="text-lg md:text-xl text-gray-300 mt-4">
+                                Complete reference for all K8s resource groups with examples
+                            </p>
+                        </div>
+
+                        <div class="flex gap-4 mb-8 overflow-x-auto pb-2">
+                            ${['overview', 'architecture', 'components', 'workflow'].map(tab => `
+                                <button
+                                    onclick="setActiveTab('${tab}')"
+                                    class="px-6 py-3 rounded-lg font-semibold transition-all whitespace-nowrap ${
+                                        state.activeTab === tab
+                                            ? 'bg-blue-600 shadow-lg shadow-blue-500/50'
+                                            : 'bg-slate-700 hover:bg-slate-600'
+                                    }"
+                                >
+                                    ${tab.charAt(0).toUpperCase() + tab.slice(1)}
+                                </button>
+                            `).join('')}
+                        </div>
+
+                        ${content}
+                    </div>
+                </div>
+            `;
+        }
+
+        render();
+    </script>
+</body>
+</html>

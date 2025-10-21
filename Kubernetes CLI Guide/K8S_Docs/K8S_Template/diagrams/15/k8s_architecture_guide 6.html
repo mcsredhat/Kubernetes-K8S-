@@ -1,0 +1,1950 @@
+                <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                    <h3 class="text-xl font-bold mb-4 text-blue-400">Resource Management</h3>
+                    <div class="space-y-2">
+                        <div class="cli-command">kubectl apply -f file.yaml<span class="cli-copy-btn" onclick="copyToClipboard(this, 'kubectl apply -f file.yaml')">Copy</span></div>
+                        <div class="cli-command">kubectl apply -f directory/<span class="cli-copy-btn" onclick="copyToClipboard(this, 'kubectl apply -f directory/')">Copy</span></div>
+                        <div class="cli-command">kubectl create deployment app --image=image:tag<span class="cli-copy-btn" onclick="copyToClipboard(this, 'kubectl create deployment app --image=image:tag')">Copy</span></div>
+                        <div class="cli-command">kubectl create namespace prod<span class="cli-copy-btn" onclick="copyToClipboard(this, 'kubectl create namespace prod')">Copy</span></div>
+                        <div class="cli-command">kubectl create configmap name --from-literal=key=value<span class="cli-copy-btn" onclick="copyToClipboard(this, 'kubectl create configmap name --from-literal=key=value')">Copy</span></div>
+                        <div class="cli-command">kubectl create secret generic name --from-literal=key=value<span class="cli-copy-btn" onclick="copyToClipboard(this, 'kubectl create secret generic name --from-literal=key=value')">Copy</span></div>
+                        <div class="cli-command">kubectl create service clusterip app --tcp=8080:8080<span class="cli-copy-btn" onclick="copyToClipboard(this, 'kubectl create service clusterip app --tcp=8080:8080')">Copy</span></div>
+                    </div>
+                </div>
+
+                <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                    <h3 class="text-xl font-bold mb-4 text-blue-400">Getting Resources</h3>
+                    <div class="space-y-2">
+                        <div class="cli-command">kubectl get pods<span class="cli-copy-btn" onclick="copyToClipboard(this, 'kubectl get pods')">Copy</span></div>
+                        <div class="cli-command">kubectl get pods --all-namespaces<span class="cli-copy-btn" onclick="copyToClipboard(this, 'kubectl get pods --all-namespaces')">Copy</span></div>
+                        <div class="cli-command">kubectl get pods -n namespace<span class="cli-copy-btn" onclick="copyToClipboard(this, 'kubectl get pods -n namespace')">Copy</span></div>
+                        <div class="cli-command">kubectl get pods -o wide<span class="cli-copy-btn" onclick="copyToClipboard(this, 'kubectl get pods -o wide')">Copy</span></div>
+                        <div class="cli-command">kubectl get pods -o yaml<span class="cli-copy-btn" onclick="copyToClipboard(this, 'kubectl get pods -o yaml')">Copy</span></div>
+                        <div class="cli-command">kubectl get pods -l app=myapp<span class="cli-copy-btn" onclick="copyToClipboard(this, 'kubectl get pods -l app=myapp')">Copy</span></div>
+                        <div class="cli-command">kubectl get all<span class="cli-copy-btn" onclick="copyToClipboard(this, 'kubectl get all')">Copy</span></div>
+                    </div>
+                </div>
+
+                <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                    <h3 class="text-xl font-bold mb-4 text-blue-400">Inspecting & Debugging</h3>
+                    <div class="space-y-2">
+                        <div class="cli-command">kubectl describe pod pod-name<span class="cli-copy-btn" onclick="copyToClipboard(this, 'kubectl describe pod pod-name')">Copy</span></div>
+                        <div class="cli-command">kubectl logs pod-name<span class="cli-copy-btn" onclick="copyToClipboard(this, 'kubectl logs pod-name')">Copy</span></div>
+                        <div class="cli-command">kubectl logs pod-name -c container-name<span class="cli-copy-btn" onclick="copyToClipboard(this, 'kubectl logs pod-name -c container-name')">Copy</span></div>
+                        <div class="cli-command">kubectl logs pod-name -f<span class="cli-copy-btn" onclick="copyToClipboard(this, 'kubectl logs pod-name -f')">Copy</span></div>
+                        <div class="cli-command">kubectl logs pod-name --tail=50<span class="cli-copy-btn" onclick="copyToClipboard(this, 'kubectl logs pod-name --tail=50')">Copy</span></div>
+                        <div class="cli-command">kubectl logs deployment/name<span class="cli-copy-btn" onclick="copyToClipboard(this, 'kubectl logs deployment/name')">Copy</span></div>
+                    </div>
+                </div>
+
+                <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                    <h3 class="text-xl font-bold mb-4 text-blue-400">Pod Execution & Interaction</h3>
+                    <div class="space-y-2">
+                        <div class="cli-command">kubectl exec -it pod-name -- /bin/bash<span class="cli-copy-btn" onclick="copyToClipboard(this, 'kubectl exec -it pod-name -- /bin/bash')">Copy</span></div>
+                        <div class="cli-command">kubectl exec pod-name -- command arg<span class="cli-copy-btn" onclick="copyToClipboard(this, 'kubectl exec pod-name -- command arg')">Copy</span></div>
+                        <div class="cli-command">kubectl port-forward pod-name 8080:80<span class="cli-copy-btn" onclick="copyToClipboard(this, 'kubectl port-forward pod-name 8080:80')">Copy</span></div>
+                        <div class="cli-command">kubectl cp pod-name:/path/file ./local/<span class="cli-copy-btn" onclick="copyToClipboard(this, 'kubectl cp pod-name:/path/file ./local/')">Copy</span></div>
+                    </div>
+                </div>
+
+                <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                    <h3 class="text-xl font-bold mb-4 text-blue-400">Scaling & Updates</h3>
+                    <div class="space-y-2">
+                        <div class="cli-command">kubectl scale deployment/name --replicas=5<span class="cli-copy-btn" onclick="copyToClipboard(this, 'kubectl scale deployment/name --replicas=5')">Copy</span></div>
+                        <div class="cli-command">kubectl set image deployment/app app=image:v2<span class="cli-copy-btn" onclick="copyToClipboard(this, 'kubectl set image deployment/app app=image:v2')">Copy</span></div>
+                        <div class="cli-command">kubectl rollout status deployment/name<span class="cli-copy-btn" onclick="copyToClipboard(this, 'kubectl rollout status deployment/name')">Copy</span></div>
+                        <div class="cli-command">kubectl rollout undo deployment/name<span class="cli-copy-btn" onclick="copyToClipboard(this, 'kubectl rollout undo deployment/name')">Copy</span></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Code Examples Tab -->
+        <div id="examples" class="tab-content hidden">
+            <h2 class="text-3xl font-bold mb-6">Kubernetes Manifest Examples</h2>
+            <p class="text-gray-300 mb-6">Copy-ready YAML manifests for common Kubernetes resources. Click Copy to use directly.</p>
+            
+            <div class="space-y-6">
+                <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                    <h3 class="text-xl font-bold mb-4 text-green-400">Deployment - Stateless App</h3>
+                    <div class="code-block">
+                        <div class="code-label">nginx-deployment.yaml</div>
+                        <pre>apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-app
+  namespace: production
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.24-alpine
+        ports:
+        - containerPort: 80
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 5</pre>
+                    </div>
+                    <button onclick="copyCodeBlock(this)" class="mt-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-sm">Copy YAML</button>
+                </div>
+
+                <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                    <h3 class="text-xl font-bold mb-4 text-purple-400">StatefulSet - PostgreSQL Database</h3>
+                    <div class="code-block">
+                        <div class="code-label">postgres-statefulset.yaml</div>
+                        <pre>apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  namespace: production
+spec:
+  serviceName: postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:15-alpine
+        ports:
+        - containerPort: 5432
+          name: postgres
+        env:
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secret
+              key: password
+        - name: POSTGRES_DB
+          value: myapp
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "1000m"
+        volumeMounts:
+        - name: postgres-storage
+          mountPath: /var/lib/postgresql/data
+  volumeClaimTemplates:
+  - metadata:
+      name: postgres-storage
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      storageClassName: fast-ssd
+      resources:
+        requests:
+          storage: 10Gi</pre>
+                    </div>
+                    <button onclick="copyCodeBlock(this)" class="mt-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-sm">Copy YAML</button>
+                </div>
+
+                <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                    <h3 class="text-xl font-bold mb-4 text-cyan-400">Service - ClusterIP</h3>
+                    <div class="code-block">
+                        <div class="code-label">service.yaml</div>
+                        <pre>apiVersion: v1
+kind: Service
+metadata:
+  name: app-service
+  namespace: production
+  labels:
+    app: nginx
+spec:
+  type: ClusterIP
+  selector:
+    app: nginx
+  ports:
+  - name: http
+    port: 80
+    targetPort: 80
+    protocol: TCP
+  - name: https
+    port: 443
+    targetPort: 443
+    protocol: TCP</pre>
+                    </div>
+                    <button onclick="copyCodeBlock(this)" class="mt-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-sm">Copy YAML</button>
+                </div>
+
+                <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                    <h3 class="text-xl font-bold mb-4 text-yellow-400">ConfigMap - Application Config</h3>
+                    <div class="code-block">
+                        <div class="code-label">configmap.yaml</div>
+                        <pre>apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: production
+data:
+  DATABASE_HOST: "postgres.production.svc.cluster.local"
+  DATABASE_PORT: "5432"
+  DATABASE_NAME: "myapp"
+  LOG_LEVEL: "info"
+  APP_ENV: "production"
+  config.yaml: |
+    server:
+      port: 8080
+      timeout: 30
+    database:
+      maxConnections: 100
+      minConnections: 10</pre>
+                    </div>
+                    <button onclick="copyCodeBlock(this)" class="mt-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-sm">Copy YAML</button>
+                </div>
+
+                <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                    <h3 class="text-xl font-bold mb-4 text-red-400">Secret - Credentials</h3>
+                    <div class="code-block">
+                        <div class="code-label">secret.yaml (base64 encoded)</div>
+                        <pre>apiVersion: v1
+kind: Secret
+metadata:
+  name: postgres-secret
+  namespace: production
+type: Opaque
+data:
+  password: cGFzc3dvcmQxMjM=  # base64 encoded
+  username: cG9zdGdyZXM=      # base64 encoded
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: docker-registry
+  namespace: production
+type: kubernetes.io/dockercfg
+dockercfg: eyJhdXRocyI6eyJyZWdpc3RyeS5leGFtcGxlLmNvbSI6eyJhdXRoIjoiZEhOekx6UXliMjkwIn19fQ==</pre>
+                    </div>
+                    <button onclick="copyCodeBlock(this)" class="mt-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-sm">Copy YAML</button>
+                </div>
+
+                <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                    <h3 class="text-xl font-bold mb-4 text-indigo-400">Ingress - HTTP Routing</h3>
+                    <div class="code-block">
+                        <div class="code-label">ingress.yaml</div>
+                        <pre>apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: app-ingress
+  namespace: production
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - app.example.com
+    secretName: app-tls-cert
+  rules:
+  - host: app.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: app-service
+            port:
+              number: 80</pre>
+                    </div>
+                    <button onclick="copyCodeBlock(this)" class="mt-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-sm">Copy YAML</button>
+                </div>
+
+                <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                    <h3 class="text-xl font-bold mb-4 text-orange-400">PersistentVolumeClaim - Storage Request</h3>
+                    <div class="code-block">
+                        <div class="code-label">pvc.yaml</div>
+                        <pre>apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: app-data-pvc
+  namespace: production
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: fast-ssd
+  resources:
+    requests:
+      storage: 20Gi
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: fast-ssd
+provisioner: ebs.csi.aws.com
+parameters:
+  type: gp3
+  iops: "3000"
+  throughput: "125"
+volumeBindingMode: WaitForFirstConsumer</pre>
+                    </div>
+                    <button onclick="copyCodeBlock(this)" class="mt-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-sm">Copy YAML</button>
+                </div>
+
+                <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                    <h3 class="text-xl font-bold mb-4 text-pink-400">HorizontalPodAutoscaler - Auto Scaling</h3>
+                    <div class="code-block">
+                        <div class="code-label">hpa.yaml</div>
+                        <pre>apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: app-hpa
+  namespace: production
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: nginx-app
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 50
+        periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 30</pre>
+                    </div>
+                    <button onclick="copyCodeBlock(this)" class="mt-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-sm">Copy YAML</button>
+                </div>
+
+                <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                    <h3 class="text-xl font-bold mb-4 text-sky-400">RBAC - ServiceAccount & Role</h3>
+                    <div class="code-block">
+                        <div class="code-label">rbac.yaml</div>
+                        <pre>apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: app-sa
+  namespace: production
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: app-role
+  namespace: production
+rules:
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get"]
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: app-rolebinding
+  namespace: production
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: app-role
+subjects:
+- kind: ServiceAccount
+  name: app-sa
+  namespace: production</pre>
+                    </div>
+                    <button onclick="copyCodeBlock(this)" class="mt-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-sm">Copy YAML</button>
+                </div>
+
+                <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                    <h3 class="text-xl font-bold mb-4 text-lime-400">NetworkPolicy - Traffic Control</h3>
+                    <div class="code-block">
+                        <div class="code-label">networkpolicy.yaml</div>
+                        <pre>apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: app-netpol
+  namespace: production
+spec:
+  podSelector:
+    matchLabels:
+      app: nginx
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: frontend
+    ports:
+    - protocol: TCP
+      port: 80
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    ports:
+    - protocol: TCP
+      port: 9090
+  egress:
+  - to:
+    - podSelector:
+        matchLabels:
+          app: backend
+    ports:
+    - protocol: TCP
+      port: 8080
+  - to:
+    - namespaceSelector: {}
+    ports:
+    - protocol: TCP
+      port: 53
+    - protocol: UDP
+      port: 53</pre>
+                    </div>
+                    <button onclick="copyCodeBlock(this)" class="mt-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-sm">Copy YAML</button>
+                </div>
+
+                <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                    <h3 class="text-xl font-bold mb-4 text-fuchsia-400">Namespace & ResourceQuota</h3>
+                    <div class="code-block">
+                        <div class="code-label">namespace-quota.yaml</div>
+                        <pre>apiVersion: v1
+kind: Namespace
+metadata:
+  name: production
+  labels:
+    name: production
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: prod-quota
+  namespace: production
+spec:
+  hard:
+    requests.cpu: "10"
+    requests.memory: "20Gi"
+    limits.cpu: "20"
+    limits.memory: "40Gi"
+    pods: "100"
+    services: "10"
+    persistentvolumeclaims: "10"
+  scopeSelector:
+    matchExpressions:
+    - operator: In
+      scopeName: PriorityClass
+      values: ["high", "medium"]
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: prod-limits
+  namespace: production
+spec:
+  limits:
+  - max:
+      cpu: "2"
+      memory: "2Gi"
+    min:
+      cpu: "50m"
+      memory: "64Mi"
+    default:
+      cpu: "500m"
+      memory: "512Mi"
+    defaultRequest:
+      cpu: "250m"
+      memory: "256Mi"
+    type: Container
+  - max:
+      cpu: "4"
+      memory: "4Gi"
+    min:
+      cpu: "100m"
+      memory: "128Mi"
+    type: Pod</pre>
+                    </div>
+                    <button onclick="copyCodeBlock(this)" class="mt-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-sm">Copy YAML</button>
+                </div>
+            </div>
+        </div>        <!-- Deployment Workflow Tab -->
+        <div id="deployment" class="tab-content hidden">
+            <h2 class="text-3xl font-bold mb-6">Production Deployment Workflow</h2>
+            
+            <div class="bg-slate-800 rounded-xl p-8 border border-slate-700 mb-8">
+                <h3 class="text-2xl font-bold mb-6">Step-by-Step Deployment</h3>
+                <div class="space-y-4">
+                    <div class="flex gap-4">
+                        <div class="bg-blue-600 rounded-full w-10 h-10 flex items-center justify-center font-bold flex-shrink-0">1</div>
+                        <div><h4 class="font-bold mb-1">Create Namespace</h4><p class="text-gray-300 text-sm">kubectl create namespace production</p></div>
+                    </div>
+                    <div class="flex gap-4">
+                        <div class="bg-blue-600 rounded-full w-10 h-10 flex items-center justify-center font-bold flex-shrink-0">2</div>
+                        <div><h4 class="font-bold mb-1">Setup RBAC</h4><p class="text-gray-300 text-sm">Create ServiceAccount, Role, RoleBinding for access control</p></div>
+                    </div>
+                    <div class="flex gap-4">
+                        <div class="bg-blue-600 rounded-full w-10 h-10 flex items-center justify-center font-bold flex-shrink-0">3</div>
+                        <div><h4 class="font-bold mb-1">Configure Storage</h4><p class="text-gray-300 text-sm">Define StorageClass and provision PersistentVolumes</p></div>
+                    </div>
+                    <div class="flex gap-4">
+                        <div class="bg-blue-600 rounded-full w-10 h-10 flex items-center justify-center font-bold flex-shrink-0">4</div>
+                        <div><h4 class="font-bold mb-1">Create Secrets & ConfigMaps</h4><p class="text-gray-300 text-sm">Store credentials, API keys, and configuration</p></div>
+                    </div>
+                    <div class="flex gap-4">
+                        <div class="bg-blue-600 rounded-full w-10 h-10 flex items-center justify-center font-bold flex-shrink-0">5</div>
+                        <div><h4 class="font-bold mb-1">Deploy Databases</h4><p class="text-gray-300 text-sm">Use StatefulSets for PostgreSQL, MongoDB, etc.</p></div>
+                    </div>
+                    <div class="flex gap-4">
+                        <div class="bg-blue-600 rounded-full w-10 h-10 flex items-center justify-center font-bold flex-shrink-0">6</div>
+                        <div><h4 class="font-bold mb-1">Deploy Message Queues</h4><p class="text-gray-300 text-sm">Setup RabbitMQ, Kafka, or NATS</p></div>
+                    </div>
+                    <div class="flex gap-4">
+                        <div class="bg-blue-600 rounded-full w-10 h-10 flex items-center justify-center font-bold flex-shrink-0">7</div>
+                        <div><h4 class="font-bold mb-1">Deploy Applications</h4><p class="text-gray-300 text-sm">Apply Deployments for microservices</p></div>
+                    </div>
+                    <div class="flex gap-4">
+                        <div class="bg-blue-600 rounded-full w-10 h-10 flex items-center justify-center font-bold flex-shrink-0">8</div>
+                        <div><h4 class="font-bold mb-1">Configure Networking</h4><p class="text-gray-300 text-sm">Create Services, Ingress, NetworkPolicies</p></div>
+                    </div>
+                    <div class="flex gap-4">
+                        <div class="bg-blue-600 rounded-full w-10 h-10 flex items-center justify-center font-bold flex-shrink-0">9</div>
+                        <div><h4 class="font-bold mb-1">Enable Monitoring</h4><p class="text-gray-300 text-sm">Deploy Prometheus, Grafana, logging stack</p></div>
+                    </div>
+                    <div class="flex gap-4">
+                        <div class="bg-blue-600 rounded-full w-10 h-10 flex items-center justify-center font-bold flex-shrink-0">10</div>
+                        <div><h4 class="font-bold mb-1">Configure Autoscaling</h4><p class="text-gray-300 text-sm">Setup HPA, VPA, PodDisruptionBudgets</p></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid md:grid-cols-2 gap-8">
+                <div class="bg-green-900 bg-opacity-30 border border-green-700 rounded-xl p-6">
+                    <h3 class="text-xl font-bold mb-4">Best Practices</h3>
+                    <ul class="space-y-2 text-sm">
+                        <li class="flex gap-2"><span class="text-green-400">✓</span> Set resource requests and limits on all containers</li>
+                        <li class="flex gap-2"><span class="text-green-400">✓</span> Use namespaces for environment separation</li>
+                        <li class="flex gap-2"><span class="text-green-400">✓</span> Never hardcode secrets in images</li>
+                        <li class="flex gap-2"><span class="text-green-400">✓</span> Implement least privilege RBAC</li>
+                        <li class="flex gap-2"><span class="text-green-400">✓</span> Enable liveness & readiness probes</li>
+                        <li class="flex gap-2"><span class="text-green-400">✓</span> Use StatefulSets for databases</li>
+                        <li class="flex gap-2"><span class="text-green-400">✓</span> Setup monitoring and logging</li>
+                        <li class="flex gap-2"><span class="text-green-400">✓</span> Plan multi-replica deployments</li>
+                    </ul>
+                </div>
+
+                <div class="bg-slate-800 border border-slate-700 rounded-xl p-6">
+                    <h3 class="text-xl font-bold mb-4">Essential kubectl Commands</h3>
+                    <div class="space-y-1 font-mono text-xs bg-black bg-opacity-50 p-4 rounded">
+                        <div class="text-green-400">kubectl apply -f manifest.yaml</div>
+                        <div class="text-green-400">kubectl get pods -n namespace</div>
+                        <div class="text-green-400">kubectl logs pod-name -f</div>
+                        <div class="text-green-400">kubectl describe pod pod-name</div>
+                        <div class="text-green-400">kubectl scale deploy/name --replicas=3</div>
+                        <div class="text-green-400">kubectl exec -it pod-name -- bash</div>
+                        <div class="text-green-400">kubectl port-forward pod 8080:80</div>
+                        <div class="text-green-400">kubectl rollout undo deploy/app</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Kubectl CLI Tab -->
+        <div id="kubectl" class="tab-content hidden">
+            <h2 class="text-3xl font-bold mb-6">Kubectl Command Reference</h2>
+            <p class="text-gray-300 mb-6">Essential commands for cluster management. Hover over commands to copy to clipboard.</p>
+            
+            <div class="space-y-6">
+                <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                    <h3 class="text-xl font-bold mb-4 text-blue-400">Installation & Setup</h3>
+                    <div class="space-y-2">
+                        <div class="cli-command">brew install kubectl  # macOS<span class="cli-copy-btn" onclick="copyToClipboard(this, 'brew install kubectl')">Copy</span></div>
+                        <div class="cli-command">sudo apt-get install kubectl  # Ubuntu/Debian<span class="cli-copy-btn" onclick="copyToClipboard(this, 'sudo apt-get install kubectl')">Copy</span></div>
+                        <div class="cli-command">choco install kubernetes-cli  # Windows<span class="cli-copy-btn" onclick="copyToClipboard(this, 'choco install kubernetes-cli')">Copy</span></div>
+                        <div class="cli-command">kubectl version --client<span class="cli-copy-btn" onclick="copyToClipboard(this, 'kubectl version --client')">Copy</span></div>
+                        <div class="cli-command">kubectl cluster-info<span class="cli-copy-btn" onclick="copyToClipboard(this, 'kubectl cluster-info')">Copy</span></div>
+                    </div>
+                </div>
+
+                <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                    <h3 class="text-xl font-bold mb-4 text-blue-400">Cluster Management</h3>
+                    <div class="space-y-2">
+                        <div class="cli-command">kubectl get nodes<span class="cli-copy-btn" onclick="copyToClipboard(this, 'kubectl get nodes')">Copy</span></div>
+                        <div class="cli-command">kubectl describe node node-name<span class="cli-copy-btn" onclick="copyToClipboard(this, 'kubectl describe node node-name')">Copy</span></div>
+                        <div class="cli-command">kubectl top nodes<span class="cli-copy-btn" onclick="copyToClipboard(this, 'kubectl top nodes')">Copy</span></div>
+                        <div class="cli-command">kubectl cordon node-name<span class="cli-copy-btn" onclick="copyToClipboard(this, 'kubectl cordon node-name')">Copy</span></div>
+                        <div class="cli-command">kubectl uncordon node-name<span class="cli-copy-btn" onclick="copyToClipboard(this, 'kubectl uncordon node-name')">Copy</span></div>
+                        <div class="cli-command">kubectl drain node-name --ignore-daemonsets<span class="cli-copy-btn" onclick="copyToClipboard(this, 'kubectl drain node-name --ignore-daemonsets')">Copy</span></div>
+                        <div class="cli-command">kubectl label nodes node-name key=value<span class="cli-copy-btn" onclick="copyToClipboard(this, 'kubectl label nodes node-name key=value')">Copy</span></div>
+                        <div class="cli-command">kubectl taint nodes node-name key=value:NoSchedule<span class="cli-copy-btn" onclick="copyToClipboard(this, 'kubectl taint nodes node-name key=value:NoSchedule')">Copy</span></div>
+                    </div>
+                </div>
+
+                <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                    <h3 class="text-xl font-bold mb-4 text-blue-400">Resource Management</h3>
+                    <div class="space-y-2">
+                        <div class="cli-command">kubectl apply -f file.yaml  # Apply manifest</div>
+                        <div class="cli-command">kubectl apply -f directory/  # Apply all files in directory</div>
+                        <div class="cli-command">kubectl create deployment app --image=image:tag  # Create deployment</div>
+                        <div class="cli-command">kubectl create namespace prod  # Create namespace</div>
+                        <div class="cli-command">kubectl create configmap name --from-literal=key=value  # Create ConfigMap</div>
+                        <div class="cli-command">kubectl create secret generic name --from-literal=key=value  # Create secret</div>
+                        <div class="cli-command">kubectl create service clusterip app --tcp=8080:8080  # Create service</div>
+                    </div>
+                </div>
+
+                <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                    <h3 class="text-xl font-bold mb-4 text-blue-400">Getting Resources</h3>
+                    <div class="space-y-2">
+                        <div class="cli-command">kubectl get pods  # List pods</div>
+                        <div class="cli-command">kubectl get pods --all-namespaces  # Pods in all namespaces</div>
+                        <div class="cli-command">kubectl get pods -n namespace  # Pods in specific namespace</div>
+                        <div class="cli-command">kubectl get pods -o wide  # Pods with IP and node info</div>
+                        <div class="cli-command">kubectl get pods -o yaml  # Output in YAML format</div>
+                        <div class="cli-command">kubectl get pods -l app=myapp  # Filter by labels</div>
+                        <div class="cli-command">kubectl get all  # All resources in namespace</div>
+                        <div class="cli-command">kubectl get deployments,services  # Multiple resource types</div>
+                    </div>
+                </div>
+
+                <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                    <h3 class="text-xl font-bold mb-4 text-blue-400">Inspecting & Debugging</h3>
+                    <div class="space-y-2">
+                        <div class="cli-command">kubectl describe pod pod-name  # Detailed pod information</div>
+                        <div class="cli-command">kubectl logs pod-name  # Display pod logs</div>
+                        <div class="cli-command">kubectl logs pod-name -c container-name  # Specific container logs</div>
+                        <div class="cli-command">kubectl logs pod-name --previous  # Previous pod logs (crashed)</div>
+                        <div class="cli-command">kubectl logs pod-name -f  # Follow logs in real-time</div>
+                        <div class="cli-command">kubectl logs pod-name --tail=50  # Last 50 log lines</div>
+                        <div class="cli-command">kubectl logs deployment/name  # Logs from all pods in deployment</div>
+                    </div>
+                </div>
+
+                <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                    <h3 class="text-xl font-bold mb-4 text-blue-400">Pod Execution & Interaction</h3>
+                    <div class="space-y-2">
+                        <div class="cli-command">kubectl exec -it pod-name -- /bin/bash  # Interactive shell in pod</div>
+                        <div class="cli-command">kubectl exec pod-name -- command arg  # Execute command in pod</div>
+                        <div class="cli-command">kubectl exec pod-name -c container -- bash  # Specific container shell</div>
+                        <div class="cli-command">kubectl port-forward pod-name 8080:80  # Forward local port to pod</div>
+                        <div class="cli-command">kubectl port-forward service/name 8080:80  # Forward via service</div>
+                        <div class="cli-command">kubectl cp pod-name:/path/file ./local/  # Copy from pod</div>
+                        <div class="cli-command">kubectl cp ./local/file pod-name:/path/  # Copy to pod</div>
+                        <div class="cli-command">kubectl attach pod-name  # Attach to running pod</div>
+                    </div>
+                </div>
+
+                <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                    <h3 class="text-xl font-bold mb-4 text-blue-400">Scaling & Updates</h3>
+                    <div class="space-y-2">
+                        <div class="cli-command">kubectl scale deployment/name --replicas=5  # Scale deployment</div>
+                        <div class="cli-command">kubectl scale statefulset/name --replicas=3  # Scale StatefulSet</div>
+                        <div class="cli-command">kubectl set image deployment/app app=image:v2  # Update container image</div>
+                        <div class="cli-command">kubectl rollout status deployment/name  # Check rollout status</div>
+                        <div class="cli-command">kubectl rollout history deployment/name  # View deployment history</div>
+                        <div class="cli-command">kubectl rollout undo deployment/name  # Rollback to previous version</div>
+                        <div class="cli-command">kubectl rollout undo deployment/name --to-revision=2  # Rollback to specific revision</div>
+                    </div>
+                </div>
+
+                <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                    <h3 class="text-xl font-bold mb-4 text-blue-400">Monitoring & Events</h3>
+                    <div class="space-y-2">
+                        <div class="cli-command">kubectl top pods  # Pod resource usage (CPU/memory)</div>
+                        <div class="cli-command">kubectl top pods -n namespace  # Pod usage in namespace</div>
+                        <div class="cli-command">kubectl top nodes  # Node resource usage</div>
+                        <div class="cli-command">kubectl get events  # Cluster events</div>
+                        <div class="cli-command">kubectl get events -n namespace  # Events in namespace</div>
+                        <div class="cli-command">kubectl get resourcequota  # View resource quotas</div>
+                        <div class="cli-command">kubectl describe resourcequota quota-name  # Quota details</div>
+                    </div>
+                </div>
+
+                <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                    <h3 class="text-xl font-bold mb-4 text-blue-400">Deletion & Cleanup</h3>
+                    <div class="space-y-2">
+                        <div class="cli-command">kubectl delete pod pod-name  # Delete pod</div>
+                        <div class="cli-command">kubectl delete deployment deploy-name  # Delete deployment</div>
+                        <div class="cli-command">kubectl delete service service-name  # Delete service</div>
+                        <div class="cli-command">kubectl delete namespace namespace-name  # Delete namespace</div>
+                        <div class="cli-command">kubectl delete all -n namespace  # Delete all resources in namespace</div>
+                        <div class="cli-command">kubectl delete -f file.yaml  # Delete by manifest file</div>
+                        <div class="cli-command">kubectl delete pod --all -n namespace  # Delete all pods in namespace</div>
+                    </div>
+                </div>
+
+                <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                    <h3 class="text-xl font-bold mb-4 text-blue-400">Configuration Management</h3>
+                    <div class="space-y-2">
+                        <div class="cli-command">kubectl config view  # Display current kubeconfig</div>
+                        <div class="cli-command">kubectl config current-context  # Show current context</div>
+                        <div class="cli-command">kubectl config get-contexts  # List all available contexts</div>
+                        <div class="cli-command">kubectl config use-context cluster-name  # Switch context</div>
+                        <div class="cli-command">kubectl config set-context ctx --namespace=prod  # Set default namespace</div>
+                        <div class="cli-command">kubectl config delete-context context-name  # Delete context</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Resource Requirements Tab -->
+        <div id="requirements" class="tab-content hidden">
+            <h2 class="text-3xl font-bold mb-6">Kubernetes Resource Requirements & Comparisons</h2>
+            <p class="text-gray-300 mb-6">Production-grade CPU, memory, and storage recommendations for common services.</p>
+
+            <div class="space-y-8">
+                <!-- Database Comparison -->
+                <div class="bg-slate-800 rounded-xl p-6 border border-slate-700 overflow-x-auto">
+                    <h3 class="text-2xl font-bold mb-4 text-purple-400">Databases - Resources & Characteristics</h3>
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="bg-slate-700">
+                                <th class="px-4 py-2 text-left">Service</th>
+                                <th class="px-4 py-2 text-left">CPU (Request/Limit)</th>
+                                <th class="px-4 py-2 text-left">Memory (Request/Limit)</th>
+                                <th class="px-4 py-2 text-left">Storage</th>
+                                <th class="px-4 py-2 text-left">HA Type</th>
+                                <th class="px-4 py-2 text-left">Best For</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr class="border-t border-slate-700">
+                                <td class="px-4 py-2 font-bold text-blue-300">PostgreSQL</td>
+                                <td class="px-4 py-2">500m / 2000m</td>
+                                <td class="px-4 py-2">512Mi / 2Gi</td>
+                                <td class="px-4 py-2">20-100Gi</td>
+                                <td class="px-4 py-2 text-yellow-300">Replication</td>
+                                <td class="px-4 py-2 text-gray-300">ACID, Complex queries</td>
+                            </tr>
+                            <tr class="border-t border-slate-700 bg-slate-700 bg-opacity-30">
+                                <td class="px-4 py-2 font-bold text-blue-300">MySQL</td>
+                                <td class="px-4 py-2">250m / 1000m</td>
+                                <td class="px-4 py-2">256Mi / 1Gi</td>
+                                <td class="px-4 py-2">10-50Gi</td>
+                                <td class="px-4 py-2 text-yellow-300">Master-Slave</td>
+                                <td class="px-4 py-2 text-gray-300">Web apps, Lightweight</td>
+                            </tr>
+                            <tr class="border-t border-slate-700">
+                                <td class="px-4 py-2 font-bold text-blue-300">MongoDB</td>
+                                <td class="px-4 py-2">1000m / 4000m</td>
+                                <td class="px-4 py-2">1Gi / 4Gi</td>
+                                <td class="px-4 py-2">30-200Gi</td>
+                                <td class="px-4 py-2 text-yellow-300">Replica Set</td>
+                                <td class="px-4 py-2 text-gray-300">Documents, Flexible schema</td>
+                            </tr>
+                            <tr class="border-t border-slate-700 bg-slate-700 bg-opacity-30">
+                                <td class="px-4 py-2 font-bold text-blue-300">CockroachDB</td>
+                                <td class="px-4 py-2">500m / 2000m</td>
+                                <td class="px-4 py-2">1Gi / 4Gi</td>
+                                <td class="px-4 py-2">50-500Gi</td>
+                                <td class="px-4 py-2 text-yellow-300">Multi-region</td>
+                                <td class="px-4 py-2 text-gray-300">Distributed SQL</td>
+                            </tr>
+                            <tr class="border-t border-slate-700">
+                                <td class="px-4 py-2 font-bold text-blue-300">Redis</td>
+                                <td class="px-4 py-2">100m / 500m</td>
+                                <td class="px-4 py-2">256Mi / 2Gi</td>
+                                <td class="px-4 py-2">5-50Gi (RDB)</td>
+                                <td class="px-4 py-2 text-yellow-300">Sentinel/Cluster</td>
+                                <td class="px-4 py-2 text-gray-300">Cache, Sessions</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Message Queue Comparison -->
+                <div class="bg-slate-800 rounded-xl p-6 border border-slate-700 overflow-x-auto">
+                    <h3 class="text-2xl font-bold mb-4 text-yellow-400">Message Queues - Resources & Characteristics</h3>
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="bg-slate-700">
+                                <th class="px-4 py-2 text-left">Service</th>
+                                <th class="px-4 py-2 text-left">CPU (Request/Limit)</th>
+                                <th class="px-4 py-2 text-left">Memory (Request/Limit)</th>
+                                <th class="px-4 py-2 text-left">Throughput</th>
+                                <th class="px-4 py-2 text-left">Persistence</th>
+                                <th class="px-4 py-2 text-left">Best For</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr class="border-t border-slate-700">
+                                <td class="px-4 py-2 font-bold text-yellow-300">RabbitMQ</td>
+                                <td class="px-4 py-2">500m / 2000m</td>
+                                <td class="px-4 py-2">512Mi / 2Gi</td>
+                                <td class="px-4 py-2">~50k msg/s</td>
+                                <td class="px-4 py-2 text-green-300">Durable</td>
+                                <td class="px-4 py-2 text-gray-300">Task queues, Routing</td>
+                            </tr>
+                            <tr class="border-t border-slate-700 bg-slate-700 bg-opacity-30">
+                                <td class="px-4 py-2 font-bold text-yellow-300">Kafka</td>
+                                <td class="px-4 py-2">1000m / 4000m</td>
+                                <td class="px-4 py-2">2Gi / 8Gi</td>
+                                <td class="px-4 py-2">~1M msg/s</td>
+                                <td class="px-4 py-2 text-green-300">Highly Durable</td>
+                                <td class="px-4 py-2 text-gray-300">Stream processing</td>
+                            </tr>
+                            <tr class="border-t border-slate-700">
+                                <td class="px-4 py-2 font-bold text-yellow-300">NATS</td>
+                                <td class="px-4 py-2">100m / 500m</td>
+                                <td class="px-4 py-2">128Mi / 512Mi</td>
+                                <td class="px-4 py-2">~10M msg/s</td>
+                                <td class="px-4 py-2 text-orange-300">Optional</td>
+                                <td class="px-4 py-2 text-gray-300">Cloud native, Fast</td>
+                            </tr>
+                            <tr class="border-t border-slate-700 bg-slate-700 bg-opacity-30">
+                                <td class="px-4 py-2 font-bold text-yellow-300">Pulsar</td>
+                                <td class="px-4 py-2">1000m / 4000m</td>
+                                <td class="px-4 py-2">2Gi / 8Gi</td>
+                                <td class="px-4 py-2">~1M msg/s</td>
+                                <td class="px-4 py-2 text-green-300">Highly Durable</td>
+                                <td class="px-4 py-2 text-gray-300">Multi-tenancy</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Monitoring Stack Comparison -->
+                <div class="bg-slate-800 rounded-xl p-6 border border-slate-700 overflow-x-auto">
+                    <h3 class="text-2xl font-bold mb-4 text-orange-400">Monitoring & Observability Stack</h3>
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="bg-slate-700">
+                                <th class="px-4 py-2 text-left">Service</th>
+                                <th class="px-4 py-2 text-left">CPU (Request/Limit)</th>
+                                <th class="px-4 py-2 text-left">Memory (Request/Limit)</th>
+                                <th class="px-4 py-2 text-left">Storage</th>
+                                <th class="px-4 py-2 text-left">Retention</th>
+                                <th class="px-4 py-2 text-left">Purpose</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr class="border-t border-slate-700">
+                                <td class="px-4 py-2 font-bold text-orange-300">Prometheus</td>
+                                <td class="px-4 py-2">500m / 2000m</td>
+                                <td class="px-4 py-2">1Gi / 4Gi</td>
+                                <td class="px-4 py-2">50-500Gi</td>
+                                <td class="px-4 py-2">15 days</td>
+                                <td class="px-4 py-2 text-gray-300">Metrics scraping</td>
+                            </tr>
+                            <tr class="border-t border-slate-700 bg-slate-700 bg-opacity-30">
+                                <td class="px-4 py-2 font-bold text-orange-300">Grafana</td>
+                                <td class="px-4 py-2">100m / 500m</td>
+                                <td class="px-4 py-2">256Mi / 1Gi</td>
+                                <td class="px-4 py-2">5-20Gi</td>
+                                <td class="px-4 py-2">Unlimited</td>
+                                <td class="px-4 py-2 text-gray-300">Visualization</td>
+                            </tr>
+                            <tr class="border-t border-slate-700">
+                                <td class="px-4 py-2 font-bold text-orange-300">Loki</td>
+                                <td class="px-4 py-2">250m / 1000m</td>
+                                <td class="px-4 py-2">512Mi / 2Gi</td>
+                                <td class="px-4 py-2">100-500Gi</td>
+                                <td class="px-4 py-2">7-30 days</td>
+                                <td class="px-4 py-2 text-gray-300">Log aggregation</td>
+                            </tr>
+                            <tr class="border-t border-slate-700 bg-slate-700 bg-opacity-30">
+                                <td class="px-4 py-2 font-bold text-orange-300">Jaeger</td>
+                                <td class="px-4 py-2">250m / 1000m</td>
+                                <td class="px-4 py-2">512Mi / 2Gi</td>
+                                <td class="px-4 py-2">50-200Gi</td>
+                                <td class="px-4 py-2">3-7 days</td>
+                                <td class="px-4 py-2 text-gray-300">Distributed tracing</td>
+                            </tr>
+                            <tr class="border-t border-slate-700">
+                                <td class="px-4 py-2 font-bold text-orange-300">Elasticsearch</td>
+                                <td class="px-4 py-2">1000m / 4000m</td>
+                                <td class="px-4 py-2">2Gi / 8Gi</td>
+                                <td class="px-4 py-2">100-2000Gi</td>
+                                <td class="px-4 py-2">15-30 days</td>
+                                <td class="px-4 py-2 text-gray-300">Log search</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Backend APIs Comparison -->
+                <div class="bg-slate-800 rounded-xl p-6 border border-slate-700 overflow-x-auto">
+                    <h3 class="text-2xl font-bold mb-4 text-green-400">Backend APIs - Development Frameworks</h3>
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="bg-slate-700">
+                                <th class="px-4 py-2 text-left">Language</th>
+                                <th class="px-4 py-2 text-left">Framework</th>
+                                <th class="px-4 py-2 text-left">CPU (per pod)</th>
+                                <th class="px-4 py-2 text-left">Memory (per pod)</th>
+                                <th class="px-4 py-2 text-left">Concurrency</th>
+                                <th class="px-4 py-2 text-left">Startup Time</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr class="border-t border-slate-700">
+                                <td class="px-4 py-2 font-bold text-green-300">Node.js</td>
+                                <td class="px-4 py-2">Express, Fastify</td>
+                                <td class="px-4 py-2">100m / 500m</td>
+                                <td class="px-4 py-2">256Mi / 1Gi</td>
+                                <td class="px-4 py-2">High</td>
+                                <td class="px-4 py-2">~500ms</td>
+                            </tr>
+                            <tr class="border-t border-slate-700 bg-slate-700 bg-opacity-30">
+                                <td class="px-4 py-2 font-bold text-green-300">Python</td>
+                                <td class="px-4 py-2">Django, FastAPI</td>
+                                <td class="px-4 py-2">250m / 1000m</td>
+                                <td class="px-4 py-2">512Mi / 2Gi</td>
+                                <td class="px-4 py-2">Medium</td>
+                                <td class="px-4 py-2">~1s</td>
+                            </tr>
+                            <tr class="border-t border-slate-700">
+                                <td class="px-4 py-2 font-bold text-green-300">Java</td>
+                                <td class="px-4 py-2">Spring Boot</td>
+                                <td class="px-4 py-2">500m / 2000m</td>
+                                <td class="px-4 py-2">1Gi / 4Gi</td>
+                                <td class="px-4 py-2">Very High</td>
+                                <td class="px-4 py-2">~3-5s</td>
+                            </tr>
+                            <tr class="border-t border-slate-700 bg-slate-700 bg-opacity-30">
+                                <td class="px-4 py-2 font-bold text-green-300">Go</td>
+                                <td class="px-4 py-2">Gin, Echo</td>
+                                <td class="px-4 py-2">50m / 200m</td>
+                                <td class="px-4 py-2">64Mi / 256Mi</td>
+                                <td class="px-4 py-2">Very High</td>
+                                <td class="px-4 py-2">~50ms</td>
+                            </tr>
+                            <tr class="border-t border-slate-700">
+                                <td class="px-4 py-2 font-bold text-green-300">.NET</td>
+                                <td class="px-4 py-2">ASP.NET Core</td>
+                                <td class="px-4 py-2">250m / 1000m</td>
+                                <td class="px-4 py-2">512Mi / 2Gi</td>
+                                <td class="px-4 py-2">Very High</td>
+                                <td class="px-4 py-2">~1-2s</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Storage Services Comparison -->
+                <div class="bg-slate-800 rounded-xl p-6 border border-slate-700 overflow-x-auto">
+                    <h3 class="text-2xl font-bold mb-4 text-indigo-400">Storage Services - Resources & Use Cases</h3>
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="bg-slate-700">
+                                <th class="px-4 py-2 text-left">Service</th>
+                                <th class="px-4 py-2 text-left">CPU (Request/Limit)</th>
+                                <th class="px-4 py-2 text-left">Memory (Request/Limit)</th>
+                                <th class="px-4 py-2 text-left">Min Nodes</th>
+                                <th class="px-4 py-2 text-left">Protocol</th>
+                                <th class="px-4 py-2 text-left">Best For</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr class="border-t border-slate-700">
+                                <td class="px-4 py-2 font-bold text-indigo-300">MinIO</td>
+                                <td class="px-4 py-2">500m / 2000m</td>
+                                <td class="px-4 py-2">512Mi / 2Gi</td>
+                                <td class="px-4 py-2">4</td>
+                                <td class="px-4 py-2">S3 API</td>
+                                <td class="px-4 py-2 text-gray-300">Object storage</td>
+                            </tr>
+                            <tr class="border-t border-slate-700 bg-slate-700 bg-opacity-30">
+                                <td class="px-4 py-2 font-bold text-indigo-300">NFS Server</td>
+                                <td class="px-4 py-2">200m / 1000m</td>
+                                <td class="px-4 py-2">256Mi / 1Gi</td>
+                                <td class="px-4 py-2">1</td>
+                                <td class="px-4 py-2">NFS v4</td>
+                                <td class="px-4 py-2 text-gray-300">File sharing</td>
+                            </tr>
+                            <tr class="border-t border-slate-700">
+                                <td class="px-4 py-2 font-bold text-indigo-300">Ceph</td>
+                                <td class="px-4 py-2">1000m / 4000m</td>
+                                <td class="px-4 py-2">2Gi / 8Gi</td>
+                                <td class="px-4 py-2">3</td>
+                                <td class="px-4 py-2">RBD, CephFS</td>
+                                <td class="px-4 py-2 text-gray-300">Distributed storage</td>
+                            </tr>
+                            <tr class="border-t border-slate-700 bg-slate-700 bg-opacity-30">
+                                <td class="px-4 py-2 font-bold text-indigo-300">Longhorn</td>
+                                <td class="px-4 py-2">250m / 1000m</td>
+                                <td class="px-4 py-2">512Mi / 2Gi</td>
+                                <td class="px-4 py-2">3</td>
+                                <td class="px-4 py-2">Block storage</td>
+                                <td class="px-4 py-2 text-gray-300">Persistent volumes</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Ingress & Load Balancing -->
+                <div class="bg-slate-800 rounded-xl p-6 border border-slate-700 overflow-x-auto">
+                    <h3 class="text-2xl font-bold mb-4 text-sky-400">Ingress Controllers & Load Balancers</h3>
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="bg-slate-700">
+                                <th class="px-4 py-2 text-left">Service</th>
+                                <th class="px-4 py-2 text-left">Type</th>
+                                <th class="px-4 py-2 text-left">CPU (Request/Limit)</th>
+                                <th class="px-4 py-2 text-left">Memory (Request/Limit)</th>
+                                <th class="px-4 py-2 text-left">Deployment</th>
+                                <th class="px-4 py-2 text-left">Features</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr class="border-t border-slate-700">
+                                <td class="px-4 py-2 font-bold text-sky-300">NGINX Ingress</td>
+                                <td class="px-4 py-2">Ingress</td>
+                                <td class="px-4 py-2">100m / 500m</td>
+                                <td class="px-4 py-2">256Mi / 1Gi</td>
+                                <td class="px-4 py-2">Deployment</td>
+                                <td class="px-4 py-2 text-gray-300">HTTP/HTTPS, WAF</td>
+                            </tr>
+                            <tr class="border-t border-slate-700 bg-slate-700 bg-opacity-30">
+                                <td class="px-4 py-2 font-bold text-sky-300">Traefik</td>
+                                <td class="px-4 py-2">Ingress</td>
+                                <td class="px-4 py-2">100m / 500m</td>
+                                <td class="px-4 py-2">64Mi / 256Mi</td>
+                                <td class="px-4 py-2">DaemonSet</td>
+                                <td class="px-4 py-2 text-gray-300">Dynamic config, Metrics</td>
+                            </tr>
+                            <tr class="border-t border-slate-700">
+                                <td class="px-4 py-2 font-bold text-sky-300">Istio</td>
+                                <td class="px-4 py-2">Service Mesh</td>
+                                <td class="px-4 py-2">500m / 2000m</td>
+                                <td class="px-4 py-2">1Gi / 4Gi</td>
+                                <td class="px-4 py-2">Deployment + DaemonSet</td>
+                                <td class="px-4 py-2 text-gray-300">mTLS, Traffic mgmt</td>
+                            </tr>
+                            <tr class="border-t border-slate-700 bg-slate-700 bg-opacity-30">
+                                <td class="px-4 py-2 font-bold text-sky-300">Linkerd</td>
+                                <td class="px-4 py-2">Service Mesh</td>
+                                <td class="px-4 py-2">100m / 500m</td>
+                                <td class="px-4 py-2">64Mi / 256Mi</td>
+                                <td class="px-4 py-2">Deployment + DaemonSet</td>
+                                <td class="px-4 py-2 text-gray-300">Lightweight, mTLS</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Resource Sizing Guide -->
+                <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                    <h3 class="text-2xl font-bold mb-4 text-lime-400">Production Sizing Guidelines</h3>
+                    <div class="space-y-4">
+                        <div class="bg-black bg-opacity-30 p-4 rounded-lg">
+                            <h4 class="font-bold text-lime-300 mb-2">🔹 Small Cluster (Development)</h4>
+                            <p class="text-sm text-gray-300">3-5 nodes, 2-4 CPU/node, 4-8GB RAM/node</p>
+                            <p class="text-xs text-gray-400 mt-1">Best for: Development, Testing, Small workloads</p>
+                        </div>
+                        <div class="bg-black bg-opacity-30 p-4 rounded-lg">
+                            <h4 class="font-bold text-lime-300 mb-2">🔹 Medium Cluster (Production)</h4>
+                            <p class="text-sm text-gray-300">6-10 nodes, 4-8 CPU/node, 16-32GB RAM/node</p>
+                            <p class="text-xs text-gray-400 mt-1">Best for: Production apps, Moderate traffic, HA setup</p>
+                        </div>
+                        <div class="bg-black bg-opacity-30 p-4 rounded-lg">
+                            <h4 class="font-bold text-lime-300 mb-2">🔹 Large Cluster (Enterprise)</h4>
+                            <p class="text-sm text-gray-300">15+ nodes, 8-16 CPU/node, 32-64GB RAM/node</p>
+                            <p class="text-xs text-gray-400 mt-1">Best for: High traffic, Multiple teams, Multi-region</p>
+                        </div>
+                        <div class="bg-black bg-opacity-30 p-4 rounded-lg">
+                            <h4 class="font-bold text-lime-300 mb-2">💡 Pro Tips</h4>
+                            <ul class="text-sm text-gray-300 list-disc list-inside space-y-1">
+                                <li>Always reserve 10-15% of cluster capacity for system pods</li>
+                                <li>Set resource requests at 50-60% of limits for better packing</li>
+                                <li>Database pods should be on dedicated nodes when possible</li>
+                                <li>Leave at least 25% free capacity for spikes and failures</li>
+                                <li>Monitor actual usage and adjust quarterly</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    <script>
+        function selectTab(tabName) {
+            document.querySelectorAll('.tab-content').forEach(tab => tab.classList.add('hidden'));
+            const selected = document.getElementById(tabName);
+            if (selected) selected.classList.remove('hidden');
+
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('bg-blue-600');
+                btn.classList.add('bg-slate-700');
+            });
+            event.target.classList.remove('bg-slate-700');
+            event.target.classList.add('bg-blue-600');
+        }
+
+        const serviceData = {
+            nginx: {required: [{name: 'Deployment', desc: 'NGINX replicas'},{name: 'Service', desc: 'ClusterIP/LoadBalancer'}],optional: [{name: 'Ingress', desc: 'HTTP/HTTPS routing'},{name: 'ConfigMap', desc: 'nginx.conf'},{name: 'HPA', desc: 'Auto-scaling'}],notused: [{name: 'StatefulSet', desc: 'Stateless service'},{name: 'PVC', desc: 'No storage'}]},
+            apache: {required: [{name: 'Deployment', desc: 'Apache HTTP Server'},{name: 'Service', desc: 'Expose web server'}],optional: [{name: 'ConfigMap', desc: 'httpd.conf'},{name: 'Ingress', desc: 'SSL routing'},{name: 'HPA', desc: 'Scale on traffic'}],notused: [{name: 'StatefulSet', desc: 'Stateless'},{name: 'PVC', desc: 'Content via ConfigMap'}]},
+            react: {required: [{name: 'Deployment', desc: 'SPA application'},{name: 'Service', desc: 'Expose frontend'}],optional: [{name: 'Ingress', desc: 'External access'},{name: 'ConfigMap', desc: 'app.config.js'},{name: 'HPA', desc: 'Scale on demand'}],notused: [{name: 'StatefulSet', desc: 'Stateless'},{name: 'PVC', desc: 'No persistence'},{name: 'Secret', desc: 'No secrets'}]},
+            vue: {required: [{name: 'Deployment', desc: 'Vue/Angular apps'},{name: 'Service', desc: 'Web service'}],optional: [{name: 'Ingress', desc: 'Routing'},{name: 'ConfigMap', desc: 'Environment config'}],notused: [{name: 'StatefulSet', desc: 'Stateless'},{name: 'PVC', desc: 'Ephemeral'}]},
+            nodejs: {required: [{name: 'Deployment', desc: 'Node.js API'},{name: 'Service', desc: 'API endpoint'}],optional: [{name: 'ConfigMap', desc: '.env config'},{name: 'Secret', desc: 'API keys'},{name: 'Ingress', desc: 'External routing'},{name: 'HPA', desc: 'Auto-scale'}],notused: [{name: 'StatefulSet', desc: 'Stateless API'},{name: 'PVC', desc: 'No storage'}]},
+            python: {required: [{name: 'Deployment', desc: 'Django/FastAPI'},{name: 'Service', desc: 'Python app service'}],optional: [{name: 'ConfigMap', desc: 'settings.py'},{name: 'Secret', desc: 'DB credentials'},{name: 'HPA', desc: 'Scale on load'},{name: 'Ingress', desc: 'HTTP routing'}],notused: [{name: 'StatefulSet', desc: 'Usually stateless'},{name: 'DaemonSet', desc: 'Single app'}]},
+            java: {required: [{name: 'Deployment', desc: 'Spring Boot app'},{name: 'Service', desc: 'Java API'}],optional: [{name: 'ConfigMap', desc: 'application.properties'},{name: 'Secret', desc: 'DB password'},{name: 'HPA', desc: 'Memory-based scale'},{name: 'Ingress', desc: 'API routing'}],notused: [{name: 'StatefulSet', desc: 'Typically stateless'},{name: 'DaemonSet', desc: 'Not node-wide'}]},
+            go: {required: [{name: 'Deployment', desc: 'Go services'},{name: 'Service', desc: 'Service endpoint'}],optional: [{name: 'ConfigMap', desc: 'config.yaml'},{name: 'Secret', desc: 'API keys'},{name: 'HPA', desc: 'Scale on CPU'},{name: 'Ingress', desc: 'Routing'}],notused: [{name: 'StatefulSet', desc: 'Stateless'},{name: 'DaemonSet', desc: 'Centralized'}]},
+            php: {required: [{name: 'Deployment', desc: 'Laravel/Symfony'},{name: 'Service', desc: 'Web app service'}],optional: [{name: 'ConfigMap', desc: '.env config'},{name: 'Secret', desc: 'App secret'},{name: 'Ingress', desc: 'PHP routing'}],notused: [{name: 'StatefulSet', desc: 'Stateless'},{name: 'PVC', desc: 'Ephemeral'}]},
+            dotnet: {required: [{name: 'Deployment', desc: 'ASP.NET Core'},{name: 'Service', desc: '.NET API'}],optional: [{name: 'ConfigMap', desc: 'appsettings.json'},{name: 'Secret', desc: 'Connection string'},{name: 'HPA', desc: 'Load balancing'}],notused: [{name: 'StatefulSet', desc: 'Usually stateless'},{name: 'DaemonSet', desc: 'Centralized'}]},
+            postgresql: {required: [{name: 'StatefulSet', desc: 'Data consistency'},{name: 'Service', desc: 'Database access'},{name: 'PVC', desc: 'Persistent data'},{name: 'Secret', desc: 'Password'}],optional: [{name: 'ConfigMap', desc: 'postgresql.conf'},{name: 'NetworkPolicy', desc: 'Access control'},{name: 'PodDisruptionBudget', desc: 'High availability'}],notused: [{name: 'Deployment', desc: 'Use StatefulSet'},{name: 'HPA', desc: 'Manual scaling'}]},
+            mysql: {required: [{name: 'StatefulSet', desc: 'Data ordering'},{name: 'Service', desc: 'Database endpoint'},{name: 'PVC', desc: 'Table storage'},{name: 'Secret', desc: 'Root password'}],optional: [{name: 'ConfigMap', desc: 'my.cnf'},{name: 'NetworkPolicy', desc: 'Firewall rules'}],notused: [{name: 'Deployment', desc: 'Use StatefulSet'},{name: 'HPA', desc: 'Manual'}]},
+            mongodb: {required: [{name: 'StatefulSet', desc: 'Replica set'},{name: 'Service', desc: 'Cluster access'},{name: 'PVC', desc: 'Document storage'},{name: 'Secret', desc: 'Auth creds'}],optional: [{name: 'ConfigMap', desc: 'mongod.conf'},{name: 'NetworkPolicy', desc: 'Network rules'}],notused: [{name: 'Deployment', desc: 'Use StatefulSet'},{name: 'Ingress', desc: 'Non-HTTP'}]},
+            cockroachdb: {required: [{name: 'StatefulSet', desc: 'Cluster nodes'},{name: 'Service', desc: 'Database access'},{name: 'PVC', desc: 'Distributed storage'}],optional: [{name: 'Secret', desc: 'Certificates'},{name: 'NetworkPolicy', desc: 'Node communication'}],notused: [{name: 'Deployment', desc: 'Use StatefulSet'},{name: 'HPA', desc: 'Manual'}]},
+            redis: {required: [{name: 'StatefulSet', desc: 'Data persistence'},{name: 'Service', desc: 'Cache endpoint'},{name: 'PVC', desc: 'AOF/RDB'}],optional: [{name: 'ConfigMap', desc: 'redis.conf'},{name: 'Secret', desc: 'Password'},{name: 'HPA', desc: 'Scale cache'}],notused: [{name: 'Deployment', desc: 'Use StatefulSet'},{name: 'Ingress', desc: 'Redis protocol'}]},
+            memcached: {required: [{name: 'Deployment', desc: 'Cache instances'},{name: 'Service', desc: 'Memcached port'}],optional: [{name: 'HPA', desc: 'Auto-scale cache'}],notused: [{name: 'StatefulSet', desc: 'In-memory only'},{name: 'PVC', desc: 'No persistence'},{name: 'Secret', desc: 'No auth'}]},
+            valkey: {required: [{name: 'StatefulSet', desc: 'Redis compatible'},{name: 'Service', desc: 'Cache access'},{name: 'PVC', desc: 'Persistence'}],optional: [{name: 'ConfigMap', desc: 'valkey.conf'}],notused: [{name: 'Deployment', desc: 'Use StatefulSet'},{name: 'HPA', desc: 'Manual'}]},
+            rabbitmq: {required: [{name: 'StatefulSet', desc: 'Queue data'},{name: 'Service', desc: 'Broker access'},{name: 'PVC', desc: 'Message storage'}],optional: [{name: 'ConfigMap', desc: 'rabbitmq.conf'},{name: 'Secret', desc: 'Credentials'},{name: 'Ingress', desc: 'Management UI'}],notused: [{name: 'Deployment', desc: 'Use StatefulSet'},{name: 'HPA', desc: 'Manual broker'}]},
+            kafka: {required: [{name: 'StatefulSet', desc: 'Broker cluster'},{name: 'Service', desc: 'Broker port'},{name: 'PVC', desc: 'Topic partitions'}],optional: [{name: 'ConfigMap', desc: 'broker.properties'},{name: 'Secret', desc: 'SASL auth'}],notused: [{name: 'Deployment', desc: 'Use StatefulSet'},{name: 'DaemonSet', desc: 'Cluster service'}]},
+            nats: {required: [{name: 'StatefulSet', desc: 'Message broker'},{name: 'Service', desc: 'NATS port'}],optional: [{name: 'ConfigMap', desc: 'nats.conf'},{name: 'Secret', desc: 'Auth tokens'},{name: 'PVC', desc: 'Optional persistence'}],notused: [{name: 'Deployment', desc: 'Use StatefulSet'},{name: 'Ingress', desc: 'Internal only'}]},
+            activemq: {required: [{name: 'StatefulSet', desc: 'JMS broker'},{name: 'Service', desc: 'Broker endpoint'}],optional: [{name: 'PVC', desc: 'Message persistence'},{name: 'ConfigMap', desc: 'activemq.xml'}],notused: [{name: 'Deployment', desc: 'Use StatefulSet'},{name: 'HPA', desc: 'Manual'}]},
+            pulsar: {required: [{name: 'StatefulSet', desc: 'Broker nodes'},{name: 'Service', desc: 'Pub-sub access'},{name: 'PVC', desc: 'Topic storage'}],optional: [{name: 'Secret', desc: 'TLS certs'}],notused: [{name: 'Deployment', desc: 'Use StatefulSet'},{name: 'Ingress', desc: 'Binary protocol'}]},
+            elasticsearch: {required: [{name: 'StatefulSet', desc: 'Cluster nodes'},{name: 'Service', desc: 'Cluster comm'},{name: 'PVC', desc: 'Index data'}],optional: [{name: 'Secret', desc: 'X-Pack creds'},{name: 'ConfigMap', desc: 'elasticsearch.yml'},{name: 'Ingress', desc: 'Kibana UI'}],notused: [{name: 'Deployment', desc: 'Use StatefulSet'},{name: 'HPA', desc: 'Manual'}]},
+            opensearch: {required: [{name: 'StatefulSet', desc: 'Cluster nodes'},{name: 'Service', desc: 'Search access'},{name: 'PVC', desc: 'Index storage'}],optional: [{name: 'Secret', desc: 'Auth'},{name: 'Ingress', desc: 'Dashboard'}],notused: [{name: 'Deployment', desc: 'Use StatefulSet'},{name: 'DaemonSet', desc: 'Centralized'}]},
+            solr: {required: [{name: 'StatefulSet', desc: 'Cluster nodes'},{name: 'Service', desc: 'Search API'},{name: 'PVC', desc: 'Index data'}],optional: [{name: 'ConfigMap', desc: 'solr.xml'},{name: 'Secret', desc: 'Auth'}],notused: [{name: 'Deployment', desc: 'Use StatefulSet'},{name: 'Ingress', desc: 'Usually internal'}]},
+            meilisearch: {required: [{name: 'Deployment', desc: 'Search engine'},{name: 'Service', desc: 'Search API'}],optional: [{name: 'PVC', desc: 'Indexes'},{name: 'Secret', desc: 'API key'},{name: 'Ingress', desc: 'Web access'}],notused: [{name: 'StatefulSet', desc: 'Can use Deploy'},{name: 'HPA', desc: 'Single instance'}]},
+            prometheus: {required: [{name: 'StatefulSet', desc: 'TSDB metrics'},{name: 'Service', desc: 'Metrics endpoint'},{name: 'PVC', desc: 'Metrics storage'}],optional: [{name: 'ConfigMap', desc: 'prometheus.yml'},{name: 'ServiceMonitor', desc: 'SD targets'},{name: 'Ingress', desc: 'Web UI'}],notused: [{name: 'Deployment', desc: 'Use StatefulSet'},{name: 'DaemonSet', desc: 'Centralized'}]},
+            grafana: {required: [{name: 'Deployment', desc: 'Dashboards'},{name: 'Service', desc: 'Web UI access'}],optional: [{name: 'ConfigMap', desc: 'Dashboard config'},{name: 'Secret', desc: 'Admin pwd'},{name: 'PVC', desc: 'Dashboards'},{name: 'Ingress', desc: 'HTTP access'}],notused: [{name: 'StatefulSet', desc: 'Stateless'},{name: 'DaemonSet', desc: 'Single instance'}]},
+            jaeger: {required: [{name: 'Deployment', desc: 'Tracing collector'},{name: 'Service', desc: 'Trace ingestion'}],optional: [{name: 'StatefulSet', desc: 'Backend storage'},{name: 'PVC', desc: 'Trace data'},{name: 'Ingress', desc: 'Web UI'}],notused: [{name: 'DaemonSet', desc: 'Use sidecar agents'},{name: 'ConfigMap', desc: 'Usually code'}]},
+            loki: {required: [{name: 'StatefulSet', desc: 'Log storage'},{name: 'Service', desc: 'Log ingestion'},{name: 'PVC', desc: 'Log chunks'}],optional: [{name: 'ConfigMap', desc: 'loki-config.yaml'},{name: 'Ingress', desc: 'Grafana UI'}],notused: [{name: 'Deployment', desc: 'Use StatefulSet'},{name: 'HPA', desc: 'Manual'}]},
+            datadog: {required: [{name: 'DaemonSet', desc: 'Node agents'},{name: 'Deployment', desc: 'Cluster level'}],optional: [{name: 'Secret', desc: 'API key'},{name: 'ConfigMap', desc: 'Agent config'}],notused: [{name: 'StatefulSet', desc: 'Use DaemonSet'},{name: 'PVC', desc: 'SaaS service'}]},
+            newrelic: {required: [{name: 'DaemonSet', desc: 'Infrastructure agent'},{name: 'Deployment', desc: 'Kubernetes integration'}],optional: [{name: 'Secret', desc: 'License key'}],notused: [{name: 'StatefulSet', desc: 'Use DaemonSet'},{name: 'PVC', desc: 'Cloud based'}]},
+            jenkins: {required: [{name: 'Deployment', desc: 'Jenkins controller'},{name: 'Service', desc: 'Web UI & agents'}],optional: [{name: 'PVC', desc: 'Job data'},{name: 'ConfigMap', desc: 'jenkins.yaml'},{name: 'Secret', desc: 'GitHub token'},{name: 'Ingress', desc: 'Web access'}],notused: [{name: 'StatefulSet', desc: 'Single instance'},{name: 'DaemonSet', desc: 'Centralized'}]},
+            argocd: {required: [{name: 'Deployment', desc: 'ArgoCD server'},{name: 'Service', desc: 'Web UI & API'}],optional: [{name: 'ConfigMap', desc: 'Repo config'},{name: 'Secret', desc: 'Git creds'},{name: 'Ingress', desc: 'Web UI access'}],notused: [{name: 'StatefulSet', desc: 'Stateless'},{name: 'PVC', desc: 'Usually none'}]},
+            'gitlab-runner': {required: [{name: 'Deployment', desc: 'CI executor'},{name: 'Service', desc: 'Runner comm'}],optional: [{name: 'ConfigMap', desc: 'runner config'},{name: 'Secret', desc: 'Registration token'}],notused: [{name: 'StatefulSet', desc: 'Stateless'},{name: 'PVC', desc: 'Ephemeral'}]},
+            tekton: {required: [{name: 'Deployment', desc: 'Pipeline controller'},{name: 'CRD', desc: 'Pipeline resources'}],optional: [{name: 'Secret', desc: 'Git/registry creds'},{name: 'ConfigMap', desc: 'Task config'}],notused: [{name: 'StatefulSet', desc: 'Controllers stateless'},{name: 'PVC', desc: 'Workspace-based'}]},
+            spinnaker: {required: [{name: 'Deployment', desc: 'Deploy platform'},{name: 'Service', desc: 'Web UI'}],optional: [{name: 'PVC', desc: 'Pipeline data'},{name: 'ConfigMap', desc: 'spinnaker.yml'},{name: 'Secret', desc: 'K8s access'}],notused: [{name: 'StatefulSet', desc: 'Can use Deploy'},{name: 'DaemonSet', desc: 'Centralized'}]},
+            keycloak: {required: [{name: 'Deployment', desc: 'Identity provider'},{name: 'Service', desc: 'Auth endpoint'}],optional: [{name: 'StatefulSet', desc: 'With postgres'},{name: 'ConfigMap', desc: 'realm config'},{name: 'Secret', desc: 'Admin pwd'},{name: 'Ingress', desc: 'Web access'}],notused: [{name: 'DaemonSet', desc: 'Not node-wide'},{name: 'PVC', desc: 'If using external DB'}]},
+            vault: {required: [{name: 'StatefulSet', desc: 'Secret storage'},{name: 'Service', desc: 'Vault API'},{name: 'PVC', desc: 'Encrypted storage'}],optional: [{name: 'ConfigMap', desc: 'vault.hcl'},{name: 'Secret', desc: 'Unseal keys'},{name: 'Ingress', desc: 'Web UI'}],notused: [{name: 'Deployment', desc: 'Use StatefulSet'},{name: 'DaemonSet', desc: 'Centralized'}]},
+            'cert-manager': {required: [{name: 'Deployment', desc: 'Cert controller'},{name: 'ClusterRole', desc: 'API access'},{name: 'CRD', desc: 'Certificate resources'}],optional: [{name: 'Secret', desc: 'ACME creds'},{name: 'ConfigMap', desc: 'Issuer config'}],notused: [{name: 'Service', desc: 'Not exposed'},{name: 'Ingress', desc: 'Integrated'},{name: 'PVC', desc: 'No persistence'}]},
+            'oauth2-proxy': {required: [{name: 'Deployment', desc: 'Auth proxy'},{name: 'Service', desc: 'Proxy port'}],optional: [{name: 'ConfigMap', desc: 'proxy config'},{name: 'Secret', desc: 'OAuth credentials'},{name: 'Ingress', desc: 'Upstream routing'}],notused: [{name: 'StatefulSet', desc: 'Stateless'},{name: 'PVC', desc: 'No storage'}]},
+            falco: {required: [{name: 'DaemonSet', desc: 'Runtime security'},{name: 'Service', desc: 'Event stream'}],optional: [{name: 'ConfigMap', desc: 'Rules'},{name: 'Secret', desc: 'Creds for outputs'}],notused: [{name: 'Deployment', desc: 'Use DaemonSet'},{name: 'StatefulSet', desc: 'Per-node service'}]},
+            minio: {required: [{name: 'StatefulSet', desc: 'Object consistency'},{name: 'Service', desc: 'S3 API'},{name: 'PVC', desc: 'Object storage'}],optional: [{name: 'ConfigMap', desc: 'minio config'},{name: 'Secret', desc: 'Access keys'},{name: 'Ingress', desc: 'Web UI'}],notused: [{name: 'Deployment', desc: 'Use StatefulSet'},{name: 'DaemonSet', desc: 'Centralized'}]},
+            nextcloud: {required: [{name: 'Deployment', desc: 'File server'},{name: 'Service', desc: 'Web access'}],optional: [{name: 'PVC', desc: 'File storage'},{name: 'StatefulSet', desc: 'With DB'},{name: 'Secret', desc: 'Admin creds'},{name: 'Ingress', desc: 'Web UI'}],notused: [{name: 'DaemonSet', desc: 'Centralized'},{name: 'ConfigMap', desc: 'Usually config.php'}]},
+            'nfs-server': {required: [{name: 'Deployment', desc: 'NFS server'},{name: 'Service', desc: 'NFS port access'}],optional: [{name: 'PVC', desc: 'Backend storage'},{name: 'ConfigMap', desc: 'exports config'}],notused: [{name: 'StatefulSet', desc: 'Single server'},{name: 'DaemonSet', desc: 'Centralized'},{name: 'Ingress', desc: 'Not HTTP'}]},
+            ceph: {required: [{name: 'DaemonSet', desc: 'OSD daemons'},{name: 'StatefulSet', desc: 'Monitor nodes'},{name: 'Deployment', desc: 'Managers'}],optional: [{name: 'ConfigMap', desc: 'ceph.conf'}],notused: [{name: 'Service', desc: 'Implicit'},{name: 'Ingress', desc: 'Internal'}]},
+            longhorn: {required: [{name: 'DaemonSet', desc: 'Block storage'},{name: 'Deployment', desc: 'Manager'},{name: 'CRD', desc: 'Volume resources'}],optional: [{name: 'ConfigMap', desc: 'Storage config'},{name: 'PVC', desc: 'Longhorn backed'}],notused: [{name: 'StatefulSet', desc: 'DaemonSet model'},{name: 'Secret', desc: 'Built-in access'}]},
+            airflow: {required: [{name: 'Deployment', desc: 'Scheduler/webserver'},{name: 'Service', desc: 'Web UI'}],optional: [{name: 'StatefulSet', desc: 'DB backend'},{name: 'PVC', desc: 'DAGs/logs'},{name: 'ConfigMap', desc: 'airflow.cfg'},{name: 'Secret', desc: 'Connections'}],notused: [{name: 'DaemonSet', desc: 'Not node-wide'},{name: 'CronJob', desc: 'Use Airflow'}]},
+            temporal: {required: [{name: 'StatefulSet', desc: 'Server nodes'},{name: 'Service', desc: 'gRPC & API'},{name: 'PVC', desc: 'Workflow data'}],optional: [{name: 'ConfigMap', desc: 'Server config'},{name: 'Secret', desc: 'TLS certs'},{name: 'Ingress', desc: 'Web UI'}],notused: [{name: 'Deployment', desc: 'Use StatefulSet'},{name: 'DaemonSet', desc: 'Centralized'}]},
+            prefect: {required: [{name: 'Deployment', desc: 'Orion server'},{name: 'Service', desc: 'API access'}],optional: [{name: 'ConfigMap', desc: 'Flow config'},{name: 'Secret', desc: 'API keys'},{name: 'Ingress', desc: 'Web UI'}],notused: [{name: 'StatefulSet', desc: 'Stateless'},{name: 'PVC', desc: 'Cloud-based'}]},
+            'argo-workflows': {required: [{name: 'Deployment', desc: 'Workflow server'},{name: 'CRD', desc: 'Workflow resources'}],optional: [{name: 'ConfigMap', desc: 'Workflow config'},{name: 'Secret', desc: 'Container registry'},{name: 'PVC', desc: 'Artifact storage'}],notused: [{name: 'StatefulSet', desc: 'Server stateless'},{name: 'DaemonSet', desc: 'Centralized'}]},
+            sonarqube: {required: [{name: 'Deployment', desc: 'Code quality'},{name: 'Service', desc: 'Web UI & API'}],optional: [{name: 'PVC', desc: 'Analysis data'},{name: 'ConfigMap', desc: 'sonar.properties'},{name: 'Secret', desc: 'Admin token'},{name: 'Ingress', desc: 'Web access'}],notused: [{name: 'StatefulSet', desc: 'Can use Deploy'},{name: 'DaemonSet', desc: 'Centralized'}]},
+            'selenium-grid': {required: [{name: 'Deployment', desc: 'Hub'},{name: 'Service', desc: 'Grid access'},{name: 'Deployment', desc: 'Node instances'}],optional: [{name: 'ConfigMap', desc: 'Grid config'},{name: 'HPA', desc: 'Scale nodes'},{name: 'PVC', desc: 'Screenshots'}],notused: [{name: 'StatefulSet', desc: 'Stateless'},{name: 'Secret', desc: 'Usually not'}]},
+            k6: {required: [{name: 'Deployment', desc: 'Load test runner'},{name: 'Service', desc: 'Results access'}],optional: [{name: 'ConfigMap', desc: 'Test scripts'},{name: 'Secret', desc: 'API tokens'}],notused: [{name: 'StatefulSet', desc: 'Stateless'},{name: 'PVC', desc: 'Ephemeral'},{name: 'Ingress', desc: 'Not needed'}]},
+            gitpod: {required: [{name: 'Deployment', desc: 'Workspace'},{name: 'Service', desc: 'IDE access'}],optional: [{name: 'PVC', desc: 'Workspace data'},{name: 'Secret', desc: 'Git creds'},{name: 'Ingress', desc: 'Web IDE'}],notused: [{name: 'StatefulSet', desc: 'Ephemeral'},{name: 'DaemonSet', desc: 'Per-user'}]},
+            traefik: {required: [{name: 'DaemonSet', desc: 'Edge router'},{name: 'Service', desc: 'LoadBalancer type'},{name: 'ClusterRole', desc: 'API access'}],optional: [{name: 'ConfigMap', desc: 'traefik.yml'},{name: 'Secret', desc: 'TLS certs'},{name: 'Ingress', desc: 'Routes'}],notused: [{name: 'Deployment', desc: 'Use DaemonSet'},{name: 'PVC', desc: 'No persistence'}]},
+            'nginx-ingress': {required: [{name: 'Deployment', desc: 'Ingress controller'},{name: 'Service', desc: 'LoadBalancer'},{name: 'ClusterRole', desc: 'API access'}],optional: [{name: 'ConfigMap', desc: 'nginx config'},{name: 'Secret', desc: 'TLS certs'}],notused: [{name: 'DaemonSet', desc: 'Use Deploy'},{name: 'PVC', desc: 'No storage'}]},
+            istio: {required: [{name: 'Deployment', desc: 'Istiod control'},{name: 'DaemonSet', desc: 'Sidecar injection'},{name: 'Service', desc: 'API access'}],optional: [{name: 'ConfigMap', desc: 'Pilot config'},{name: 'Secret', desc: 'mTLS certs'},{name: 'NetworkPolicy', desc: 'Traffic rules'}],notused: [{name: 'StatefulSet', desc: 'Deploy for control'},{name: 'PVC', desc: 'No storage'}]},
+            linkerd: {required: [{name: 'Deployment', desc: 'Control plane'},{name: 'DaemonSet', desc: 'Sidecars'},{name: 'Service', desc: 'API'}],optional: [{name: 'ConfigMap', desc: 'Config'},{name: 'Secret', desc: 'mTLS'},{name: 'Ingress', desc: 'Metrics'}],notused: [{name: 'StatefulSet', desc: 'Deploy for CP'},{name: 'PVC', desc: 'No persistence'}]},
+            kong: {required: [{name: 'Deployment', desc: 'API gateway'},{name: 'Service', desc: 'Gateway port'}],optional: [{name: 'ConfigMap', desc: 'kong.conf'},{name: 'Secret', desc: 'Credentials'},{name: 'Ingress', desc: 'Routing'}],notused: [{name: 'StatefulSet', desc: 'Stateless'},{name: 'PVC', desc: 'No storage'},{name: 'DaemonSet', desc: 'Centralized'}]}
+        };
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const overviewTab = document.getElementById('overview');
+            if (overviewTab) overviewTab.classList.remove('hidden');
+        });
+
+        function copyToClipboard(btn, text) {
+            navigator.clipboard.writeText(text).then(() => {
+                const feedback = document.createElement('div');
+                feedback.className = 'copy-feedback';
+                feedback.textContent = '✓ Copied to clipboard!';
+                document.body.appendChild(feedback);
+                setTimeout(() => feedback.remove(), 2000);
+                
+                btn.textContent = '✓ Copied';
+                setTimeout(() => { btn.textContent = 'Copy'; }, 2000);
+            });
+        }
+
+        function copyCodeBlock(btn) {
+            const codeBlock = btn.previousElementSibling.querySelector('pre');
+            const text = codeBlock.textContent;
+            navigator.clipboard.writeText(text).then(() => {
+                const feedback = document.createElement('div');
+                feedback.className = 'copy-feedback';
+                feedback.textContent = '✓ YAML copied to clipboard!';
+                document.body.appendChild(feedback);
+                setTimeout(() => feedback.remove(), 2000);
+                
+                btn.textContent = '✓ Copied';
+                setTimeout(() => { btn.textContent = 'Copy YAML'; }, 2000);
+            });
+        }
+
+        function toggleLayer(element) {
+            const details = element.nextElementSibling;
+            const arrow = element.querySelector('.toggle-arrow');
+            
+            details.classList.toggle('open');
+            arrow.textContent = details.classList.contains('open') ? '▲' : '▼';
+        }
+
+        function showModal(service) {
+            const data = serviceData[service];
+            if (!data) return;
+
+            document.getElementById('modal-title').textContent = service.toUpperCase();
+            const content = document.getElementById('modal-content');
+            content.innerHTML = '';
+
+            if (data.required?.length) {
+                let html = '<div class="mb-4"><h4 class="font-bold text-green-400 mb-2">✅ REQUIRED</h4><ul class="space-y-2">';
+                data.required.forEach(item => {
+                    html += `<li><strong class="text-green-300">${item.name}:</strong> <span class="text-gray-300">${item.desc}</span></li>`;
+                });
+                content.innerHTML += html + '</ul></div>';
+            }
+
+            if (data.optional?.length) {
+                let html = '<div class="mb-4"><h4 class="font-bold text-blue-400 mb-2">🔵 OPTIONAL</h4><ul class="space-y-2">';
+                data.optional.forEach(item => {
+                    html += `<li><strong class="text-blue-300">${item.name}:</strong> <span class="text-gray-300">${item.desc}</span></li>`;
+                });
+                content.innerHTML += html + '</ul></div>';
+            }
+
+            if (data.notused?.length) {
+                let html = '<div class="mb-4"><h4 class="font-bold text-gray-400 mb-2">⚫ NOT USED</h4><ul class="space-y-2">';
+                data.notused.forEach(item => {
+                    html += `<li><strong class="text-gray-400">${item.name}:</strong> <span class="text-gray-500">${item.desc}</span></li>`;
+                });
+                content.innerHTML += html + '</ul></div>';
+            }
+
+            document.getElementById('service-modal').classList.remove('hidden');
+        }
+
+        function closeModal() {
+            document.getElementById('service-modal').classList.add('hidden');
+        }
+
+        document.addEventListener('click', function(e) {
+            const modal = document.getElementById('service-modal');
+            if (e.target === modal) closeModal();
+        });
+    </script>
+    </script>
+</body>
+</html><!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kubernetes Architecture & Production Services Guide</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+        .card-shadow { box-shadow: 0 4px 15px rgba(0,0,0,0.1); transition: all 0.3s ease; }
+        .card-shadow:hover { transform: translateY(-5px); box-shadow: 0 8px 25px rgba(0,0,0,0.15); }
+        .cli-command { background-color: #374151; padding: 0.75rem; border-radius: 0.25rem; font-family: 'Courier New', monospace; font-size: 0.875rem; color: #f9fafb; border-left: 4px solid #3b82f6; margin-bottom: 0.5rem; word-break: break-word; position: relative; }
+        .cli-command:hover { background-color: #475569; }
+        .cli-copy-btn { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: #3b82f6; border: none; color: white; padding: 4px 8px; border-radius: 3px; cursor: pointer; font-size: 0.7rem; opacity: 0; transition: opacity 0.2s; }
+        .cli-command:hover .cli-copy-btn { opacity: 1; }
+        .cli-copy-btn:hover { background: #2563eb; }
+        .copy-feedback { position: fixed; top: 20px; right: 20px; background: #10b981; color: white; padding: 12px 20px; border-radius: 6px; z-index: 1000; animation: slideIn 0.3s ease; }
+        @keyframes slideIn { from { transform: translateX(400px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        .layer-details { max-height: 0; overflow: hidden; transition: max-height 0.3s ease; }
+        .layer-details.open { max-height: 500px; }
+        .service-card { cursor-pointer; transition: all 0.2s ease; }
+        .service-card:hover { transform: scale(1.02); border-color: #3b82f6; }
+        .search-box { background-color: #374151; border: 2px solid #475569; border-radius: 8px; padding: 12px 16px; color: #f9fafb; font-size: 1rem; width: 100%; max-width: 500px; margin-bottom: 20px; }
+        .search-box:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }
+        .search-results { display: none; }
+        .search-results.active { display: block; }
+        .no-results { text-align: center; padding: 40px; color: #9ca3af; font-size: 1.1rem; }
+        .code-block { background-color: #1e293b; border: 1px solid #334155; border-radius: 6px; padding: 16px; margin: 12px 0; position: relative; overflow-x: auto; }
+        .code-block pre { margin: 0; font-family: 'Courier New', monospace; color: #f9fafb; font-size: 0.875rem; line-height: 1.5; }
+        .code-label { color: #60a5fa; font-size: 0.75rem; font-weight: bold; margin-bottom: 8px; text-transform: uppercase; }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white">
+    <nav class="bg-slate-800 border-b border-slate-700 sticky top-0 z-40">
+        <div class="max-w-7xl mx-auto px-4">
+            <div class="flex items-center justify-between h-16">
+                <h1 class="text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-400">K8s Architecture</h1>
+                <div class="flex gap-2 overflow-x-auto scrollbar-hide">
+                    <button onclick="selectTab('overview')" class="tab-btn px-4 py-2 rounded-lg text-sm font-semibold bg-blue-600 text-white transition-all whitespace-nowrap">Overview</button>
+                    <button onclick="selectTab('layers')" class="tab-btn px-4 py-2 rounded-lg text-sm font-semibold bg-slate-700 hover:bg-slate-600 text-white transition-all whitespace-nowrap">7-Layers</button>
+                    <button onclick="selectTab('components')" class="tab-btn px-4 py-2 rounded-lg text-sm font-semibold bg-slate-700 hover:bg-slate-600 text-white transition-all whitespace-nowrap">Components</button>
+                    <button onclick="selectTab('services')" class="tab-btn px-4 py-2 rounded-lg text-sm font-semibold bg-slate-700 hover:bg-slate-600 text-white transition-all whitespace-nowrap">Services</button>
+                    <button onclick="selectTab('deployment')" class="tab-btn px-4 py-2 rounded-lg text-sm font-semibold bg-slate-700 hover:bg-slate-600 text-white transition-all whitespace-nowrap">Workflow</button>
+                    <button onclick="selectTab('kubectl')" class="tab-btn px-4 py-2 rounded-lg text-sm font-semibold bg-slate-700 hover:bg-slate-600 text-white transition-all whitespace-nowrap">Kubectl</button>
+                    <button onclick="selectTab('examples')" class="tab-btn px-4 py-2 rounded-lg text-sm font-semibold bg-slate-700 hover:bg-slate-600 text-white transition-all whitespace-nowrap">Examples</button>
+                    <button onclick="selectTab('requirements')" class="tab-btn px-4 py-2 rounded-lg text-sm font-semibold bg-slate-700 hover:bg-slate-600 text-white transition-all whitespace-nowrap">Requirements</button>
+                    <button onclick="selectTab('healthchecks')" class="tab-btn px-4 py-2 rounded-lg text-sm font-semibold bg-slate-700 hover:bg-slate-600 text-white transition-all whitespace-nowrap">Health Checks</button>
+                    <button onclick="selectTab('backup')" class="tab-btn px-4 py-2 rounded-lg text-sm font-semibold bg-slate-700 hover:bg-slate-600 text-white transition-all whitespace-nowrap">Backup/Recovery</button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="max-w-7xl mx-auto p-4">
+        <!-- Overview Tab -->
+        <div id="overview" class="tab-content">
+            <div class="grid md:grid-cols-2 gap-6 mb-8">
+                <div class="card-shadow bg-gradient-to-br from-blue-600 to-blue-700 rounded-xl p-8">
+                    <h2 class="text-3xl font-bold mb-4">Kubernetes Architecture</h2>
+                    <p class="mb-4 text-blue-100">Complete reference guide covering all layers, components, and services in production Kubernetes clusters.</p>
+                    <div class="space-y-2 text-sm text-blue-50">
+                        <div>✓ 7-layer architecture model</div>
+                        <div>✓ 9 component groups</div>
+                        <div>✓ 13 service categories</div>
+                        <div>✓ 50+ production services</div>
+                    </div>
+                </div>
+                <div class="bg-slate-800 rounded-xl p-8 border border-slate-700">
+                    <h3 class="text-xl font-bold mb-4">Quick Navigation</h3>
+                    <div class="space-y-3 text-sm text-gray-200">
+                        <div><strong>7-Layer Model:</strong> Infrastructure to application</div>
+                        <div><strong>Components:</strong> 9 resource groups in Kubernetes</div>
+                        <div><strong>Services:</strong> 13 categories with 50+ services</div>
+                        <div><strong>Workflow:</strong> Production deployment guide</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 7-Layer Model Tab -->
+        <div id="layers" class="tab-content hidden">
+            <h2 class="text-3xl font-bold mb-6">Kubernetes 7-Layer Architecture</h2>
+            <div class="space-y-4">
+                <div class="card-shadow bg-gradient-to-r from-slate-700 to-slate-800 rounded-xl overflow-hidden">
+                    <div class="p-6 flex items-center justify-between cursor-pointer hover:bg-slate-700 transition" onclick="toggleLayer(this)">
+                        <div class="flex items-center gap-4">
+                            <div class="text-4xl font-bold opacity-30">1</div>
+                            <div>
+                                <h3 class="text-2xl font-bold">Infrastructure Layer</h3>
+                                <p class="text-sm opacity-80">Physical & Virtual Resources</p>
+                            </div>
+                        </div>
+                        <span class="toggle-arrow text-2xl">▼</span>
+                    </div>
+                    <div class="layer-details bg-black bg-opacity-20 p-6 border-t border-white border-opacity-10">
+                        <div class="grid md:grid-cols-2 gap-4 text-sm">
+                            <div><strong>Compute:</strong> VMs, bare metal, cloud instances</div>
+                            <div><strong>Storage:</strong> Local disks, SAN, block storage</div>
+                            <div><strong>Networking:</strong> Network interfaces, switches</div>
+                            <div><strong>Cloud:</strong> EC2, GCP Compute, Azure VMs</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card-shadow bg-gradient-to-r from-green-700 to-green-800 rounded-xl overflow-hidden">
+                    <div class="p-6 flex items-center justify-between cursor-pointer hover:bg-green-700 transition" onclick="toggleLayer(this)">
+                        <div class="flex items-center gap-4">
+                            <div class="text-4xl font-bold opacity-30">2</div>
+                            <div>
+                                <h3 class="text-2xl font-bold">Container Runtime</h3>
+                                <p class="text-sm opacity-80">Container Execution Engine</p>
+                            </div>
+                        </div>
+                        <span class="toggle-arrow text-2xl">▼</span>
+                    </div>
+                    <div class="layer-details bg-black bg-opacity-20 p-6 border-t border-white border-opacity-10">
+                        <div class="grid md:grid-cols-2 gap-4 text-sm">
+                            <div><strong>Runtimes:</strong> containerd, CRI-O, Docker</div>
+                            <div><strong>Images:</strong> OCI image format, registries</div>
+                            <div><strong>Isolation:</strong> cgroups, Linux namespaces</div>
+                            <div><strong>Resources:</strong> CPU, memory limits per container</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card-shadow bg-gradient-to-r from-orange-700 to-orange-800 rounded-xl overflow-hidden">
+                    <div class="p-6 flex items-center justify-between cursor-pointer hover:bg-orange-700 transition" onclick="toggleLayer(this)">
+                        <div class="flex items-center gap-4">
+                            <div class="text-4xl font-bold opacity-30">3</div>
+                            <div>
+                                <h3 class="text-2xl font-bold">Control Plane</h3>
+                                <p class="text-sm opacity-80">Cluster Decision Making</p>
+                            </div>
+                        </div>
+                        <span class="toggle-arrow text-2xl">▼</span>
+                    </div>
+                    <div class="layer-details bg-black bg-opacity-20 p-6 border-t border-white border-opacity-10">
+                        <div class="grid md:grid-cols-2 gap-4 text-sm">
+                            <div><strong>API Server:</strong> REST API for all operations</div>
+                            <div><strong>etcd:</strong> Distributed key-value store for state</div>
+                            <div><strong>Scheduler:</strong> Assigns pods to nodes</div>
+                            <div><strong>Controller Manager:</strong> Runs cluster controllers</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card-shadow bg-gradient-to-r from-teal-700 to-teal-800 rounded-xl overflow-hidden">
+                    <div class="p-6 flex items-center justify-between cursor-pointer hover:bg-teal-700 transition" onclick="toggleLayer(this)">
+                        <div class="flex items-center gap-4">
+                            <div class="text-4xl font-bold opacity-30">4</div>
+                            <div>
+                                <h3 class="text-2xl font-bold">Data Plane</h3>
+                                <p class="text-sm opacity-80">Node-Level Components</p>
+                            </div>
+                        </div>
+                        <span class="toggle-arrow text-2xl">▼</span>
+                    </div>
+                    <div class="layer-details bg-black bg-opacity-20 p-6 border-t border-white border-opacity-10">
+                        <div class="grid md:grid-cols-2 gap-4 text-sm">
+                            <div><strong>kubelet:</strong> Node agent managing pods</div>
+                            <div><strong>kube-proxy:</strong> Network proxy, service routing</div>
+                            <div><strong>CNI:</strong> Container network plugins</div>
+                            <div><strong>CSI:</strong> Storage driver interface</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card-shadow bg-gradient-to-r from-blue-700 to-blue-800 rounded-xl overflow-hidden">
+                    <div class="p-6 flex items-center justify-between cursor-pointer hover:bg-blue-700 transition" onclick="toggleLayer(this)">
+                        <div class="flex items-center gap-4">
+                            <div class="text-4xl font-bold opacity-30">5</div>
+                            <div>
+                                <h3 class="text-2xl font-bold">Resource Layer</h3>
+                                <p class="text-sm opacity-80">Core API Objects</p>
+                            </div>
+                        </div>
+                        <span class="toggle-arrow text-2xl">▼</span>
+                    </div>
+                    <div class="layer-details bg-black bg-opacity-20 p-6 border-t border-white border-opacity-10">
+                        <div class="grid md:grid-cols-2 gap-4 text-sm">
+                            <div><strong>Workloads:</strong> Pods, Deployments, StatefulSets</div>
+                            <div><strong>Config:</strong> ConfigMaps, Secrets, Volumes</div>
+                            <div><strong>Networking:</strong> Services, Ingress, NetworkPolicies</div>
+                            <div><strong>Storage:</strong> PersistentVolumes, PVCs</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card-shadow bg-gradient-to-r from-purple-700 to-purple-800 rounded-xl overflow-hidden">
+                    <div class="p-6 flex items-center justify-between cursor-pointer hover:bg-purple-700 transition" onclick="toggleLayer(this)">
+                        <div class="flex items-center gap-4">
+                            <div class="text-4xl font-bold opacity-30">6</div>
+                            <div>
+                                <h3 class="text-2xl font-bold">Platform Layer</h3>
+                                <p class="text-sm opacity-80">Add-ons & Controllers</p>
+                            </div>
+                        </div>
+                        <span class="toggle-arrow text-2xl">▼</span>
+                    </div>
+                    <div class="layer-details bg-black bg-opacity-20 p-6 border-t border-white border-opacity-10">
+                        <div class="grid md:grid-cols-2 gap-4 text-sm">
+                            <div><strong>Monitoring:</strong> Prometheus, metrics-server</div>
+                            <div><strong>Logging:</strong> Fluent, Elasticsearch, Loki</div>
+                            <div><strong>Ingress:</strong> NGINX, Traefik, Istio</div>
+                            <div><strong>Storage:</strong> CSI drivers, storage provisioners</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card-shadow bg-gradient-to-r from-red-700 to-red-800 rounded-xl overflow-hidden">
+                    <div class="p-6 flex items-center justify-between cursor-pointer hover:bg-red-700 transition" onclick="toggleLayer(this)">
+                        <div class="flex items-center gap-4">
+                            <div class="text-4xl font-bold opacity-30">7</div>
+                            <div>
+                                <h3 class="text-2xl font-bold">Application Layer</h3>
+                                <p class="text-sm opacity-80">Business Logic Services</p>
+                            </div>
+                        </div>
+                        <span class="toggle-arrow text-2xl">▼</span>
+                    </div>
+                    <div class="layer-details bg-black bg-opacity-20 p-6 border-t border-white border-opacity-10">
+                        <div class="grid md:grid-cols-2 gap-4 text-sm">
+                            <div><strong>Microservices:</strong> Business logic containers</div>
+                            <div><strong>Databases:</strong> PostgreSQL, MySQL, MongoDB</div>
+                            <div><strong>Queues:</strong> RabbitMQ, Kafka, NATS</div>
+                            <div><strong>Web:</strong> Frontend, APIs, cache layers</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Components Tab -->
+        <div id="components" class="tab-content hidden">
+            <h2 class="text-3xl font-bold mb-6">Kubernetes Component Groups</h2>
+            <div class="space-y-6">
+                <!-- Namespace Management -->
+                <div class="card-shadow bg-purple-900 bg-opacity-50 border border-purple-700 rounded-xl p-6">
+                    <h3 class="text-xl font-bold mb-4">Namespace Management</h3>
+                    <div class="grid md:grid-cols-3 gap-4 text-sm">
+                        <div class="bg-black bg-opacity-30 p-4 rounded-lg"><strong class="text-purple-300">Namespace</strong> - Logical isolation boundary for resources and teams</div>
+                        <div class="bg-black bg-opacity-30 p-4 rounded-lg"><strong class="text-purple-300">ResourceQuota</strong> - Limit total resource consumption per namespace</div>
+                        <div class="bg-black bg-opacity-30 p-4 rounded-lg"><strong class="text-purple-300">LimitRange</strong> - Default/min/max resources per pod or container</div>
+                    </div>
+                </div>
+
+                <!-- Workload Resources -->
+                <div class="card-shadow bg-blue-900 bg-opacity-50 border border-blue-700 rounded-xl p-6">
+                    <h3 class="text-xl font-bold mb-4">Workload Resources</h3>
+                    <div class="grid md:grid-cols-3 gap-4 text-sm">
+                        <div class="bg-black bg-opacity-30 p-4 rounded-lg"><strong class="text-blue-300">Pod</strong> - Smallest deployable unit with one or more containers</div>
+                        <div class="bg-black bg-opacity-30 p-4 rounded-lg"><strong class="text-blue-300">Deployment</strong> - Manages stateless apps with replicas and rolling updates</div>
+                        <div class="bg-black bg-opacity-30 p-4 rounded-lg"><strong class="text-blue-300">StatefulSet</strong> - Manages stateful apps with stable identity and ordering</div>
+                        <div class="bg-black bg-opacity-30 p-4 rounded-lg"><strong class="text-blue-300">DaemonSet</strong> - Runs pod on every cluster node automatically</div>
+                        <div class="bg-black bg-opacity-30 p-4 rounded-lg"><strong class="text-blue-300">Job</strong> - Runs pods to completion once or periodically</div>
+                        <div class="bg-black bg-opacity-30 p-4 rounded-lg"><strong class="text-blue-300">CronJob</strong> - Manages scheduled job execution at specific times</div>
+                    </div>
+                </div>
+
+                <!-- Configuration Management -->
+                <div class="card-shadow bg-green-900 bg-opacity-50 border border-green-700 rounded-xl p-6">
+                    <h3 class="text-xl font-bold mb-4">Configuration Management</h3>
+                    <div class="grid md:grid-cols-3 gap-4 text-sm">
+                        <div class="bg-black bg-opacity-30 p-4 rounded-lg"><strong class="text-green-300">ConfigMap</strong> - Store non-sensitive configuration data as key-value pairs</div>
+                        <div class="bg-black bg-opacity-30 p-4 rounded-lg"><strong class="text-green-300">Secret</strong> - Store sensitive encrypted data like passwords and tokens</div>
+                        <div class="bg-black bg-opacity-30 p-4 rounded-lg"><strong class="text-green-300">Volume</strong> - Attach storage to containers for data persistence</div>
+                    </div>
+                </div>
+
+                <!-- Storage Management -->
+                <div class="card-shadow bg-cyan-900 bg-opacity-50 border border-cyan-700 rounded-xl p-6">
+                    <h3 class="text-xl font-bold mb-4">Storage Management</h3>
+                    <div class="grid md:grid-cols-3 gap-4 text-sm">
+                        <div class="bg-black bg-opacity-30 p-4 rounded-lg"><strong class="text-cyan-300">StorageClass</strong> - Define storage provisioner and parameters for automatic PV creation</div>
+                        <div class="bg-black bg-opacity-30 p-4 rounded-lg"><strong class="text-cyan-300">PersistentVolume</strong> - Cluster-level storage resource provisioned by admin</div>
+                        <div class="bg-black bg-opacity-30 p-4 rounded-lg"><strong class="text-cyan-300">PersistentVolumeClaim</strong> - Request storage from StorageClass automatically</div>
+                    </div>
+                </div>
+
+                <!-- Networking & Service Exposure -->
+                <div class="card-shadow bg-yellow-900 bg-opacity-50 border border-yellow-700 rounded-xl p-6">
+                    <h3 class="text-xl font-bold mb-4">Networking & Service Exposure</h3>
+                    <div class="grid md:grid-cols-3 gap-4 text-sm">
+                        <div class="bg-black bg-opacity-30 p-4 rounded-lg"><strong class="text-yellow-300">Service</strong> - Stable endpoint for pod communication (ClusterIP, NodePort, LoadBalancer)</div>
+                        <div class="bg-black bg-opacity-30 p-4 rounded-lg"><strong class="text-yellow-300">Ingress</strong> - HTTP/HTTPS routing from outside cluster to services</div>
+                        <div class="bg-black bg-opacity-30 p-4 rounded-lg"><strong class="text-yellow-300">NetworkPolicy</strong> - Control ingress/egress traffic between pods</div>
+                    </div>
+                </div>
+
+                <!-- Security & Access Control -->
+                <div class="card-shadow bg-red-900 bg-opacity-50 border border-red-700 rounded-xl p-6">
+                    <h3 class="text-xl font-bold mb-4">Security & Access Control</h3>
+                    <div class="grid md:grid-cols-3 gap-4 text-sm">
+                        <div class="bg-black bg-opacity-30 p-4 rounded-lg"><strong class="text-red-300">ServiceAccount</strong> - Pod identity for Kubernetes API access</div>
+                        <div class="bg-black bg-opacity-30 p-4 rounded-lg"><strong class="text-red-300">Role/ClusterRole</strong> - Define API permissions and actions allowed</div>
+                        <div class="bg-black bg-opacity-30 p-4 rounded-lg"><strong class="text-red-300">RoleBinding</strong> - Attach roles to ServiceAccounts or users</div>
+                    </div>
+                </div>
+
+                <!-- Scaling & Reliability -->
+                <div class="card-shadow bg-indigo-900 bg-opacity-50 border border-indigo-700 rounded-xl p-6">
+                    <h3 class="text-xl font-bold mb-4">Scaling & Reliability</h3>
+                    <div class="grid md:grid-cols-3 gap-4 text-sm">
+                        <div class="bg-black bg-opacity-30 p-4 rounded-lg"><strong class="text-indigo-300">HorizontalPodAutoscaler</strong> - Auto-scale pod count based on CPU/memory/custom metrics</div>
+                        <div class="bg-black bg-opacity-30 p-4 rounded-lg"><strong class="text-indigo-300">VerticalPodAutoscaler</strong> - Auto-tune resource requests and limits</div>
+                        <div class="bg-black bg-opacity-30 p-4 rounded-lg"><strong class="text-indigo-300">PodDisruptionBudget</strong> - Guarantee minimum availability during disruptions</div>
+                    </div>
+                </div>
+
+                <!-- Advanced Features -->
+                <div class="card-shadow bg-pink-900 bg-opacity-50 border border-pink-700 rounded-xl p-6">
+                    <h3 class="text-xl font-bold mb-4">Advanced Features</h3>
+                    <div class="grid md:grid-cols-3 gap-4 text-sm">
+                        <div class="bg-black bg-opacity-30 p-4 rounded-lg"><strong class="text-pink-300">MutatingWebhook</strong> - Intercept and modify API requests before storage</div>
+                        <div class="bg-black bg-opacity-30 p-4 rounded-lg"><strong class="text-pink-300">ValidatingWebhook</strong> - Validate API requests before storage</div>
+                        <div class="bg-black bg-opacity-30 p-4 rounded-lg"><strong class="text-pink-300">CustomResourceDefinition</strong> - Extend API with custom resource types</div>
+                    </div>
+                </div>
+
+                <!-- Observability -->
+                <div class="card-shadow bg-orange-900 bg-opacity-50 border border-orange-700 rounded-xl p-6">
+                    <h3 class="text-xl font-bold mb-4">Observability & Events</h3>
+                    <div class="grid md:grid-cols-3 gap-4 text-sm">
+                        <div class="bg-black bg-opacity-30 p-4 rounded-lg"><strong class="text-orange-300">Event</strong> - Record of cluster state changes and activity</div>
+                        <div class="bg-black bg-opacity-30 p-4 rounded-lg"><strong class="text-orange-300">PodMonitor</strong> - Define metrics collection targets (Prometheus)</div>
+                        <div class="bg-black bg-opacity-30 p-4 rounded-lg"><strong class="text-orange-300">ServiceMonitor</strong> - Prometheus scrape configuration for services</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Production Services Tab -->
+        <div id="services" class="tab-content hidden">
+            <h2 class="text-3xl font-bold mb-6">Production Services by Category</h2>
+            <p class="text-gray-300 mb-6">Click any service to see recommended Kubernetes deployment pattern</p>
+            
+            <div class="space-y-8">
+                <!-- Frontend & Web Servers -->
+                <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                    <h3 class="text-2xl font-bold mb-4 text-blue-400">Frontend & Web Servers</h3>
+                    <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div class="service-card bg-slate-700 border border-slate-600 rounded-lg p-4 hover:border-blue-500" onclick="showModal('nginx')">
+                            <h4 class="font-bold text-blue-300">NGINX</h4>
+                            <p class="text-sm text-gray-400 mt-1">Web server & reverse proxy</p>
+                        </div>
+                        <div class="service-card bg-slate-700 border border-slate-600 rounded-lg p-4 hover:border-blue-500" onclick="showModal('apache')">
+                            <h4 class="font-bold text-blue-300">Apache</h4>
+                            <p class="text-sm text-gray-400 mt-1">HTTP server</p>
+                        </div>
+                        <div class="service-card bg-slate-700 border border-slate-600 rounded-lg p-4 hover:border-blue-500" onclick="showModal('react')">
+                            <h4 class="font-bold text-blue-300">React</h4>
+                            <p class="text-sm text-gray-400 mt-1">SPA framework</p>
+                        </div>
+                        <div class="service-card bg-slate-700 border border-slate-600 rounded-lg p-4 hover:border-blue-500" onclick="showModal('vue')">
+                            <h4 class="font-bold text-blue-300">Vue/Angular</h4>
+                            <p class="text-sm text-gray-400 mt-1">Frontend frameworks</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Backend APIs -->
+                <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                    <h3 class="text-2xl font-bold mb-4 text-green-400">Backend APIs</h3>
+                    <div class="grid md:grid-cols-2 lg:grid-cols-6 gap-4">
+                        <div class="service-card bg-slate-700 border border-slate-600 rounded-lg p-4 hover:border-green-500" onclick="showModal('nodejs')">
+                            <h4 class="font-bold text-green-300">Node.js</h4>
+                            <p class="text-sm text-gray-400 mt-1">JavaScript runtime</p>
+                        </div>
+                        <div class="service-card bg-slate-700 border border-slate-600 rounded-lg p-4 hover:border-green-500" onclick="showModal('python')">
+                            <h4 class="font-bold text-green-300">Python</h4>
+                            <p class="text-sm text-gray-400 mt-1">Django/FastAPI</p>
+                        </div>
+                        <div class="service-card bg-slate-700 border border-slate-600 rounded-lg p-4 hover:border-green-500" onclick="showModal('java')">
+                            <h4 class="font-bold text-green-300">Java</h4>
+                            <p class="text-sm text-gray-400 mt-1">Spring/Quarkus</p>
+                        </div>
+                        <div class="service-card bg-slate-700 border border-slate-600 rounded-lg p-4 hover:border-green-500" onclick="showModal('go')">
+                            <h4 class="font-bold text-green-300">Go</h4>
+                            <p class="text-sm text-gray-400 mt-1">Gin/Echo</p>
+                        </div>
+                        <div class="service-card bg-slate-700 border border-slate-600 rounded-lg p-4 hover:border-green-500" onclick="showModal('php')">
+                            <h4 class="font-bold text-green-300">PHP</h4>
+                            <p class="text-sm text-gray-400 mt-1">Laravel/Symfony</p>
+                        </div>
+                        <div class="service-card bg-slate-700 border border-slate-600 rounded-lg p-4 hover:border-green-500" onclick="showModal('dotnet')">
+                            <h4 class="font-bold text-green-300">.NET</h4>
+                            <p class="text-sm text-gray-400 mt-1">ASP.NET Core</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Databases -->
+                <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                    <h3 class="text-2xl font-bold mb-4 text-purple-400">Databases</h3>
+                    <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div class="service-card bg-slate-700 border border-slate-600 rounded-lg p-4 hover:border-purple-500" onclick="showModal('postgresql')">
+                            <h4 class="font-bold text-purple-300">PostgreSQL</h4>
+                            <p class="text-sm text-gray-400 mt-1">Relational ACID database</p>
+                        </div>
+                        <div class="service-card bg-slate-700 border border-slate-600 rounded-lg p-4 hover:border-purple-500" onclick="showModal('mysql')">
+                            <h4 class="font-bold text-purple-300">MySQL</h4>
+                            <p class="text-sm text-gray-400 mt-1">SQL database server</p>
+                        </div>
+                        <div class="service-card bg-slate-700 border border-slate-600 rounded-lg p-4 hover:border-purple-500" onclick="showModal('mongodb')">
+                            <h4 class="font-bold text-purple-300">MongoDB</h4>
+                            <p class="text-sm text-gray-400 mt-1">NoSQL document store</p>
+                        </div>
+                        <div class="service-card bg-slate-700 border border-slate-600 rounded-lg p-4 hover:border-purple-500" onclick="showModal('cockroachdb')">
+                            <h4 class="font-bold text-purple-300">CockroachDB</h4>
+                            <p class="text-sm text-gray-400 mt-1">Distributed SQL</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Caching & In-Memory -->
+                <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                    <h3 class="text-2xl font-bold mb-4 text-cyan-400">Caching & In-Memory</h3>
+                    <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div class="service-card bg-slate-700 border border-slate-600 rounded-lg p-4 hover:border-cyan-500" onclick="showModal('redis')">
+                            <h4 class="font-bold text-cyan-300">Redis</h4>
+                            <p class="text-sm text-gray-400 mt-1">In-memory cache & store</p>
+                        </div>
+                        <div class="service-card bg-slate-700 border border-slate-600 rounded-lg p-4 hover:border-cyan-500" onclick="showModal('memcached')">
+                            <h4 class="font-bold text-cyan-300">Memcached</h4>
+                            <p class="text-sm text-gray-400 mt-1">Distributed memory cache</p>
+                        </div>
+                        <div class="service-card bg-slate-700 border border-slate-600 rounded-lg p-4 hover:border-cyan-500" onclick="showModal('valkey')">
+                            <h4 class="font-bold text-cyan-300">Valkey</h4>
+                            <p class="text-sm text-gray-400 mt-1">Redis alternative</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Message Queues -->
+                <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                    <h3 class="text-2xl font-bold mb-4 text-yellow-400">Message Queues & Streaming</h3>
+                    <div class="grid md:grid-cols-2 lg:grid-cols-5 gap-4">
+                        <div class="service-card bg-slate-700 border border-slate-600 rounded-lg p-4 hover:border-yellow-500" onclick="showModal('rabbitmq')">
+                            <h4 class="font-bold text-yellow-300">RabbitMQ</h4>
+                            <p class="text-sm text-gray-400 mt-1">Message broker</p>
+                        </div>
+                        <div class="service-card bg-slate-700 border border-slate-600 rounded-lg p-4 hover:border-yellow-500" onclick="showModal('kafka')">
+                            <h4 class="font-bold text-yellow-300">Kafka</h4>
+                            <p class="text-sm text-gray-400 mt-1">Event streaming</p>
+                        </div>
+                        <div class="service-card bg-slate-700 border border-slate-600 rounded-lg p-4 hover:border-yellow-500" onclick="showModal('nats')">
+                            <h4 class="font-bold text-yellow-300">NATS</h4>
+                            <p class="text-sm text-gray-400 mt-1">Cloud messaging</p>
+                        </div>
+                        <div class="service-card bg-slate-700 border border-slate-600 rounded-lg p-4 hover:border-yellow-500" onclick="showModal('activemq')">
+                            <h4 class="font-bold text-yellow-300">ActiveMQ</h4>
+                            <p class="text-sm text-gray-400 mt-1">JMS broker</p>
+                        </div>
+                        <div class="service-card bg-slate-700 border border-slate-600 rounded-lg p-4 hover:border-yellow-500" onclick="showModal('pulsar')">
+                            <h4 class="font-bold text-yellow-300">Pulsar</h4>
+                            <p class="text-sm text-gray-400 mt-1">Distributed pub-sub</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Search & Analytics -->
+                <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                    <h3 class="text-2xl font-bold mb-4 text-red-400">Search & Analytics</h3>
+                    <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div class="service-card bg-slate-700 border border-slate-600 rounded-lg p-4 hover:border-red-500" onclick="showModal('elasticsearch')">
+                            <h4 class="font-bold text-red-300">Elasticsearch</h4>
+                            <p class="text-sm text-gray-400 mt-1">Search & analytics</p>
+                        </div>
+                        <div class="service-card bg-slate-700 border border-slate-600 rounded-lg p-4 hover:border-red-500" onclick="showModal('opensearch')">
+                            <h4 class="font-bold text-red-300">OpenSearch</h4>
+                            <p class="text-sm text-gray-400 mt-1">ES fork & analytics</p>
+                        </div>
+                        <div class="service-card bg-slate-700 border border-slate-600 rounded-lg p-4 hover:border-red-500" onclick="showModal('solr')">
+                            <h4 class="font-bold text-red-300">Solr</h4>
+                            <p class="text-sm text-gray-400 mt-1">Search platform</p>
+                        </div>
+                        <div class="service-card bg-slate-700 border border-slate-600 rounded-lg p-4 hover:border-red-500" onclick="showModal('meilisearch')">
+                            <h4 class="font-bold text-red-300">Meilisearch</h4>
+                            <p class="text-sm text-gray-400 mt-1">Fast search engine</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Monitoring & Observability -->
+                <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                    <h3 class="text-2xl font-bold mb-4 text-orange-400">Monitoring & Observability</h3>
+                    <div class="grid md:grid-cols-2 lg:grid-cols-6 gap-4">
+                        <div class="service-card bg-slate-700 border border-slate-600 rounded-lg p-4 hover:border-orange-500" onclick="showModal('prometheus')">
+                            <h4 class="font-bold text-orange-300">Prometheus</h4>
+                            <p class="text-sm text-gray-400 mt-1">Metrics collection</p>
+                        </div>
+                        <div class="service-card bg-slate-700 border border-slate-600 rounded-lg p-4 hover:border-orange-500" onclick="showModal('grafana')">
+                            <h4 class="font-bold text-orange-300">Grafana</h4>
+                            <p class="text-sm text-gray-400 mt-1">Visualizations</p>
+                        </div>
+                        <div class="service-card bg-slate-700 border border-slate-600 rounded-lg p-4 hover:border-orange-500" onclick="showModal('jaeger')">
+                            <h4 class="font-bold text-orange-300">Jaeger</h4>
+                            <p class="text-sm text-gray-400 mt-1">Distributed tracing</p>
+                        </div>
+                        <div class="service-card bg-slate-700 border border-slate-600 rounded-lg p-4 hover:border-orange-500" onclick="showModal('loki')">
+                            <h4 class="font-bold text-orange-300">Loki</h4>
+                            <p class="text-sm text-gray-400 mt-1">Log aggregation</p>
+                        </div>
+                        <div class="service-card bg-slate-700 border border-slate-600 rounded-lg p-4 hover:border-orange-500" onclick="showModal('datadog')">
+                            <h4 class="font-bold text-orange-300">Datadog</h4>
+                            <p class="text-sm text-gray-400 mt-1">SaaS monitoring</p>
+                        </div>
+                        <div class="service-card bg-slate-700 border border-slate-600 rounded-lg p-4 hover:border-orange-500" onclick="showModal('newrelic')">
+                            <h4 class="font-bold text-orange-300">New Relic</h4>
+                            <p class="text-sm text-gray-400 mt-1">APM platform</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- CI/CD & DevOps -->
+                <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                    <h3 class="text-2xl font-bold mb-4 text-teal-400">CI/CD & DevOps</h3>
+                    <div class="grid md:grid-cols-2 lg:grid-cols-5 gap-4">
+                        <div class="service-card bg-slate-700 border border-slate-600 rounded-lg p-4 hover:border-teal-500" onclick="showModal('jenkins')">
+                            <h4 class="font-bold text-teal-300">Jenkins</h4>
+                            <p class="text-sm text-gray-400 mt-1">Automation server</p>
+                        </div>
+                        <div class="service-card bg-slate-700 border border-slate-600 rounded-lg p-4 hover:border-teal-500" onclick="showModal('argocd')">
+                            <h4 class="font-bold text-teal-300">ArgoCD</h4>
+                            <p class="text-sm text-gray-400 mt-1">GitOps deployment</p>
+                        </div>
+                        <div class="service-card bg-slate-700 border border-slate-600 rounded-lg p-4 hover:border-teal-500" onclick="showModal('gitlab-runner')">
+                            <h4 class="font-bold text-teal-300">GitLab Runner</h4>
+                            <p class="text-sm text-gray-400 mt-1">CI pipeline executor</p>
+                        </div>
+                        <div class="service-card bg-slate-700 border border-slate-600 rounded-lg p-4 hover:border-teal-500" onclick="showModal('tekton')">
+                            <h4 class="font-bold text-teal-300">Tekton</h4>
+                            <p class="text-sm text-gray-400 mt-1">Kubernetes pipelines</p>
+                        </div>
+                        <div class="service-card bg-slate-700 border border-slate-600 rounded-lg p-4 hover:border-teal-500" onclick="showModal('spinnaker')">
+                            <h4 class="font-bold text-teal-300">Spinnaker</h4>
+                            <p class="text-sm text-gray-400 mt-1">Deployment platform</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Security & Identity -->
+                <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                    <h3 class="text-2xl font-bold mb-4 text-pink-400">Security & Identity</h3>
+                    <div class="grid md:grid-cols-2 lg:grid-cols-5 gap-4">
+                        <div class="service-card bg-slate-700 border border-slate-600 rounded-lg p-4 hover:border-pink-500" onclick="showModal('keycloak')">
+                            <h4 class="font-bold text-pink-300">Keycloak</h4>
+                            <p class="text-sm text-gray-400 mt-1">Identity provider</p>
+                        </div>
+                        <div class="service-card bg-slate-700 border border-slate-600 rounded-lg p-4 hover:border-pink-500" onclick="showModal('vault')">
+                            <h4 class="font-bold text-pink-300">Vault</h4>
+                            <p class="text-sm text-gray-400 mt-1">Secrets management</p>
+                        </div>
+                        <div class="service-card bg-slate-700 border border-slate-600 rounded-lg p-4 hover:border-pink-500" onclick="showModal('cert-manager')">
+                            <h4 class="font-bold text-pink-300">Cert-Manager</h4>
+                            <p class="text-sm text-gray-400 mt-1">TLS automation</p>
+                        </div>
+                        <div class="service-card bg-slate-700 border border-slate-600 rounded-lg p-4 hover:border-pink-500" onclick="showModal('oauth2-proxy')">
+                            <h4 class="font-bold text-pink-300">OAuth2 Proxy</h4>
+                            <p class="text-sm text-gray-400 mt-1">API authentication</p>
+                        </div>
+                        <div class="service-card bg-slate-700 border border-slate-600 rounded-lg p-4 hover:border-pink-500" onclick="showModal('falco')">
+                            <h4 class="font-bold text-pink-300">Falco</h4>
+                            <p class="text-sm text-gray-400 mt-1">Runtime security</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Storage & File Systems -->
+                <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                    <h3 class="text-2xl font-bold mb-4 text-indigo-400">Storage & File Systems</h3>
+                    <div class="grid md:grid-cols-2 lg:grid-cols-5 gap-4">
+                        <div class="service-card bg-slate-700 border border-slate-600 rounded-lg p-4 hover:border-indigo-500" onclick="showModal('minio')">
+                            <h4 class="font-bold text-indigo-300">MinIO</h4>
+                            <p class="text-sm text-gray-400 mt-1">S3-compatible storage</p>
+                        </div>
+                        <div class="service-card bg-slate-700 border border-slate-600 rounded-lg p-4 hover:border-indigo-500" onclick="showModal('nextcloud')">
+                            <h4 class="font-bold text-indigo-300">Nextcloud</h4>
+                            <p class="text-sm text-gray-400 mt-1">File sync & share</p>
+                        </div>
+                        <div class="service-card bg-slate-700 border border-slate-600 rounded-lg p-4 hover:border-indigo-500" onclick="showModal('nfs-server')">
+                            <h4 class="font-bold text-indigo-300">NFS Server</h4>
+                            <p class="text-sm text-gray-400 mt-1">Network file system</p>
+                        </div>
+                        <div class="service-card bg-slate-700 border border-slate-600 rounded-lg p-4 hover:border-indigo-500" onclick="showModal('ceph')">
+                            <h4 class="font-bold text-indigo-300">Ceph</h4>
+                            <p class="text-sm text-gray-400 mt-1">Distributed storage</p>
+                        </div>
+                        <div class="service-card bg-slate-700 border border-slate-600 rounded-lg p-4 hover:border-indigo-500" onclick="showModal('longhorn')">
+                            <h4 class="font-bold text-indigo-300">Longhorn</h4>
+                            <p class="text-sm text-gray-400 mt-1">Block storage</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Workflow Orchestration -->
+                <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                    <h3 class="text-2xl font-bold mb-4 text-lime-400">Workflow Orchestration</h3>
+                    <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div class="service-card bg-slate-700 border border-slate-600 rounded-lg p-4 hover:border-lime-500" onclick="showModal('airflow')">
+                            <h4 class="font-bold text-lime-300">Airflow</h4>
+                            <p class="text-sm text-gray-400 mt-1">Workflow scheduler</p>
+                        </div>
+                        <div class="service-card bg-slate-700 border border-slate-600 rounded-lg p-4 hover:border-lime-500" onclick="showModal('temporal')">
+                            <h4 class="font-bold text-lime-300">Temporal</h4>
+                            <p class="text-sm text-gray-400 mt-1">Workflow engine</p>
+                        </div>
+                        <div class="service-card bg-slate-700 border border-slate-600 rounded-lg p-4 hover:border-lime-500" onclick="showModal('prefect')">
+                            <h4 class="font-bold text-lime-300">Prefect</h4>
+                            <p class="text-sm text-gray-400 mt-1">Data workflows</p>
+                        </div>
+                        <div class="service-card bg-slate-700 border border-slate-600 rounded-lg p-4 hover:border-lime-500" onclick="showModal('argo-workflows')">
+                            <h4 class="font-bold text-lime-300">Argo Workflows</h4>
+                            <p class="text-sm text-gray-400 mt-1">Kubernetes workflows</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quality & Testing -->
+                <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                    <h3 class="text-2xl font-bold mb-4 text-fuchsia-400">Quality & Testing</h3>
+                    <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div class="service-card bg-slate-700 border border-slate-600 rounded-lg p-4 hover:border-fuchsia-500" onclick="showModal('sonarqube')">
+                            <h4 class="font-bold text-fuchsia-300">SonarQube</h4>
+                            <p class="text-sm text-gray-400 mt-1">Code quality</p>
+                        </div>
+                        <div class="service-card bg-slate-700 border border-slate-600 rounded-lg p-4 hover:border-fuchsia-500" onclick="showModal('selenium-grid')">
+                            <h4 class="font-bold text-fuchsia-300">Selenium Grid</h4>
+                            <p class="text-sm text-gray-400 mt-1">Browser testing</p>
+                        </div>
+                        <div class="service-card bg-slate-700 border border-slate-600 rounded-lg p-4 hover:border-fuchsia-500" onclick="showModal('k6')">
+                            <h4 class="font-bold text-fuchsia-300">K6</h4>
+                            <p class="text-sm text-gray-400 mt-1">Load testing</p>
+                        </div>
+                        <div class="service-card bg-slate-700 border border-slate-600 rounded-lg p-4 hover:border-fuchsia-500" onclick="showModal('gitpod')">
+                            <h4 class="font-bold text-fuchsia-300">Gitpod</h4>
+                            <p class="text-sm text-gray-400 mt-1">Dev environment</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Networking & Ingress -->
+                <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                    <h3 class="text-2xl font-bold mb-4 text-sky-400">Networking & Ingress</h3>
+                    <div class="grid md:grid-cols-2 lg:grid-cols-5 gap-4">
+                        <div class="service-card bg-slate-700 border border-slate-600 rounded-lg p-4 hover:border-sky-500" onclick="showModal('traefik')">
+                            <h4 class="font-bold text-sky-300">Traefik</h4>
+                            <p class="text-sm text-gray-400 mt-1">Edge router</p>
+                        </div>
+                        <div class="service-card bg-slate-700 border border-slate-600 rounded-lg p-4 hover:border-sky-500" onclick="showModal('nginx-ingress')">
+                            <h4 class="font-bold text-sky-300">NGINX Ingress</h4>
+                            <p class="text-sm text-gray-400 mt-1">Ingress controller</p>
+                        </div>
+                        <div class="service-card bg-slate-700 border border-slate-600 rounded-lg p-4 hover:border-sky-500" onclick="showModal('istio')">
+                            <h4 class="font-bold text-sky-300">Istio</h4>
+                            <p class="text-sm text-gray-400 mt-1">Service mesh</p>
+                        </div>
+                        <div class="service-card bg-slate-700 border border-slate-600 rounded-lg p-4 hover:border-sky-500" onclick="showModal('linkerd')">
+                            <h4 class="font-bold text-sky-300">Linkerd</h4>
+                            <p class="text-sm text-gray-400 mt-1">Lightweight service mesh</p>
+                        </div>
+                        <div class="service-card bg-slate-700 border border-slate-600 rounded-lg p-4 hover:border-sky-500" onclick="showModal('kong')">
+                            <h4 class="font-bold text-sky-300">Kong</h4>
+                            <p class="text-sm text-gray-400 mt-1">API gateway</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Service Modal -->
+            <div id="service-modal" class="fixed inset-0 bg-black bg-opacity-70 hidden flex items-center justify-center z-50 p-4">
+                <div class="bg-slate-800 rounded-xl p-6 max-w-2xl w-full max-h-[85vh] overflow-y-auto border border-slate-700">
+                    <div class="flex justify-between items-start mb-4">
+                        <h3 id="modal-title" class="text-2xl font-bold text-blue-400"></h3>
+                        <button onclick="closeModal()" class="text-gray-400 hover:text-white text-2xl font-bold">×</button>
+                    </div>
+                    <div id="modal-content" class="space-y-4 text-sm"></div>
+                </div>
+            </div>
+        </div> border

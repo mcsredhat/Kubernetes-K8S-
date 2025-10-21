@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kubernetes Components Guide</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { margin: 0; padding: 0; }
+        pre { overflow-x: auto; }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white">
+    <div id="app"></div>
+
+    <script>
+        const state = {
+            activeTab: 'overview',
+            expandedSections: {}
+        };
+
+        const componentGroups = [
+            {
+                id: 'namespace',
+                title: '1. Namespace Management',
+                color: 'from-purple-500 to-purple-600',
+                description: 'Organize and isolate environments',
+                components: [
+                    {
+                        name: 'Namespace',
+                        purpose: 'Logical isolation boundary for resources',
+                        example: `apiVersion: v1
+kind: Namespace
+metadata:
+  name: production
+  labels:
+    environment: prod
+    team: backend`
+                    },
+                    {
+                        name: 'ResourceQuota',
+                        purpose: 'Limit total resource consumption in namespace',
+                        example: `apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: prod-quota
+  namespace: production
+spec:
+  hard:
+    requests.cpu: "100"
+    requests.memory: 200Gi
+    persistentvolumeclaims: "10"
+    pods: "50"`
+                    },
+                    {
+                        name: 'LimitRange',
+                        purpose: 'Define default/min/max resources per Pod',
+                        example: `apiVersion: v1
+kind: LimitRange
+metadata:
+  name: prod-limits
+  namespace: production
+spec:
+  limits:
+  - max:
+      cpu: "2"
+      memory: 4Gi
+    min:
+      cpu: 100m
+      memory: 128Mi
+    default:
+      cpu: 500m
+      memory: 512Mi
+    type: Container`
+                    }
+                ]
+            },
+            {
+                id: 'config',
+                title: '2. Configuration Management',
+                color: 'from-blue-500 to-blue-600',
+                description: 'Externalize app configuration',
+                components: [
+                    {
+                        name: 'ConfigMap',
+                        purpose: 'Store non-sensitive configuration data',
+                        example: `apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: production
+data:
+  APP_ENV: "production"
+  API_URL: "https://api.example.com"
+  LOG_LEVEL: "info"
+  config.json: |
+    {
+      "database": {
+        "host": "db.example.com",
+        "port": 5432
+      }
+    }`
+                    },
+                    {
+                        name: 'Secret',
+                        purpose: 'Store sensitive data (encrypted at rest)',
+                        example: `apiVersion: v1
+kind: Secret
+metadata:
+  name: db-credentials
+  namespace: production
+type: Opaque
+data:
+  username: YWRtaW4=
+  password: cGFzc3dvcmQxMjM=
+stringData:
+  connection-string: "postgresql://user:pass@host/db"`
+                    }
+                ]
+            },
+            {
+                id: 'storage',
+                title: '3. Storage Management',
+                color: 'from-green-500 to-green-600',
+                description: 'Persist data beyond Pod lifecycle',
+                components: [
+                    {
+                        name: 'StorageClass',
+                        purpose: 'Define storage provisioner and parameters',
+                        example: `apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: fast-ssd
+provisioner: kubernetes.io/aws-ebs
+parameters:
+  type: gp3
+  iops: "3000"
+  throughput: "125"
+reclaimPolicy: Retain
+allowVolumeExpansion: true`
+                    },
+                    {
+                        name: 'PersistentVolumeClaim',
+                        purpose: 'Request storage from StorageClass',
+                        example: `apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: db-data
+  namespace: production
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: fast-ssd
+  resources:
+    requests:
+      storage: 50Gi`
+                    }
+                ]
+            },
+            {
+                id: 'workload',
+                title: '4. Workload Management',
+                color: 'from-orange-500 to-orange-600',
+                description: 'Deploy and manage applications',
+                components: [
+                    {
+                        name: 'Deployment',
+                        purpose: 'Manage stateless applications with rolling updates',
+                        example: `apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-app
+  namespace: production
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: web
+  template:
+    metadata:
+      labels:
+        app: web
+    spec:
+      serviceAccountName: app-runner
+      containers:
+      - name: web
+        image: myapp:v1.2.3
+        ports:
+        - containerPort: 8080`
+                    },
+                    {
+                        name: 'StatefulSet',
+                        purpose: 'Manage stateful applications like databases',
+                        example: `apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  namespace: production
+spec:
+  serviceName: postgres
+  replicas: 3
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:15
+        ports:
+        - containerPort: 5432
+        volumeMounts:
+        - name: data
+          mountPath: /var/lib/postgresql/data
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      storageClassName: fast-ssd
+      resources:
+        requests:
+          storage: 10Gi`
+                    }
+                ]
+            },
+            {
+                id: 'networking',
+                title: '5. Networking & Exposure',
+                color: 'from-cyan-500 to-cyan-600',
+                description: 'Connect and expose services',
+                components: [
+                    {
+                        name: 'Service (ClusterIP)',
+                        purpose: 'Internal service discovery',
+                        example: `apiVersion: v1
+kind: Service
+metadata:
+  name: web-service
+  namespace: production
+spec:
+  type: ClusterIP
+  selector:
+    app: web
+  ports:
+  - port: 80
+    targetPort: 8080
+    protocol: TCP`
+                    },
+                    {
+                        name: 'Ingress',
+                        purpose: 'HTTP/HTTPS routing with SSL termination',
+                        example: `apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: web-ingress
+  namespace: production
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - app.example.com
+    secretName: tls-secret
+  rules:
+  - host: app.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: web-service
+            port:
+              number: 80`
+                    }
+                ]
+            },
+            {
+                id: 'security',
+                title: '6. Security & Access Control',
+                color: 'from-red-500 to-red-600',
+                description: 'Manage permissions and identities',
+                components: [
+                    {
+                        name: 'ServiceAccount',
+                        purpose: 'Identity for Pods within cluster',
+                        example: `apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: app-runner
+  namespace: production
+automountServiceAccountToken: true`
+                    },
+                    {
+                        name: 'Role',
+                        purpose: 'Define permissions within namespace',
+                        example: `apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: secret-reader
+  namespace: production
+rules:
+- apiGroups: [""]
+  resources: ["secrets", "configmaps"]
+  verbs: ["get", "list"]`
+                    },
+                    {
+                        name: 'RoleBinding',
+                        purpose: 'Bind Role to ServiceAccount',
+                        example: `apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: read-secrets
+  namespace: production
+subjects:
+- kind: ServiceAccount
+  name: app-runner
+  namespace: production
+roleRef:
+  kind: Role
+  name: secret-reader
+  apiGroup: rbac.authorization.k8s.io`
+                    }
+                ]
+            },
+            {
+                id: 'advanced',
+                title: '7. Advanced Features',
+                color: 'from-yellow-500 to-yellow-600',
+                description: 'Auto-scaling and high availability',
+                components: [
+                    {
+                        name: 'HorizontalPodAutoscaler',
+                        purpose: 'Auto-scale based on CPU/Memory metrics',
+                        example: `apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: web-hpa
+  namespace: production
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: web-app
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70`
+                    },
+                    {
+                        name: 'PodDisruptionBudget',
+                        purpose: 'Ensure availability during disruptions',
+                        example: `apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: web-pdb
+  namespace: production
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: web`
+                    }
+                ]
+            }
+        ];
+
+        function toggleSection(sectionId) {
+            state.expandedSections[sectionId] = !state.expandedSections[sectionId];
+            render();
+        }
+
+        function setActiveTab(tab) {
+            state.activeTab = tab;
+            render();
+        }
+
+        function renderOverview() {
+            return `
+                <div class="bg-slate-800 rounded-xl p-8 shadow-2xl">
+                    <h2 class="text-3xl font-bold mb-6">Component Groups Overview</h2>
+                    <div class="grid md:grid-cols-2 gap-6">
+                        ${componentGroups.map((group) => `
+                            <div class="bg-slate-700 rounded-lg p-6 hover:shadow-xl transition-all cursor-pointer" onclick="setActiveTab('components')">
+                                <div class="inline-flex p-3 rounded-lg bg-gradient-to-r ${group.color} mb-4">
+                                    <span class="text-2xl">${getGroupIcon(group.id)}</span>
+                                </div>
+                                <h3 class="text-xl font-bold mb-2">${group.title}</h3>
+                                <p class="text-gray-300">${group.description}</p>
+                                <div class="mt-4 text-sm text-gray-400">
+                                    ${group.components.length} components
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderArchitecture() {
+            return `
+                <div class="bg-slate-800 rounded-xl p-8 shadow-2xl">
+                    <h2 class="text-3xl font-bold mb-6">Kubernetes Architecture</h2>
+                    
+                    <div class="bg-slate-900 rounded-lg p-6 mb-8 overflow-x-auto">
+                        <pre class="text-green-400 text-xs font-mono whitespace-pre">
+┌──────────────────────────────────────────────────┐
+│  CLUSTER LEVEL (Admin Scope)                    │
+│  StorageClass | ClusterRole | ClusterRoleBinding│
+│  PersistentVolume | IngressController           │
+└────────────────┬─────────────────────────────────┘
+                 ↓
+┌──────────────────────────────────────────────────┐
+│  NAMESPACE LEVEL (Developer Scope)               │
+│  Namespace | ResourceQuota | LimitRange          │
+│  ConfigMap | Secret | PVC | ServiceAccount       │
+│  Role | RoleBinding | NetworkPolicy              │
+└────────────────┬─────────────────────────────────┘
+                 ↓
+┌──────────────────────────────────────────────────┐
+│  WORKLOAD RESOURCES                              │
+│  Deployment → ReplicaSet → Pod                   │
+│  StatefulSet → Pod                               │
+│  Job | CronJob → Pod                             │
+└────────────────┬─────────────────────────────────┘
+                 ↓
+┌──────────────────────────────────────────────────┐
+│  POD INTERNALS                                   │
+│  Container(s):                                   │
+│   - Mounted ConfigMap (env/files)                │
+│   - Mounted Secret (env/files)                   │
+│   - Mounted PVC (persistent storage)             │
+│   - ServiceAccount token                         │
+└────────────────┬─────────────────────────────────┘
+                 ↓
+┌──────────────────────────────────────────────────┐
+│  NETWORKING LAYER                                │
+│  Service (ClusterIP/NodePort/LoadBalancer)       │
+│  Ingress → Routes HTTP/S to Services             │
+│  NetworkPolicy → Controls Pod communication      │
+└──────────────────────────────────────────────────┘
+                        </pre>
+                    </div>
+
+                    <div class="bg-slate-700 rounded-lg p-6">
+                        <h3 class="text-xl font-bold mb-4">Key Relationships</h3>
+                        <div class="space-y-4 text-gray-300">
+                            <div class="flex items-start gap-3">
+                                <div class="w-2 h-2 bg-blue-400 rounded-full mt-2"></div>
+                                <div>
+                                    <strong class="text-white">StorageClass → PV → PVC → Pod</strong>
+                                    <p class="text-sm mt-1">Storage provisioning flow</p>
+                                </div>
+                            </div>
+                            <div class="flex items-start gap-3">
+                                <div class="w-2 h-2 bg-green-400 rounded-full mt-2"></div>
+                                <div>
+                                    <strong class="text-white">Deployment → ReplicaSet → Pod</strong>
+                                    <p class="text-sm mt-1">Workload management hierarchy</p>
+                                </div>
+                            </div>
+                            <div class="flex items-start gap-3">
+                                <div class="w-2 h-2 bg-purple-400 rounded-full mt-2"></div>
+                                <div>
+                                    <strong class="text-white">ConfigMap/Secret → Pod</strong>
+                                    <p class="text-sm mt-1">Configuration injection</p>
+                                </div>
+                            </div>
+                            <div class="flex items-start gap-3">
+                                <div class="w-2 h-2 bg-orange-400 rounded-full mt-2"></div>
+                                <div>
+                                    <strong class="text-white">Service → Pod (via selector)</strong>
+                                    <p class="text-sm mt-1">Network routing based on labels</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderComponents() {
+            return `
+                <div class="space-y-6">
+                    ${componentGroups.map((group) => `
+                        <div class="bg-slate-800 rounded-xl shadow-2xl overflow-hidden">
+                            <div class="bg-gradient-to-r ${group.color} p-6 cursor-pointer flex items-center justify-between" onclick="toggleSection('${group.id}')">
+                                <div class="flex items-center gap-4">
+                                    <span class="text-3xl">${getGroupIcon(group.id)}</span>
+                                    <div>
+                                        <h3 class="text-2xl font-bold">${group.title}</h3>
+                                        <p class="text-white/80 mt-1">${group.description}</p>
+                                    </div>
+                                </div>
+                                <span class="text-2xl">${state.expandedSections[group.id] ? '▼' : '▶'}</span>
+                            </div>
+
+                            ${state.expandedSections[group.id] ? `
+                                <div class="p-6 space-y-6">
+                                    ${group.components.map((component) => `
+                                        <div class="bg-slate-700 rounded-lg p-6">
+                                            <div class="mb-4">
+                                                <h4 class="text-xl font-bold text-blue-400">${component.name}</h4>
+                                                <p class="text-gray-300 mt-2">${component.purpose}</p>
+                                            </div>
+                                            <div class="bg-slate-900 rounded-lg p-4 overflow-x-auto">
+                                                <pre class="text-sm text-green-400"><code>${escapeHtml(component.example)}</code></pre>
+                                            </div>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            ` : ''}
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        function renderWorkflow() {
+            return `
+                <div class="bg-slate-800 rounded-xl p-8 shadow-2xl">
+                    <h2 class="text-3xl font-bold mb-6">Complete Production Workflow</h2>
+                    
+                    <div class="grid md:grid-cols-2 gap-6 mb-8">
+                        <div class="bg-slate-700 rounded-lg p-6">
+                            <h3 class="text-xl font-bold mb-4 text-cyan-400">Deployment Order</h3>
+                            <ol class="space-y-3 text-gray-300">
+                                <li class="flex items-start gap-3">
+                                    <span class="bg-blue-600 rounded-full w-6 h-6 flex items-center justify-center flex-shrink-0 text-sm font-bold">1</span>
+                                    <div>
+                                        <strong class="text-white">Namespace & Limits</strong>
+                                        <p class="text-sm mt-1">Create namespace, ResourceQuota, LimitRange</p>
+                                    </div>
+                                </li>
+                                <li class="flex items-start gap-3">
+                                    <span class="bg-blue-600 rounded-full w-6 h-6 flex items-center justify-center flex-shrink-0 text-sm font-bold">2</span>
+                                    <div>
+                                        <strong class="text-white">Storage Infrastructure</strong>
+                                        <p class="text-sm mt-1">Create StorageClass if needed</p>
+                                    </div>
+                                </li>
+                                <li class="flex items-start gap-3">
+                                    <span class="bg-blue-600 rounded-full w-6 h-6 flex items-center justify-center flex-shrink-0 text-sm font-bold">3</span>
+                                    <div>
+                                        <strong class="text-white">Configuration</strong>
+                                        <p class="text-sm mt-1">Deploy ConfigMaps and Secrets</p>
+                                    </div>
+                                </li>
+                                <li class="flex items-start gap-3">
+                                    <span class="bg-blue-600 rounded-full w-6 h-6 flex items-center justify-center flex-shrink-0 text-sm font-bold">4</span>
+                                    <div>
+                                        <strong class="text-white">Security</strong>
+                                        <p class="text-sm mt-1">Create ServiceAccount, Role, RoleBinding</p>
+                                    </div>
+                                </li>
+                                <li class="flex items-start gap-3">
+                                    <span class="bg-blue-600 rounded-full w-6 h-6 flex items-center justify-center flex-shrink-0 text-sm font-bold">5</span>
+                                    <div>
+                                        <strong class="text-white">Workloads</strong>
+                                        <p class="text-sm mt-1">Deploy StatefulSets, then Deployments</p>
+                                    </div>
+                                </li>
+                                <li class="flex items-start gap-3">
+                                    <span class="bg-blue-600 rounded-full w-6 h-6 flex items-center justify-center flex-shrink-0 text-sm font-bold">6</span>
+                                    <div>
+                                        <strong class="text-white">Networking</strong>
+                                        <p class="text-sm mt-1">Create Services, NetworkPolicies, Ingress</p>
+                                    </div>
+                                </li>
+                                <li class="flex items-start gap-3">
+                                    <span class="bg-blue-600 rounded-full w-6 h-6 flex items-center justify-center flex-shrink-0 text-sm font-bold">7</span>
+                                    <div>
+                                        <strong class="text-white">Advanced Features</strong>
+                                        <p class="text-sm mt-1">Add HPA, PDB, CronJobs</p>
+                                    </div>
+                                </li>
+                            </ol>
+                        </div>
+
+                        <div class="bg-slate-700 rounded-lg p-6">
+                            <h3 class="text-xl font-bold mb-4 text-green-400">Best Practices</h3>
+                            <div class="space-y-4 text-gray-300">
+                                <div class="flex items-start gap-3">
+                                    <div class="w-2 h-2 bg-green-400 rounded-full mt-2 flex-shrink-0"></div>
+                                    <div>
+                                        <strong class="text-white">Set resource requests/limits</strong>
+                                        <p class="text-sm mt-1">Prevents resource starvation</p>
+                                    </div>
+                                </div>
+                                <div class="flex items-start gap-3">
+                                    <div class="w-2 h-2 bg-green-400 rounded-full mt-2 flex-shrink-0"></div>
+                                    <div>
+                                        <strong class="text-white">Use namespaces for isolation</strong>
+                                        <p class="text-sm mt-1">Separate dev, staging, prod</p>
+                                    </div>
+                                </div>
+                                <div class="flex items-start gap-3">
+                                    <div class="w-2 h-2 bg-green-400 rounded-full mt-2 flex-shrink-0"></div>
+                                    <div>
+                                        <strong class="text-white">Never hardcode secrets</strong>
+                                        <p class="text-sm mt-1">Always use Secret objects</p>
+                                    </div>
+                                </div>
+                                <div class="flex items-start gap-3">
+                                    <div class="w-2 h-2 bg-green-400 rounded-full mt-2 flex-shrink-0"></div>
+                                    <div>
+                                        <strong class="text-white">Implement RBAC</strong>
+                                        <p class="text-sm mt-1">Use ServiceAccounts with minimal permissions</p>
+                                    </div>
+                                </div>
+                                <div class="flex items-start gap-3">
+                                    <div class="w-2 h-2 bg-green-400 rounded-full mt-2 flex-shrink-0"></div>
+                                    <div>
+                                        <strong class="text-white">Enable monitoring & logging</strong>
+                                        <p class="text-sm mt-1">Use Prometheus and centralized logging</p>
+                                    </div>
+                                </div>
+                                <div class="flex items-start gap-3">
+                                    <div class="w-2 h-2 bg-green-400 rounded-full mt-2 flex-shrink-0"></div>
+                                    <div>
+                                        <strong class="text-white">Use health checks</strong>
+                                        <p class="text-sm mt-1">Define readiness and liveness probes</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-slate-700 rounded-lg p-6">
+                        <h3 class="text-xl font-bold mb-4 text-yellow-400">Command Cheat Sheet</h3>
+                        <div class="grid md:grid-cols-2 gap-4">
+                            <div class="bg-slate-800 rounded p-4 font-mono text-sm">
+                                <p class="text-gray-400 mb-2"># Apply resources</p>
+                                <p class="text-green-400">kubectl apply -f namespace.yaml</p>
+                            </div>
+                            <div class="bg-slate-800 rounded p-4 font-mono text-sm">
+                                <p class="text-gray-400 mb-2"># Check status</p>
+                                <p class="text-green-400">kubectl get all -n production</p>
+                            </div>
+                            <div class="bg-slate-800 rounded p-4 font-mono text-sm">
+                                <p class="text-gray-400 mb-2"># View logs</p>
+                                <p class="text-green-400">kubectl logs -f deploy/web-app</p>
+                            </div>
+                            <div class="bg-slate-800 rounded p-4 font-mono text-sm">
+                                <p class="text-gray-400 mb-2"># Scale manually</p>
+                                <p class="text-green-400">kubectl scale deploy/web-app --replicas=5</p>
+                            </div>
+                            <div class="bg-slate-800 rounded p-4 font-mono text-sm">
+                                <p class="text-gray-400 mb-2"># Describe resource</p>
+                                <p class="text-green-400">kubectl describe pod web-app-xyz</p>
+                            </div>
+                            <div class="bg-slate-800 rounded p-4 font-mono text-sm">
+                                <p class="text-gray-400 mb-2"># Execute in pod</p>
+                                <p class="text-green-400">kubectl exec -it pod-name -- /bin/sh</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function getGroupIcon(groupId) {
+            const icons = {
+                'namespace': '📦',
+                'config': '⚙️',
+                'storage': '💾',
+                'workload': '🚀',
+                'networking': '🌐',
+                'security': '🔒',
+                'advanced': '⚡'
+            };
+            return icons[groupId] || '•';
+        }
+
+        function escapeHtml(text) {
+            const map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            };
+            return text.replace(/[&<>"']/g, m => map[m]);
+        }
+
+        function render() {
+            const app = document.getElementById('app');
+            
+            let content = '';
+            
+            if (state.activeTab === 'overview') {
+                content = renderOverview();
+            } else if (state.activeTab === 'architecture') {
+                content = renderArchitecture();
+            } else if (state.activeTab === 'components') {
+                content = renderComponents();
+            } else if (state.activeTab === 'workflow') {
+                content = renderWorkflow();
+            }
+
+            app.innerHTML = `
+                <div class="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white p-4 md:p-8">
+                    <div class="max-w-7xl mx-auto">
+                        <div class="text-center mb-12">
+                            <h1 class="text-4xl md:text-5xl font-bold bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">
+                                Kubernetes Components Guide
+                            </h1>
+                            <p class="text-lg md:text-xl text-gray-300 mt-4">
+                                Complete reference for all K8s resource groups with examples
+                            </p>
+                        </div>
+
+                        <div class="flex gap-4 mb-8 overflow-x-auto pb-2">
+                            ${['overview', 'architecture', 'components', 'workflow'].map(tab => `
+                                <button
+                                    onclick="setActiveTab('${tab}')"
+                                    class="px-6 py-3 rounded-lg font-semibold transition-all whitespace-nowrap ${
+                                        state.activeTab === tab
+                                            ? 'bg-blue-600 shadow-lg shadow-blue-500/50'
+                                            : 'bg-slate-700 hover:bg-slate-600'
+                                    }"
+                                >
+                                    ${tab.charAt(0).toUpperCase() + tab.slice(1)}
+                                </button>
+                            `).join('')}
+                        </div>
+
+                        ${content}
+                    </div>
+                </div>
+            `;
+        }
+
+        render();
+    </script>
+</body>
+</html>

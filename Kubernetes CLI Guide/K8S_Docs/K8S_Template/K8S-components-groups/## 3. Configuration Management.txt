@@ -1,0 +1,170 @@
+# =============================================================================
+# 3. CONFIGURATION MANAGEMENT
+# =============================================================================
+# Components: ConfigMap, Secret, Volume
+# Use Case: Application configuration, sensitive data, persistent storage
+# =============================================================================
+
+---
+# ConfigMap
+# Description: Store non-sensitive configuration as key-value pairs
+# Use Case: Application config, feature flags, environment-specific settings
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: example-configmap
+  namespace: example-namespace
+  labels:
+    config-type: app
+  annotations:
+    description: "Non-sensitive app configuration"
+data:
+  config.key1: "value1"
+  config.key2: "value2"
+  database.url: "postgresql://db.example.svc.cluster.local:5432/mydb"
+  log.level: "INFO"
+  app.properties: |
+    server.port=8080
+    server.servlet.context-path=/api
+    logging.level.root=INFO
+immutable: false
+
+# Apply Example:
+# kubectl apply -f 3-configuration-management.yaml -n example-namespace
+# kubectl get configmap -n example-namespace
+# kubectl edit configmap example-configmap -n example-namespace
+
+# Customization Notes:
+# - Use immutable: true for config that shouldn't change
+# - Separate ConfigMaps by concern (database, logging, etc.)
+# - Use multi-line format for complex configurations
+
+# Common Pitfalls:
+# - Storing secrets in ConfigMap (use Secret instead)
+# - Expecting running pods to auto-reload ConfigMap changes
+# - Creating overly large ConfigMaps (1MB limit)
+
+---
+# Secret
+# Description: Store sensitive data (passwords, tokens, certificates)
+# Use Case: Database credentials, API keys, TLS certificates
+
+apiVersion: v1
+kind: Secret
+metadata:
+  name: example-secret
+  namespace: example-namespace
+  labels:
+    secret-type: auth
+  annotations:
+    description: "Sensitive credentials"
+type: Opaque
+data:
+  password: cGFzc3dvcmQxMjM=
+  username: YWRtaW4=
+  api-token: ZXhhbXBsZXRva2VuMTIz
+immutable: true
+
+# Apply Example:
+# Create from literal values
+# kubectl create secret generic example-secret \
+#   --from-literal=username=admin \
+#   --from-literal=password=secret123 \
+#   -n example-namespace
+
+# Apply from file
+# kubectl apply -f 3-configuration-management.yaml -n example-namespace
+
+# View secret
+# kubectl get secret example-secret -n example-namespace -o yaml
+
+# Customization Notes:
+# - Always set immutable: true for production secrets
+# - Use external secret management (e.g., Sealed Secrets, External Secrets Operator)
+# - Never commit secrets to version control
+
+# Common Pitfalls:
+# - Base64-encoded secrets are NOT encrypted (anyone can decode)
+# - Storing secrets in version control
+# - Using mutable secrets allowing accidental overwrites
+
+---
+# Volume (Pod with Multiple Volume Types)
+# Description: Attach storage to containers for data persistence/sharing
+# Use Case: Application data, logs, temporary files
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: example-pod-volumes
+  namespace: example-namespace
+  labels:
+    app: example
+    demo: volumes
+  annotations:
+    description: "Pod demonstrating various volume types"
+spec:
+  serviceAccountName: example-serviceaccount
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    fsGroup: 2000
+  containers:
+  - name: app-container
+    image: nginx:1.21
+    securityContext:
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: false
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 200m
+        memory: 256Mi
+    volumeMounts:
+    - mountPath: /config
+      name: config-volume
+      readOnly: true
+    - mountPath: /secrets
+      name: secret-volume
+      readOnly: true
+    - mountPath: /data
+      name: persistent-volume
+    - mountPath: /tmp
+      name: temp-volume
+  volumes:
+  - name: config-volume
+    configMap:
+      name: example-configmap
+      defaultMode: 0644
+      items:
+      - key: app.properties
+        path: application.properties
+  - name: secret-volume
+    secret:
+      secretName: example-secret
+      defaultMode: 0600
+  - name: persistent-volume
+    persistentVolumeClaim:
+      claimName: example-pvc
+  - name: temp-volume
+    emptyDir:
+      medium: Memory
+      sizeLimit: 500Mi
+  terminationGracePeriodSeconds: 30
+
+# Apply Example:
+# kubectl apply -f 3-configuration-management.yaml -n example-namespace
+# kubectl describe pod example-pod-volumes -n example-namespace
+
+# Customization Notes:
+# - Use readOnly: true for config/secrets
+# - Set appropriate defaultMode permissions (0600 for secrets, 0644 for configs)
+# - Use emptyDir for temporary storage only
+
+# Common Pitfalls:
+# - Using readOnly: true then trying to write to volume
+# - Not setting proper permissions on secret volumes (should be 0600)
+# - Assuming emptyDir survives pod restarts

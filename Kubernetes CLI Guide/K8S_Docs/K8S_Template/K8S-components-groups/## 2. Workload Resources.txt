@@ -1,0 +1,554 @@
+# =============================================================================
+# 2. WORKLOAD RESOURCES
+# =============================================================================
+# Components: Pod, Deployment, StatefulSet, DaemonSet, Job, CronJob
+# Use Case: Running containerized applications with different lifecycle patterns
+# =============================================================================
+
+---
+# Pod
+# Description: Smallest deployable unit; ephemeral by design
+# Use Case: Testing, one-off tasks (prefer controllers for production)
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: example-pod
+  namespace: example-namespace
+  labels:
+    app: example
+    tier: frontend
+  annotations:
+    description: "Example pod with multi-container setup"
+spec:
+  restartPolicy: Always
+  serviceAccountName: example-serviceaccount
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    fsGroup: 2000
+    seccompProfile:
+      type: RuntimeDefault
+  initContainers:
+  - name: init-container
+    image: busybox:1.28
+    command: ['sh', '-c', 'echo Initializing && sleep 5']
+    securityContext:
+      allowPrivilegeEscalation: false
+      runAsNonRoot: true
+      readOnlyRootFilesystem: true
+  containers:
+  - name: example-container
+    image: nginx:1.21
+    imagePullPolicy: IfNotPresent
+    ports:
+    - containerPort: 80
+      protocol: TCP
+      name: http
+    env:
+    - name: ENVIRONMENT
+      value: "production"
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 256Mi
+    livenessProbe:
+      httpGet:
+        path: /healthz
+        port: 80
+      initialDelaySeconds: 30
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: 3
+    readinessProbe:
+      httpGet:
+        path: /
+        port: 80
+      initialDelaySeconds: 5
+      periodSeconds: 5
+      timeoutSeconds: 3
+      failureThreshold: 2
+    securityContext:
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: false
+    volumeMounts:
+    - mountPath: /var/log/nginx
+      name: log-volume
+  volumes:
+  - name: log-volume
+    emptyDir: {}
+  terminationGracePeriodSeconds: 30
+
+# Apply Example:
+# kubectl apply -f 2-workload-resources.yaml -n example-namespace
+# kubectl logs example-pod -n example-namespace
+
+# Common Pitfalls:
+# - Using latest image tag causing unexpected updates
+# - Missing or misconfigured health probes
+# - Not setting resource requests/limits
+
+---
+# Deployment
+# Description: Manages stateless applications with rolling updates and auto-rollback
+# Use Case: Web servers, microservices, stateless APIs
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: example-deployment
+  namespace: example-namespace
+  labels:
+    app: example
+    version: v1
+  annotations:
+    description: "Stateless app deployment"
+spec:
+  replicas: 3
+  revisionHistoryLimit: 10
+  progressDeadlineSeconds: 600
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app: example
+  template:
+    metadata:
+      labels:
+        app: example
+        tier: frontend
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+    spec:
+      serviceAccountName: example-serviceaccount
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 2000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: example-container
+        image: nginx:1.21
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 80
+          protocol: TCP
+          name: http
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        resources:
+          requests:
+            cpu: 250m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 80
+          initialDelaySeconds: 30
+          timeoutSeconds: 5
+          periodSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 5
+          timeoutSeconds: 3
+          periodSeconds: 10
+          failureThreshold: 2
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: false
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - mountPath: /app/config
+          name: config-volume
+          readOnly: true
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values:
+                - example
+            topologyKey: kubernetes.io/hostname
+      volumes:
+      - name: config-volume
+        configMap:
+          name: example-configmap
+          defaultMode: 0644
+      terminationGracePeriodSeconds: 30
+
+# Apply Example:
+# kubectl apply -f 2-workload-resources.yaml -n example-namespace
+# kubectl rollout status deployment/example-deployment -n example-namespace
+# kubectl set image deployment/example-deployment example-container=nginx:1.22 -n example-namespace
+
+# Customization Notes:
+# - Using requiredDuringSchedulingIgnoredDuringExecution requires sufficient nodes
+# - With 3 replicas, you need at least 3 nodes across different availability zones
+# - Alternative: Use preferredDuringSchedulingIgnoredDuringExecution for better availability
+
+# Common Pitfalls:
+# - Using requiredDuringSchedulingIgnoredDuringExecution without verifying node availability
+# - Setting maxUnavailable: 25% with 2-3 replicas causes complete downtime
+# - Insufficient initialDelaySeconds for slow-starting apps
+
+---
+# StatefulSet (with required Headless Service)
+# Description: Manages stateful applications with stable network identity and persistent storage
+# Use Case: Databases, message queues, clustered applications
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: example-statefulset-svc
+  namespace: example-namespace
+  labels:
+    app: example
+    service: headless
+  annotations:
+    description: "Headless service for StatefulSet DNS"
+spec:
+  clusterIP: None  # CRITICAL: Makes this a headless service
+  selector:
+    app: example
+  ports:
+  - port: 80
+    targetPort: 80
+    name: web
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: example-statefulset
+  namespace: example-namespace
+  labels:
+    app: example
+    stateful: db
+  annotations:
+    description: "Stateful application with persistent storage"
+spec:
+  serviceName: example-statefulset-svc  # CRITICAL: References headless service
+  replicas: 3
+  revisionHistoryLimit: 10
+  podManagementPolicy: OrderedReady
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      partition: 0
+  selector:
+    matchLabels:
+      app: example
+  template:
+    metadata:
+      labels:
+        app: example
+    spec:
+      serviceAccountName: example-serviceaccount
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - example
+              topologyKey: kubernetes.io/hostname
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 2000
+      containers:
+      - name: example-container
+        image: nginx:1.21
+        ports:
+        - containerPort: 80
+          name: web
+        volumeMounts:
+        - mountPath: /data
+          name: data-volume
+        resources:
+          requests:
+            cpu: 500m
+            memory: 1Gi
+          limits:
+            cpu: 1
+            memory: 2Gi
+        livenessProbe:
+          tcpSocket:
+            port: 80
+          initialDelaySeconds: 60
+          periodSeconds: 10
+        readinessProbe:
+          tcpSocket:
+            port: 80
+          initialDelaySeconds: 10
+          periodSeconds: 5
+      terminationGracePeriodSeconds: 300
+  volumeClaimTemplates:
+  - metadata:
+      name: data-volume
+      labels:
+        volume-type: persistent
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      storageClassName: example-storageclass
+      resources:
+        requests:
+          storage: 10Gi
+
+# Apply Example:
+# kubectl apply -f 2-workload-resources.yaml -n example-namespace
+# kubectl get statefulset -n example-namespace
+# kubectl get pvc -n example-namespace
+
+# Customization Notes:
+# - Always deploy headless Service before or with StatefulSet
+# - Use preferredDuringSchedulingIgnoredDuringExecution for pod distribution
+# - Set longer terminationGracePeriodSeconds for graceful shutdowns
+
+# Common Pitfalls:
+# - Missing headless Service (causes DNS resolution failures)
+# - Using requiredDuringSchedulingIgnoredDuringExecution prevents scheduling when insufficient nodes
+
+---
+# DaemonSet
+# Description: Automatically runs pod on every cluster node
+# Use Case: Logging agents, monitoring collectors, node-level utilities
+
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: example-daemonset
+  namespace: example-namespace
+  labels:
+    app: example
+    role: agent
+  annotations:
+    description: "Runs on every node for monitoring"
+spec:
+  revisionHistoryLimit: 10
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: example
+  template:
+    metadata:
+      labels:
+        app: example
+    spec:
+      serviceAccountName: example-serviceaccount
+      hostNetwork: false
+      hostPID: false
+      dnsPolicy: ClusterFirst
+      tolerations:
+      - operator: Exists
+        effect: NoSchedule
+      - operator: Exists
+        effect: NoExecute
+      priorityClassName: system-node-critical
+      containers:
+      - name: example-container
+        image: fluentd:1.14
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 24224
+          name: fluentd-input
+          protocol: TCP
+        env:
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        resources:
+          requests:
+            cpu: 100m
+            memory: 200Mi
+          limits:
+            cpu: 200m
+            memory: 400Mi
+        livenessProbe:
+          tcpSocket:
+            port: 24224
+          initialDelaySeconds: 60
+          periodSeconds: 10
+        readinessProbe:
+          tcpSocket:
+            port: 24224
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        securityContext:
+          allowPrivilegeEscalation: false
+        volumeMounts:
+        - mountPath: /var/log
+          name: varlog
+          readOnly: true
+      volumes:
+      - name: varlog
+        hostPath:
+          path: /var/log
+          type: Directory
+      terminationGracePeriodSeconds: 30
+
+# Apply Example:
+# kubectl apply -f 2-workload-resources.yaml -n example-namespace
+# kubectl get daemonset -n example-namespace
+
+# Common Pitfalls:
+# - Forgetting tolerations causing pods to skip tainted nodes
+# - Excessive resource consumption accumulating across cluster
+
+---
+# Job
+# Description: Runs pods to completion (one-time or batch tasks)
+# Use Case: Database migrations, data processing, CI/CD tasks
+
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: example-job
+  namespace: example-namespace
+  labels:
+    job-type: batch
+  annotations:
+    description: "One-time batch processing job"
+spec:
+  ttlSecondsAfterFinished: 3600
+  backoffLimit: 4
+  activeDeadlineSeconds: 3600
+  completions: 1
+  parallelism: 1
+  template:
+    metadata:
+      labels:
+        job: example
+    spec:
+      restartPolicy: Never  # CORRECTED: Jobs must use Never or OnFailure, never Always
+      serviceAccountName: example-serviceaccount
+      securityContext:
+        runAsNonRoot: true
+      containers:
+      - name: example-container
+        image: busybox:1.28
+        command:
+        - sh
+        - -c
+        - |
+          echo "Running job at $(date)"
+          echo "Job ID: $JOB_ID"
+          exit 0
+        env:
+        - name: JOB_ID
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        resources:
+          requests:
+            cpu: 100m
+            memory: 64Mi
+          limits:
+            cpu: 200m
+            memory: 128Mi
+
+# Apply Example:
+# kubectl apply -f 2-workload-resources.yaml -n example-namespace
+# kubectl get jobs -n example-namespace
+# kubectl logs -l job-name=example-job -n example-namespace
+
+# Common Pitfalls:
+# - Not setting ttlSecondsAfterFinished causing log accumulation
+# - Using restartPolicy: Always (invalid for Jobs)
+
+---
+# CronJob
+# Description: Manages scheduled job execution using cron syntax
+# Use Case: Backups, cleanup tasks, periodic maintenance
+
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: example-cronjob
+  namespace: example-namespace
+  labels:
+    schedule-type: nightly
+  annotations:
+    description: "Scheduled backup job"
+spec:
+  schedule: "0 2 * * *"
+  timezone: "Etc/UTC"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  startingDeadlineSeconds: 300
+  jobTemplate:
+    spec:
+      ttlSecondsAfterFinished: 86400
+      backoffLimit: 2
+      template:
+        metadata:
+          labels:
+            cronjob: example
+        spec:
+          restartPolicy: OnFailure
+          serviceAccountName: example-serviceaccount
+          containers:
+          - name: example-container
+            image: busybox:1.28
+            command:
+            - sh
+            - -c
+            - |
+              echo "Backup starting at $(date)"
+              sleep 60
+              echo "Backup completed"
+            resources:
+              requests:
+                cpu: 200m
+                memory: 128Mi
+              limits:
+                cpu: 500m
+                memory: 256Mi
+            env:
+            - name: BACKUP_TIME
+              value: "2am-utc"
+
+# Apply Example:
+# kubectl apply -f 2-workload-resources.yaml -n example-namespace
+# kubectl get cronjob -n example-namespace
+
+# Common Pitfalls:
+# - Using ambiguous cron expressions
+# - Setting concurrencyPolicy: Allow causing duplicate work

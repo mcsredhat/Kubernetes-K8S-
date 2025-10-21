@@ -1,0 +1,207 @@
+## 5. Networking & Service Exposure
+
+### Service
+**Description:** Stable endpoint for pod communication
+**Use Case:** Load balancing, service discovery, internal routing
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: example-service
+  namespace: example-namespace
+  labels:
+    app: example
+    service-type: cluster
+  annotations:
+    description: "Internal service for app"
+spec:
+  type: ClusterIP
+  selector:
+    app: example
+    tier: frontend
+  ports:
+  - name: http
+    protocol: TCP
+    port: 80
+    targetPort: 8080
+  sessionAffinity: None
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 10800
+  externalTrafficPolicy: Cluster
+  ipFamilies:
+  - IPv4
+  ipFamilyPolicy: SingleStack
+```
+
+**Apply Example:**
+```bash
+kubectl apply -f service.yaml -n example-namespace
+kubectl get service -n example-namespace
+kubectl describe service example-service -n example-namespace
+```
+
+**Customization Notes:**
+- Use `ClusterIP` for internal services (default)
+- Use `NodePort` for external access without LoadBalancer
+- Use `LoadBalancer` with cloud providers for external IPs
+
+**Common Pitfalls:**
+- Service selector not matching pod labels
+- Port and targetPort confusion
+- Not considering `externalTrafficPolicy` impact on source IP
+
+---
+
+### Ingress
+**Description:** HTTP/HTTPS routing from outside cluster to services
+**Use Case:** Public API access, web application hosting
+
+```yaml
+### Ingress
+**Description:** HTTP/HTTPS routing from outside cluster to services
+**Use Case:** Public API access, web application hosting
+
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: example-ingress
+  namespace: example-namespace
+  labels:
+    ingress: web
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    description: "HTTP routing to services"
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - example.com
+    - api.example.com
+    secretName: example-tls
+  rules:
+  - host: example.com
+    http:
+      paths:
+      - path: /api
+        pathType: Prefix
+        backend:
+          service:
+            name: api-service
+            port:
+              number: 8080
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: example-service
+            port:
+              number: 80
+  defaultBackend:
+    service:
+      name: default-service
+      port:
+        number: 80
+```
+
+**Apply Example:**
+```bash
+kubectl apply -f ingress.yaml -n example-namespace
+kubectl get ingress -n example-namespace
+kubectl describe ingress example-ingress -n example-namespace
+```
+
+**Customization Notes:**
+- Use `cert-manager` for automatic TLS certificate provisioning
+- Path order matters: specific paths before catch-all
+- Test with `pathType: Exact` for debugging
+- Verify Ingress controller is installed (nginx-ingress, traefik, etc.)
+
+**Common Pitfalls:**
+- Expecting Ingress to work without controller installed
+- Wrong backend service names or ports
+- Incorrect path routing precedence
+- TLS certificate not auto-provisioned (cert-manager may not be installed)
+
+---
+
+### NetworkPolicy
+**Description:** Enforce ingress/egress traffic rules between pods
+**Use Case:** Network segmentation, compliance, security hardening
+
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: example-networkpolicy
+  namespace: example-namespace
+  labels:
+    policy: access
+  annotations:
+    description: "Restrict traffic to frontend pods"
+spec:
+  podSelector:
+    matchLabels:
+      app: example
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          project: frontend
+    - podSelector:
+        matchLabels:
+          app: frontend
+    ports:
+    - protocol: TCP
+      port: 80
+    - protocol: TCP
+      port: 443
+  egress:
+  # CORRECTED: DNS rule listed first for visibility and priority
+  - to:
+    - podSelector: {}
+    ports:
+    - protocol: UDP
+      port: 53  # CRITICAL: Always allow DNS for service discovery
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          project: backend
+    ports:
+    - protocol: TCP
+      port: 5432
+    - protocol: TCP
+      port: 443
+```
+
+**Apply Example:**
+```bash
+kubectl apply -f networkpolicy.yaml -n example-namespace
+kubectl get networkpolicy -n example-namespace
+kubectl describe networkpolicy example-networkpolicy -n example-namespace
+```
+
+**Customization Notes:**
+- Always allow DNS egress (UDP 53) unless air-gapped
+- Use `namespaceSelector` to allow cross-namespace traffic
+- Start with `Ingress` rules, then add `Egress` restrictions
+- Test gradually to avoid breaking applications
+- Include explicit deny rules for security
+- NetworkPolicy is only enforced if CNI plugin supports it (Calico, Weave, Cilium, etc.)
+
+**Common Pitfalls:**
+- Blocking DNS causing application failures
+- Forgetting `namespaceSelector: {}` for cluster-internal traffic
+- Overly restrictive rules breaking service discovery
+- NetworkPolicy not enforced without CNI support
+- Missing explicit allow rules (deny-all default doesn't apply without policy)
+- Applying NetworkPolicy without cluster CNI support
+
+---
