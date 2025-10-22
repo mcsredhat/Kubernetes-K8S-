@@ -226,41 +226,74 @@ metadata:
   labels:
     role-type: developer
     access-level: limited
-
 rules:
 # Pod access (read and list)
 - apiGroups: [""]
   resources: ["pods", "pods/log"]
   verbs: ["get", "list", "watch"]
-
 # Pod exec (limited debugging)
 - apiGroups: [""]
   resources: ["pods/exec"]
   verbs: ["create"]
-
 # ConfigMaps (read only)
 - apiGroups: [""]
   resources: ["configmaps"]
   verbs: ["get", "list"]
-
 # Services (read only)
 - apiGroups: [""]
   resources: ["services"]
   verbs: ["get", "list"]
-
 # Deployments (read, create, update)
 - apiGroups: ["apps"]
   resources: ["deployments", "deployments/rollback", "deployments/scale"]
   verbs: ["get", "list", "create", "update", "patch"]
-
 # ReplicaSets (read only)
 - apiGroups: ["apps"]
   resources: ["replicasets"]
   verbs: ["get", "list"]
-
 # Events (read)
 - apiGroups: [""]
   resources: ["events"]
+  verbs: ["get", "list"]
+# Secrets (read only - for debugging env vars)
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get", "list"]
+# StatefulSets (for stateful workloads)
+- apiGroups: ["apps"]
+  resources: ["statefulsets", "statefulsets/scale"]
+  verbs: ["get", "list", "create", "update", "patch"]
+# Jobs and CronJobs (for batch processing)
+- apiGroups: ["batch"]
+  resources: ["jobs", "cronjobs"]
+  verbs: ["get", "list", "create", "update", "patch", "delete"]
+# Ingress (read only - to check routing)
+- apiGroups: ["networking.k8s.io"]
+  resources: ["ingresses"]
+  verbs: ["get", "list"]
+# HorizontalPodAutoscalers (read/update for scaling)
+- apiGroups: ["autoscaling"]
+  resources: ["horizontalpodautoscalers"]
+  verbs: ["get", "list", "update", "patch"]
+# PersistentVolumeClaims (read only)
+- apiGroups: [""]
+  resources: ["persistentvolumeclaims"]
+  verbs: ["get", "list"]
+# ServiceAccounts (read only)
+- apiGroups: [""]
+  resources: ["serviceaccounts"]
+  verbs: ["get", "list"]
+# ResourceQuotas and LimitRanges (read - to understand constraints)
+- apiGroups: [""]
+  resources: ["resourcequotas", "limitranges"]
+  verbs: ["get", "list"]
+# NetworkPolicies (read only - for debugging connectivity)
+- apiGroups: ["networking.k8s.io"]
+  resources: ["networkpolicies"]
+  verbs: ["get", "list"]
+# Endpoints (read only - for service discovery debugging)
+- apiGroups: [""]
+  resources: ["endpoints"]
   verbs: ["get", "list"]
 
 ---
@@ -362,12 +395,23 @@ metadata:
 
 spec:
   ingressClassName: nginx
+============================================================================
+  # TLS/SSL CONFIGURATION - HTTPS Setup
+  # ============================================================================
+  # Enables encrypted HTTPS connections for specified domains
   tls:
   - hosts:
     - api.example.com
     - backend.example.com
     secretName: backend-tls-cert
+# ============================================================================
+  # ROUTING RULES - Traffic Direction
+  # ============================================================================
+  # Define how incoming requests are routed to backend services
   rules:
+# ----------------------------------------------------------------------------
+  # RULE 1: api.example.com - Main API Endpoint
+  # ----------------------------------------------------------------------------
   - host: api.example.com
     http:
       paths:
@@ -378,6 +422,9 @@ spec:
             name: backend-service
             port:
               number: 8080
+# ----------------------------------------------------------------------------
+  # RULE 2: backend.example.com - Version-specific and Health Endpoints
+  # ----------------------------------------------------------------------------
   - host: backend.example.com
     http:
       paths:
