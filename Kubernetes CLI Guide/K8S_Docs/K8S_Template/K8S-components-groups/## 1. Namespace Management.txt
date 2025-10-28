@@ -1,492 +1,733 @@
+
 # =============================================================================
-# KUBERNETES NAMESPACE MANAGEMENT - PRODUCTION-READY
+# PRIORITYCLASS: HIGH PRIORITY
 # =============================================================================
-# Components: Namespace, ResourceQuota, LimitRange, NetworkPolicy, RBAC, Service, Ingress
-# Level: Advanced Intermediate (8/10) - Production-Ready Setup
-# Use Case: Multi-tenant clusters, environment separation, security enforcement
-# =============================================================================
-
----
-# 1. NAMESPACE - Production Configuration
-# Description: Logical isolation boundary for resources and teams with security
-# Use Case: Multi-tenant clusters, environment separation (dev/staging/prod)
-
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: example-namespace
-  labels:
-    name: example
-    environment: production
-    team: platform
-    tier: backend
-    pod-security.kubernetes.io/enforce: restricted
-    pod-security.kubernetes.io/audit: restricted
-    pod-security.kubernetes.io/warn: baseline
-  annotations:
-    description: "Production namespace with security enforcement and resource controls"
-    quota-policy: "strict"
-    rbac-policy: "minimal"
-
-spec:
-  finalizers:
-  - kubernetes
-
----
-# 2. RESOURCEQUOTA - Strict Resource Controls
-# Description: Enforces hard limits on total namespace resource consumption
-# Use Case: Preventing resource exhaustion, cost control, multi-tenant isolation
-
-apiVersion: v1
-kind: ResourceQuota
-metadata:
-  name: example-quota
-  namespace: example-namespace
-  labels:
-    quota-type: compute
-    priority: high
-  annotations:
-    description: "Strict quota for production workloads"
-    rationale: "Prevents namespace resource exhaustion and multi-tenant conflicts"
-
-spec:
-  hard:
-    # Compute Resources (CPU and Memory)
-    requests.cpu: "4"
-    requests.memory: "8Gi"
-    limits.cpu: "8"
-    limits.memory: "16Gi"
-
-    # Storage Resources
-    requests.ephemeral-storage: "20Gi"
-    limits.ephemeral-storage: "40Gi"
-    persistentvolumeclaims: "5"
-    requests.storage: "100Gi"
-
-    # Pod and Resource Count
-    pods: "30"
-    services: "10"
-    services.nodeports: "2"
-    services.loadbalancers: "1"
-
-    # ConfigMaps and Secrets
-    configmaps: "20"
-    secrets: "10"
-
-    # Networking
-    count/ingresses.networking.k8s.io: "5"
-    count/networkpolicies.networking.k8s.io: "10"
-
-  scopeSelector:
-    matchExpressions:
-    - operator: In
-      scopeName: PriorityClass
-      values: ["high", "medium"]
-    - operator: NotIn
-      scopeName: PriorityClass
-      values: ["system"]
-
----
-# 3. LIMITRANGE - Per-Pod and Per-Container Controls
-# Description: Sets default, min, and max resource constraints per container/pod
-# Use Case: Preventing resource waste, enforcing deployment standards
-
-apiVersion: v1
-kind: LimitRange
-metadata:
-  name: example-limitrange
-  namespace: example-namespace
-  labels:
-    limit-type: compute
-    enforcement-level: strict
-  annotations:
-    description: "Enforces container resource standards and prevents resource misuse"
-    created-by: "platform-team"
-
-spec:
-  limits:
-  # Container-level limits
-  - type: Container
-    default:
-      cpu: 500m
-      memory: 256Mi
-    defaultRequest:
-      cpu: 200m
-      memory: 128Mi
-    max:
-      cpu: 1
-      memory: 512Mi
-    min:
-      cpu: 100m
-      memory: 64Mi
-
-  # Pod-level limits
-  - type: Pod
-    max:
-      cpu: 2
-      memory: 1Gi
-      ephemeral-storage: 10Gi
-    min:
-      cpu: 100m
-      memory: 64Mi
-      ephemeral-storage: 500Mi
-
-  # PersistentVolumeClaim limits
-  - type: PersistentVolumeClaim
-    max:
-      storage: 50Gi
-    min:
-      storage: 1Gi
-
----
-# 4. NETWORKPOLICY - Network Segmentation and Security
-# Description: Controls inbound and outbound traffic to pods
-# Use Case: Microsegmentation, security enforcement, compliance
-
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: example-network-policy
-  namespace: example-namespace
-  labels:
-    security: high
-    policy-type: ingress-egress
-  annotations:
-    description: "Restricts traffic to/from pods in the namespace"
-    created-by: "security-team"
-
-spec:
-  podSelector:
-    matchLabels:
-      tier: backend
-  policyTypes:
-  - Ingress
-  - Egress
-
-  ingress:
-  # Allow traffic from frontend tier
-  - from:
-    - namespaceSelector:
-        matchLabels:
-          name: example-namespace
-      podSelector:
-        matchLabels:
-          tier: frontend
-    ports:
-    - protocol: TCP
-      port: 8080
-    - protocol: TCP
-      port: 3000
-
-  # Allow traffic from ingress controller
-  - from:
-    - namespaceSelector:
-        matchLabels:
-          name: ingress-nginx
-    ports:
-    - protocol: TCP
-      port: 8080
-
-  egress:
-  # Allow DNS queries
-  - to:
-    - namespaceSelector: {}
-    ports:
-    - protocol: UDP
-      port: 53
-
-  # Allow traffic to other backend pods
-  - to:
-    - podSelector:
-        matchLabels:
-          tier: backend
-    ports:
-    - protocol: TCP
-      port: 8080
-
-  # Allow traffic to databases
-  - to:
-    - namespaceSelector:
-        matchLabels:
-          name: databases
-    ports:
-    - protocol: TCP
-      port: 5432
-
----
-# 5. ROLE - Define Permissions for Resource Access
-# Description: Defines granular permissions for namespace resources
-# Use Case: RBAC, principle of least privilege
-
-apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
-  name: backend-developer
-  namespace: example-namespace
-  labels:
-    role-type: developer
-    access-level: limited
-rules:
-# Pod access (read and list)
-- apiGroups: [""]
-  resources: ["pods", "pods/log"]
-  verbs: ["get", "list", "watch"]
-# Pod exec (limited debugging)
-- apiGroups: [""]
-  resources: ["pods/exec"]
-  verbs: ["create"]
-# ConfigMaps (read only)
-- apiGroups: [""]
-  resources: ["configmaps"]
-  verbs: ["get", "list"]
-# Services (read only)
-- apiGroups: [""]
-  resources: ["services"]
-  verbs: ["get", "list"]
-# Deployments (read, create, update)
-- apiGroups: ["apps"]
-  resources: ["deployments", "deployments/rollback", "deployments/scale"]
-  verbs: ["get", "list", "create", "update", "patch"]
-# ReplicaSets (read only)
-- apiGroups: ["apps"]
-  resources: ["replicasets"]
-  verbs: ["get", "list"]
-# Events (read)
-- apiGroups: [""]
-  resources: ["events"]
-  verbs: ["get", "list"]
-# Secrets (read only - for debugging env vars)
-- apiGroups: [""]
-  resources: ["secrets"]
-  verbs: ["get", "list"]
-# StatefulSets (for stateful workloads)
-- apiGroups: ["apps"]
-  resources: ["statefulsets", "statefulsets/scale"]
-  verbs: ["get", "list", "create", "update", "patch"]
-# Jobs and CronJobs (for batch processing)
-- apiGroups: ["batch"]
-  resources: ["jobs", "cronjobs"]
-  verbs: ["get", "list", "create", "update", "patch", "delete"]
-# Ingress (read only - to check routing)
-- apiGroups: ["networking.k8s.io"]
-  resources: ["ingresses"]
-  verbs: ["get", "list"]
-# HorizontalPodAutoscalers (read/update for scaling)
-- apiGroups: ["autoscaling"]
-  resources: ["horizontalpodautoscalers"]
-  verbs: ["get", "list", "update", "patch"]
-# PersistentVolumeClaims (read only)
-- apiGroups: [""]
-  resources: ["persistentvolumeclaims"]
-  verbs: ["get", "list"]
-# ServiceAccounts (read only)
-- apiGroups: [""]
-  resources: ["serviceaccounts"]
-  verbs: ["get", "list"]
-# ResourceQuotas and LimitRanges (read - to understand constraints)
-- apiGroups: [""]
-  resources: ["resourcequotas", "limitranges"]
-  verbs: ["get", "list"]
-# NetworkPolicies (read only - for debugging connectivity)
-- apiGroups: ["networking.k8s.io"]
-  resources: ["networkpolicies"]
-  verbs: ["get", "list"]
-# Endpoints (read only - for service discovery debugging)
-- apiGroups: [""]
-  resources: ["endpoints"]
-  verbs: ["get", "list"]
-
----
-# 6. ROLEBINDING - Bind Role to Users/Groups/ServiceAccounts
-# Description: Grants permissions defined in Role to subjects
-# Use Case: Team access control, service account permissions
-
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  name: backend-developer-binding
-  namespace: example-namespace
-  labels:
-    binding-type: user-role
-    team: backend
-
-subjects:
-# Bind to a group (recommended for teams)
-- kind: Group
-  name: backend-developers@company.com
-  apiGroup: rbac.authorization.k8s.io
-
-# Bind to specific service account
-- kind: ServiceAccount
-  name: backend-sa
-  namespace: example-namespace
-
-roleRef:
-  kind: Role
-  name: backend-developer
-  apiGroup: rbac.authorization.k8s.io
-
----
-# 7. SERVICEACCOUNT - Identity for Pods
-# Description: Provides identity and authentication for workloads
-# Use Case: Pod-to-pod communication, external service access
-
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: backend-sa
-  namespace: example-namespace
-  labels:
-    service: backend
-    tier: application
-
-automountServiceAccountToken: true
-
----
-# 8. SERVICE - Internal Service Discovery
-# Description: Exposes pods internally to other services
-# Use Case: Internal load balancing, DNS-based service discovery
-
-apiVersion: v1
-kind: Service
-metadata:
-  name: backend-service
-  namespace: example-namespace
-  labels:
-    app: backend
-    tier: backend
-  annotations:
-    description: "Internal service for backend pods"
-
-spec:
-  type: ClusterIP
-  selector:
-    app: backend
-    tier: backend
-  ports:
-  - name: http
-    port: 8080
-    targetPort: 8080
-    protocol: TCP
-  - name: metrics
-    port: 9090
-    targetPort: 9090
-    protocol: TCP
-  sessionAffinity: None
-
----
-# 9. INGRESS - External Access and Routing
-# Description: Exposes services externally with HTTP(S) routing
-# Use Case: Public API access, SSL termination, path-based routing
-
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: backend-ingress
-  namespace: example-namespace
-  labels:
-    app: backend
-    tier: ingress
-  annotations:
-    cert-manager.io/cluster-issuer: letsencrypt-prod
-    nginx.ingress.kubernetes.io/rate-limit: "100"
-    nginx.ingress.kubernetes.io/ssl-redirect: "true"
-    description: "Exposes backend service externally with TLS"
-
-spec:
-  ingressClassName: nginx
-============================================================================
-  # TLS/SSL CONFIGURATION - HTTPS Setup
-  # ============================================================================
-  # Enables encrypted HTTPS connections for specified domains
-  tls:
-  - hosts:
-    - api.example.com
-    - backend.example.com
-    secretName: backend-tls-cert
-# ============================================================================
-  # ROUTING RULES - Traffic Direction
-  # ============================================================================
-  # Define how incoming requests are routed to backend services
-  rules:
-# ----------------------------------------------------------------------------
-  # RULE 1: api.example.com - Main API Endpoint
-  # ----------------------------------------------------------------------------
-  - host: api.example.com
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: backend-service
-            port:
-              number: 8080
-# ----------------------------------------------------------------------------
-  # RULE 2: backend.example.com - Version-specific and Health Endpoints
-  # ----------------------------------------------------------------------------
-  - host: backend.example.com
-    http:
-      paths:
-      - path: /v1
-        pathType: Prefix
-        backend:
-          service:
-            name: backend-service
-            port:
-              number: 8080
-      - path: /health
-        pathType: Prefix
-        backend:
-          service:
-            name: backend-service
-            port:
-              number: 8080
-
----
-# INSTALLATION AND VERIFICATION GUIDE
+# RESOURCE: PriorityClass (Cluster-scoped)
+# PURPOSE: Defines scheduling priority for critical production workloads
+# CREATION ORDER: STEP 1 - Must be created before ResourceQuota references it
+# DEPENDENCIES: None (cluster-scoped resource)
+# USAGE: Referenced by ResourceQuota scopeSelector and pod.spec.priorityClassName
 # =============================================================================
 
-# Apply all resources in order:
-# kubectl apply -f namespace-management.yaml
+apiVersion: scheduling.k8s.io/v1  # API version for PriorityClass resource
+kind: PriorityClass                # Resource type: scheduling priority definition
+metadata:                          # Metadata section (no namespace - cluster-scoped)
+  name: high                       # Name: "high" - referenced by pods and quotas
+value: 1000                        # Priority value: higher number = higher priority (max: 1,000,000,000)
+globalDefault: false               # Not default priority (pods must explicitly request it)
+description: "High priority for critical production workloads"  # Human-readable description
 
-# Verify namespace creation:
-# kubectl describe ns example-namespace
+---
+# =============================================================================
+# PRIORITYCLASS: MEDIUM PRIORITY
+# =============================================================================
+# RESOURCE: PriorityClass (Cluster-scoped)
+# PURPOSE: Defines scheduling priority for standard production workloads
+# CREATION ORDER: STEP 1 - Must be created before ResourceQuota references it
+# =============================================================================
 
-# Verify ResourceQuota:
-# kubectl describe resourcequota example-quota -n example-namespace
-# kubectl get resourcequota -n example-namespace -o wide
+apiVersion: scheduling.k8s.io/v1  # API version for PriorityClass resource
+kind: PriorityClass                # Resource type: scheduling priority definition
+metadata:                          # Metadata section (no namespace - cluster-scoped)
+  name: medium                     # Name: "medium" - referenced by pods and quotas
+value: 500                         # Priority value: lower than "high", higher than default (0)
+globalDefault: false               # Not default priority (pods must explicitly request it)
+description: "Medium priority for standard production workloads"  # Human-readable description
 
-# Verify LimitRange:
-# kubectl get limitranges -n example-namespace
-# kubectl describe limitrange example-limitrange -n example-namespace
+---
+# =============================================================================
+# NAMESPACE CONFIGURATION
+# =============================================================================
+# RESOURCE: Namespace
+# PURPOSE: Logical isolation boundary for resources with security and quota controls
+# CREATION ORDER: STEP 2 - Must exist before namespace-scoped resources
+# DEPENDENCIES: None
+# SECURITY: Pod Security Standards enforced (restricted level)
+# =============================================================================
 
-# Verify NetworkPolicy:
-# kubectl get networkpolicy -n example-namespace
-# kubectl describe networkpolicy example-network-policy -n example-namespace
+apiVersion: v1                     # API version for core Kubernetes resources
+kind: Namespace                    # Resource type: namespace for isolation
+metadata:                          # Metadata section
+  name: devops                     # Namespace name: "devops"
+  labels:                          # Labels for selection and organization
+    name: devops                   # Label matches namespace name
+    environment: production        # Environment label: production workloads
+    team: platform                 # Owning team: platform team
+    tier: backend                  # Application tier: backend services
+    # Pod Security Standards (PSS) labels - enforce security policies
+    pod-security.kubernetes.io/enforce: restricted  # Enforce: most restrictive, blocks non-compliant pods
+    pod-security.kubernetes.io/audit: restricted    # Audit: logs violations without blocking
+    pod-security.kubernetes.io/warn: baseline       # Warn: shows warnings for baseline violations
+  annotations:                     # Annotations for metadata (not used for selection)
+    description: "Production namespace with security enforcement and resource controls"  # Purpose description
+    quota-policy: "strict"         # Policy indicator: strict quota enforcement
+    rbac-policy: "minimal"         # Policy indicator: minimal necessary permissions
+---
+# =============================================================================
+# RESOURCEQUOTA - COMPUTE RESOURCES (WITH PRIORITY SCOPING)
+# =============================================================================
+# RESOURCE: ResourceQuota
+# PURPOSE: Limits aggregate resource consumption for high/medium priority workloads
+# CREATION ORDER: STEP 3 - After namespace and PriorityClasses exist
+# DEPENDENCIES: Namespace (devops), PriorityClasses (high, medium)
+# SCOPE: Only applies to pods with priorityClassName: high or medium
+#CPU RESOURCES(Pod CPU allocation limits),MEMORY RESOURCES(Pod memory allocation limits),STORAGE RESOURCES(Ephemeral storage for pods),POD COUNT(Maximum number of pod instances)
+# =============================================================================
 
-# Verify RBAC Role:
-# kubectl get roles -n example-namespace
-# kubectl describe role backend-developer -n example-namespace
+apiVersion: v1                     # API version for core Kubernetes resources
+kind: ResourceQuota                # Resource type: quota enforcement
+metadata:                          # Metadata section
+  name: compute-quota              # Quota name: identifies this specific quota
+  namespace: devops                # Namespace: applies only to "devops" namespace
+  labels:                          # Labels for organization
+    quota-type: compute            # Type: compute resource quota (CPU, memory)
+    priority: high                 # Priority level: applies to high/medium priority pods
+  annotations:                     # Annotations for documentation
+    description: "Compute quota for high/medium priority workloads"  # Purpose
+    rationale: "Prevents namespace resource exhaustion for priority workloads"  # Reason
+spec:                              # Quota specification
+  hard:                            # Hard limits (cannot be exceeded)
+    # -------------------------------------------------------------------------
+    # CPU RESOURCES - Pod CPU allocation limits
+    # -------------------------------------------------------------------------
+    requests.cpu: "4"              # Max total CPU requests: 4 cores across all pods
+    limits.cpu: "8"                # Max total CPU limits: 8 cores across all pods
+    
+    # -------------------------------------------------------------------------
+    # MEMORY RESOURCES - Pod memory allocation limits
+    # -------------------------------------------------------------------------
+    requests.memory: "8Gi"         # Max total memory requests: 8 GiB across all pods
+    limits.memory: "16Gi"          # Max total memory limits: 16 GiB across all pods
+    
+    # -------------------------------------------------------------------------
+    # STORAGE RESOURCES - Ephemeral storage for pods
+    # -------------------------------------------------------------------------
+    requests.ephemeral-storage: "20Gi"  # Max total ephemeral storage requests: 20 GiB
+    limits.ephemeral-storage: "40Gi"    # Max total ephemeral storage limits: 40 GiB
+    
+    # -------------------------------------------------------------------------
+    # POD COUNT - Maximum number of pod instances
+    # -------------------------------------------------------------------------
+    pods: "30"                     # Max number of pods: 30 pods total
+    
+  # ---------------------------------------------------------------------------
+  # SCOPE SELECTOR - Defines which resources this quota applies to
+  # ---------------------------------------------------------------------------
+  scopeSelector:                   # Scope selector: filters resources by criteria
+    matchExpressions:              # Match expressions for scope
+    - operator: In                 # Operator: "In" checks if value is in the list
+      scopeName: PriorityClass     # Scope: filter by PriorityClass
+      values: ["high", "medium"]   # Values: only pods with these priority classes count against quota
 
-# Verify RoleBinding:
-# kubectl get rolebindings -n example-namespace
-# kubectl describe rolebinding backend-developer-binding -n example-namespace
+---
+# =============================================================================
+# RESOURCEQUOTA - OBJECT COUNTS (NO PRIORITY SCOPING)
+# =============================================================================
+# RESOURCE: ResourceQuota
+# PURPOSE: Limits number of Kubernetes objects to prevent etcd bloat
+# CREATION ORDER: STEP 3 - After namespace exists
+# DEPENDENCIES: Namespace (devops)
+# SCOPE: Applies to ALL objects in namespace (no priority filtering)
+# STORAGE OBJECTS(Persistent volume claims and storage requests),SERVICE OBJECTS(Network service resources),CONFIGURATION OBJECTS(ConfigMaps and Secrets),NETWORKING OBJECTS(Ingress and NetworkPolicy resources)
+# =============================================================================
 
-# Verify ServiceAccount:
-# kubectl get serviceaccounts -n example-namespace
-# kubectl describe sa backend-sa -n example-namespace
+apiVersion: v1                     # API version for core Kubernetes resources
+kind: ResourceQuota                # Resource type: quota enforcement
+metadata:                          # Metadata section
+  name: object-quota               # Quota name: identifies this specific quota
+  namespace: devops                # Namespace: applies only to "devops" namespace
+  labels:                          # Labels for organization
+    quota-type: objects            # Type: object count quota (not compute)
+    priority: high                 # Priority indicator (informational only - no scope selector)
+  annotations:                     # Annotations for documentation
+    description: "Object count quota for all resources"  # Purpose
+    rationale: "Prevents object sprawl and etcd bloat"   # Reason: limits API server load
+spec:                              # Quota specification
+  hard:                            # Hard limits (cannot be exceeded)
+    # -------------------------------------------------------------------------
+    # STORAGE OBJECTS - Persistent volume claims and storage requests
+    # -------------------------------------------------------------------------
+    persistentvolumeclaims: "5"    # Max PVCs: 5 persistent volume claims
+    requests.storage: "100Gi"      # Max total storage requests: 100 GiB across all PVCs
+    
+    # -------------------------------------------------------------------------
+    # SERVICE OBJECTS - Network service resources
+    # -------------------------------------------------------------------------
+    services: "10"                 # Max services: 10 service objects (ClusterIP, NodePort, LoadBalancer)
+    services.nodeports: "2"        # Max NodePort services: 2 (NodePort services consume cluster ports)
+    services.loadbalancers: "1"    # Max LoadBalancer services: 1 (cloud load balancers cost money)
+    
+    # -------------------------------------------------------------------------
+    # CONFIGURATION OBJECTS - ConfigMaps and Secrets
+    # -------------------------------------------------------------------------
+    configmaps: "20"               # Max ConfigMaps: 20 configuration objects
+    secrets: "10"                  # Max Secrets: 10 secret objects
+    
+    # -------------------------------------------------------------------------
+    # NETWORKING OBJECTS - Ingress and NetworkPolicy resources
+    # -------------------------------------------------------------------------
+    count/ingresses.networking.k8s.io: "5"        # Max Ingresses: 5 ingress objects
+    count/networkpolicies.networking.k8s.io: "10" # Max NetworkPolicies: 10 network policy objects
+---
+# =============================================================================
+# LIMITRANGE - PER-RESOURCE CONSTRAINTS
+# =============================================================================
+# RESOURCE: LimitRange
+# PURPOSE: Enforces min/max/default resource limits on individual containers and pods
+# CREATION ORDER: STEP 4 - After namespace exists, before workloads
+# DEPENDENCIES: Namespace (devops)
+# EFFECT: Applies to NEW pods only (not existing pods)
+# =============================================================================
+apiVersion: v1                     # API version for core Kubernetes resources
+kind: LimitRange                   # Resource type: per-resource constraints
+metadata:                          # Metadata section
+  name: example-limitrange         # LimitRange name
+  namespace: devops                # Namespace: applies only to "devops" namespace
+  labels:                          # Labels for organization
+    limit-type: compute            # Type: compute resource limits
+    enforcement-level: strict      # Enforcement: strict admission control
+  annotations:                     # Annotations for documentation
+    description: "Enforces container resource standards and prevents resource misuse"  # Purpose
+    created-by: "platform-team"    # Creator: platform team owns this policy
+spec:                              # LimitRange specification
+  limits:                          # List of limit definitions
 
-# Verify Service:
-# kubectl get svc -n example-namespace
-# kubectl describe svc backend-service -n example-namespace
+  # ===========================================================================
+  # CONTAINER LIMITS - Per-container resource constraints
+  # ===========================================================================
+  - type: Container                # Type: applies to each container in a pod
+    
+    # -------------------------------------------------------------------------
+    # DEFAULT LIMITS - Applied when container doesn't specify limits
+    # -------------------------------------------------------------------------
+    # These values are used if the container definition omits "resources.limits"
+    # Prevents unlimited resource consumption by containers without explicit limits
+    # -------------------------------------------------------------------------
+    default:                       # Default limits (applied if container doesn't specify limits)
+      cpu: 500m                    # Default CPU limit: 0.5 cores (500 millicores)
+      memory: 256Mi                # Default memory limit: 256 MiB
+    
+    # -------------------------------------------------------------------------
+    # DEFAULT REQUESTS - Applied when container doesn't specify requests
+    # -------------------------------------------------------------------------
+    # These values are used if the container definition omits "resources.requests"
+    # Ensures minimum resource reservation for scheduling decisions
+    # -------------------------------------------------------------------------
+    defaultRequest:                # Default requests (applied if container doesn't specify requests)
+      cpu: 200m                    # Default CPU request: 0.2 cores (200 millicores)
+      memory: 128Mi                # Default memory request: 128 MiB
+    
+    # -------------------------------------------------------------------------
+    # MAXIMUM CONSTRAINTS - Upper bounds for container resources
+    # -------------------------------------------------------------------------
+    # Containers cannot request or be assigned more than these values
+    # Prevents resource hogging by individual containers
+    # -------------------------------------------------------------------------
+    max:                           # Maximum allowed (cannot exceed these values)
+      cpu: "1"                     # Max CPU: 1 core per container
+      memory: 512Mi                # Max memory: 512 MiB per container
+    
+    # -------------------------------------------------------------------------
+    # MINIMUM CONSTRAINTS - Lower bounds for container resources
+    # -------------------------------------------------------------------------
+    # Containers must request at least these values
+    # Prevents under-provisioning that could cause instability
+    # -------------------------------------------------------------------------
+    min:                           # Minimum required (must request at least these values)
+      cpu: 100m                    # Min CPU: 0.1 cores (100 millicores)
+      memory: 64Mi                 # Min memory: 64 MiB
 
-# Verify Ingress:
-# kubectl get ingress -n example-namespace
-# kubectl describe ingress backend-ingress -n example-namespace
+  # ===========================================================================
+  # POD LIMITS - Per-pod aggregate resource constraints
+  # ===========================================================================
+  - type: Pod                      # Type: applies to entire pod (sum of all containers)
+    
+    # -------------------------------------------------------------------------
+    # MAXIMUM POD RESOURCES - Upper bounds for total pod consumption
+    # -------------------------------------------------------------------------
+    # Total of all containers (including init containers and sidecars)
+    # Example: Pod with 3 containers requesting 1 CPU each = 3 CPU total
+    # -------------------------------------------------------------------------
+    max:                           # Maximum allowed per pod
+      cpu: "2"                     # Max CPU: 2 cores per pod (total across all containers)
+      memory: 1Gi                  # Max memory: 1 GiB per pod (total across all containers)
+      ephemeral-storage: 10Gi      # Max ephemeral storage: 10 GiB per pod (EmptyDir, logs, temp files)
+    
+    # -------------------------------------------------------------------------
+    # MINIMUM POD RESOURCES - Lower bounds for total pod consumption
+    # -------------------------------------------------------------------------
+    # Ensures pods request sufficient resources for stability
+    # Prevents creation of under-provisioned pods
+    # -------------------------------------------------------------------------
+    min:                           # Minimum required per pod
+      cpu: 100m                    # Min CPU: 0.1 cores per pod (total across all containers)
+      memory: 64Mi                 # Min memory: 64 MiB per pod (total across all containers)
+      ephemeral-storage: 500Mi     # Min ephemeral storage: 500 MiB per pod (EmptyDir, logs, temp files)
 
-# View all resources in namespace:
-# kubectl get all -n example-namespace
+  # ===========================================================================
+  # PVC LIMITS - Persistent Volume Claim storage constraints
+  # ===========================================================================
+  - type: PersistentVolumeClaim    # Type: applies to PVC storage requests
+    
+    # -------------------------------------------------------------------------
+    # MAXIMUM STORAGE - Upper bound for PVC size
+    # -------------------------------------------------------------------------
+    # Prevents creation of excessively large volumes
+    # Helps control storage costs and capacity planning
+    # -------------------------------------------------------------------------
+    max:                           # Maximum allowed per PVC
+      storage: 50Gi                # Max storage: 50 GiB per PVC
+    
+    # -------------------------------------------------------------------------
+    # MINIMUM STORAGE - Lower bound for PVC size
+    # -------------------------------------------------------------------------
+    # Ensures PVCs are provisioned with sufficient capacity
+    # Prevents tiny volumes that may cause application issues
+    # -------------------------------------------------------------------------
+    min:                           # Minimum required per PVC
+      storage: 1Gi                 # Min storage: 1 GiB per PVC
+---
+# =============================================================================
+# NETWORKPOLICY - DEFAULT DENY (SECURITY BASELINE)
+# =============================================================================
+# RESOURCE: NetworkPolicy
+# PURPOSE: Implements zero-trust network security by denying all traffic by default
+# CREATION ORDER: STEP 5 - Apply before workloads to ensure security from start
+# DEPENDENCIES: Namespace (devops)
+# SECURITY: Critical - all traffic denied unless explicitly allowed by other policies
+# =============================================================================
 
-# Delete all resources:
-# kubectl delete -f namespace-management.yaml
+apiVersion: networking.k8s.io/v1  # API version for network policies
+kind: NetworkPolicy                # Resource type: network traffic control
+metadata:                          # Metadata section
+  name: default-deny-all           # Policy name: describes default deny behavior
+  namespace: devops                # Namespace: applies only to "devops" namespace
+  labels:                          # Labels for organization
+    security: critical             # Security level: critical security control
+    policy-type: default-deny      # Type: default deny policy (baseline)
+  annotations:                     # Annotations for documentation
+    description: "Baseline security - denies all traffic by default"  # Purpose
+    security-note: "All communication must be explicitly allowed"      # Important note
+spec:                              # NetworkPolicy specification
+  podSelector: {}                  # Empty selector: applies to ALL pods in namespace
+  policyTypes:                     # Types of traffic to control
+  - Ingress                        # Control incoming traffic (with no ingress rules = deny all)
+  - Egress                         # Control outgoing traffic (with no egress rules = deny all)
+  # NOTE: No ingress or egress rules defined = ALL traffic denied
+
+---
+# =============================================================================
+# NETWORKPOLICY - APPLICATION TRAFFIC ALLOWLIST
+# =============================================================================
+# RESOURCE: NetworkPolicy
+# PURPOSE: Explicitly allows required traffic for backend application
+# CREATION ORDER: STEP 6 - After default-deny policy
+# DEPENDENCIES: Namespace (devops), kube-system namespace with proper labels
+# SECURITY: Implements least-privilege network access
+# =============================================================================
+
+apiVersion: networking.k8s.io/v1  # API version for network policies
+kind: NetworkPolicy                # Resource type: network traffic control
+metadata:                          # Metadata section
+  name: backend-traffic-allowlist  # Policy name: backend application allowlist
+  namespace: devops                # Namespace: applies only to "devops" namespace
+  labels:                          # Labels for organization
+    security: high                 # Security level: high security control
+    policy-type: ingress-egress    # Type: controls both ingress and egress
+  annotations:                     # Annotations for documentation
+    description: "Allows required traffic to/from backend pods"  # Purpose
+    created-by: "security-team"    # Creator: security team
+    last-updated: "2025-10-24"     # Last update date
+spec:                              # NetworkPolicy specification
+  podSelector:                     # Selector: which pods this policy applies to
+    matchLabels:                   # Match pods with these labels
+      tier: backend                # Applies only to pods with label "tier: backend"
+  policyTypes:                     # Types of traffic to control
+  - Ingress                        # Control incoming traffic
+  - Egress                         # Control outgoing traffic
+  ingress:                         # Ingress rules (incoming traffic)
+  - from:                          # Rule 1: Allow from frontend pods in same namespace
+    - namespaceSelector:           # Namespace selector: filter by namespace labels
+        matchLabels:               # Match namespaces with these labels
+          name: devops             # CORRECTED: Changed from "devops-ns" to "devops" to match namespace label
+      podSelector:                 # Pod selector: further filter by pod labels within namespace
+        matchLabels:               # Match pods with these labels
+          tier: frontend           # Allow traffic from pods with label "tier: frontend"
+    ports:                         # Allowed ports for this rule
+    - protocol: TCP                # Protocol: TCP
+      port: 8080                   # Port: 8080 (main application port)
+    - protocol: TCP                # Protocol: TCP
+      port: 3000                   # Port: 3000 (alternative/admin port)
+  - from:                          # Rule 2: Allow from ingress controller
+    - namespaceSelector:           # Namespace selector
+        matchLabels:               # Match namespaces with these labels
+          name: ingress-nginx      # Allow traffic from ingress-nginx namespace
+    ports:                         # Allowed ports for this rule
+    - protocol: TCP                # Protocol: TCP
+      port: 8080                   # Port: 8080 (main application port)
+  egress:                          # Egress rules (outgoing traffic)
+  # EGRESS RULE 1: DNS Resolution (Critical for service discovery)
+  - to:                            # Allow DNS queries to CoreDNS
+    - namespaceSelector:           # Namespace selector
+        matchLabels:               # Match namespaces with these labels
+          kubernetes.io/metadata.name: kube-system  # CORRECTED: Use standard k8s namespace label
+      podSelector:                 # Pod selector: target CoreDNS pods
+        matchLabels:               # Match pods with these labels
+          k8s-app: kube-dns        # CoreDNS pods have this label
+    ports:                         # Allowed ports for DNS
+    - protocol: UDP                # Protocol: UDP (primary DNS protocol)
+      port: 53                     # Port: 53 (DNS port)
+    - protocol: TCP                # Protocol: TCP (DNS over TCP for large responses)
+      port: 53                     # Port: 53 (DNS port)
+  # EGRESS RULE 2: Backend-to-backend communication
+  - to:                            # Allow traffic to other backend pods
+    - podSelector:                 # Pod selector: target backend pods in same namespace
+        matchLabels:               # Match pods with these labels
+          tier: backend            # Allow traffic to pods with label "tier: backend"
+    ports:                         # Allowed ports
+    - protocol: TCP                # Protocol: TCP
+      port: 8080                   # Port: 8080 (inter-service communication)
+  # EGRESS RULE 3: Database access
+  - to:                            # Allow traffic to database
+    - namespaceSelector:           # Namespace selector
+        matchLabels:               # Match namespaces with these labels
+          name: databases          # Allow traffic to "databases" namespace
+    ports:                         # Allowed ports
+    - protocol: TCP                # Protocol: TCP
+      port: 5432                   # Port: 5432 (PostgreSQL default port)
+  # EGRESS RULE 4: External HTTPS (public APIs, webhooks)
+  - to:                            # Allow HTTPS to external services
+    - ipBlock:                     # IP block selector: allows by IP range
+        cidr: 0.0.0.0/0            # CIDR: all IPs (entire internet)
+        except:                    # Exceptions: exclude private/internal IPs
+        - 10.0.0.0/8               # Exclude: private network class A
+        - 172.16.0.0/12            # Exclude: private network class B
+        - 192.168.0.0/16           # Exclude: private network class C
+        - 169.254.169.254/32       # Exclude: cloud metadata service (AWS, GCP, Azure)
+    ports:                         # Allowed ports
+    - protocol: TCP                # Protocol: TCP
+      port: 443                    # Port: 443 (HTTPS only - no plain HTTP)
+
+---
+# =============================================================================
+# SERVICEACCOUNT - POD IDENTITY
+# =============================================================================
+# RESOURCE: ServiceAccount
+# PURPOSE: Provides identity for backend pods to authenticate with Kubernetes API
+# CREATION ORDER: STEP 7 - Before RBAC bindings
+# DEPENDENCIES: Namespace (devops)
+# SECURITY: Token auto-mount disabled (enable per-pod if needed)
+# =============================================================================
+
+apiVersion: v1                     # API version for core Kubernetes resources
+kind: ServiceAccount               # Resource type: service account for pod identity
+metadata:                          # Metadata section
+  name: backend-sa                 # Service account name: "backend-sa"
+  namespace: devops                # Namespace: "devops"
+  labels:                          # Labels for organization
+    service: backend               # Service: backend application
+    tier: application              # Tier: application layer
+  annotations:                     # Annotations for documentation
+    description: "Service account for backend pods"  # Purpose
+    security-note: "Token auto-mount disabled - enable per-pod if needed"  # Security note
+automountServiceAccountToken: false  # Security: disable automatic token mounting (pods must opt-in)
+
+---
+# =============================================================================
+# RBAC ROLE - DEVELOPER PERMISSIONS
+# =============================================================================
+# RESOURCE: Role (namespace-scoped)
+# PURPOSE: Defines what actions developers can perform in the devops namespace
+# CREATION ORDER: STEP 8 - After namespace, before RoleBinding
+# DEPENDENCIES: Namespace (devops)
+# SECURITY: Read-only for most resources, write access for deployments/jobs
+# =============================================================================
+
+apiVersion: rbac.authorization.k8s.io/v1  # API version for RBAC resources
+kind: Role                         # Resource type: namespace-scoped role
+metadata:                          # Metadata section
+  name: backend-developer          # Role name: "backend-developer"
+  namespace: devops                # Namespace: applies only to "devops" namespace
+  labels:                          # Labels for organization
+    role-type: developer           # Type: developer role
+    access-level: limited          # Access level: limited permissions
+  annotations:                     # Annotations for documentation
+    description: "Developer role with deployment and debugging permissions"  # Purpose
+    security-note: "Can read secrets and exec into pods - review for production"  # Security warning
+rules:                             # RBAC rules: list of permissions
+# RULE GROUP 1: Pod management and debugging
+- apiGroups: [""]                  # API group: core API (empty string = core)
+  resources: ["pods", "pods/log"]  # Resources: pods and pod logs
+  verbs: ["get", "list", "watch"]  # Verbs: read-only operations
+- apiGroups: [""]                  # API group: core API
+  resources: ["pods/exec"]         # Resources: pod exec subresource (kubectl exec)
+  verbs: ["create"]                # Verbs: create (execute commands in pods)
+# RULE GROUP 2: Configuration reading
+- apiGroups: [""]                  # API group: core API
+  resources: ["configmaps"]        # Resources: ConfigMaps
+  verbs: ["get", "list"]           # Verbs: read-only
+- apiGroups: [""]                  # API group: core API
+  resources: ["secrets"]           # Resources: Secrets (SECURITY: developers can read secrets)
+  verbs: ["get", "list"]           # Verbs: read-only
+# RULE GROUP 3: Service discovery
+- apiGroups: [""]                  # API group: core API
+  resources: ["services"]          # Resources: Services
+  verbs: ["get", "list"]           # Verbs: read-only
+- apiGroups: [""]                  # API group: core API
+  resources: ["endpoints"]         # Resources: Endpoints (service endpoints)
+  verbs: ["get", "list"]           # Verbs: read-only
+# RULE GROUP 4: Deployment management
+- apiGroups: ["apps"]              # API group: apps/v1 (workload resources)
+  resources: ["deployments", "deployments/rollback", "deployments/scale"]  # Resources: deployment operations
+  verbs: ["get", "list", "create", "update", "patch"]  # Verbs: full CRUD except delete
+- apiGroups: ["apps"]              # API group: apps/v1
+  resources: ["replicasets"]       # Resources: ReplicaSets (underlying deployment pods)
+  verbs: ["get", "list"]           # Verbs: read-only
+- apiGroups: ["apps"]              # API group: apps/v1
+  resources: ["statefulsets", "statefulsets/scale"]  # Resources: StatefulSet operations
+  verbs: ["get", "list", "create", "update", "patch"]  # Verbs: full CRUD except delete
+# RULE GROUP 5: Batch workloads
+- apiGroups: ["batch"]             # API group: batch/v1 (jobs and cronjobs)
+  resources: ["jobs", "cronjobs"]  # Resources: Jobs and CronJobs
+  verbs: ["get", "list", "create", "update", "patch", "delete"]  # Verbs: full CRUD (including delete)
+# RULE GROUP 6: Autoscaling
+- apiGroups: ["autoscaling"]       # API group: autoscaling/v1
+  resources: ["horizontalpodautoscalers"]  # Resources: HPA (horizontal pod autoscaler)
+  verbs: ["get", "list", "update", "patch"]  # Verbs: read and update (no create/delete)
+# RULE GROUP 7: Networking (read-only)
+- apiGroups: ["networking.k8s.io"]  # API group: networking.k8s.io/v1
+  resources: ["ingresses"]         # Resources: Ingresses
+  verbs: ["get", "list"]           # Verbs: read-only
+- apiGroups: ["networking.k8s.io"]  # API group: networking.k8s.io/v1
+  resources: ["networkpolicies"]   # Resources: NetworkPolicies
+  verbs: ["get", "list"]           # Verbs: read-only
+# RULE GROUP 8: Storage (read-only)
+- apiGroups: [""]                  # API group: core API
+  resources: ["persistentvolumeclaims"]  # Resources: PVCs
+  verbs: ["get", "list"]           # Verbs: read-only
+# RULE GROUP 9: Observability
+- apiGroups: [""]                  # API group: core API
+  resources: ["events"]            # Resources: Events (cluster events)
+  verbs: ["get", "list"]           # Verbs: read-only
+# RULE GROUP 10: Identity and quotas
+- apiGroups: [""]                  # API group: core API
+  resources: ["serviceaccounts"]   # Resources: ServiceAccounts
+  verbs: ["get", "list"]           # Verbs: read-only
+- apiGroups: [""]                  # API group: core API
+  resources: ["resourcequotas", "limitranges"]  # Resources: quota and limit information
+  verbs: ["get", "list"]           # Verbs: read-only
+
+---
+# =============================================================================
+# ROLEBINDING - GRANT PERMISSIONS TO USERS/GROUPS
+# =============================================================================
+# RESOURCE: RoleBinding (namespace-scoped)
+# PURPOSE: Binds the backend-developer role to users/groups/serviceaccounts
+# CREATION ORDER: STEP 9 - After Role and ServiceAccount exist
+# DEPENDENCIES: Role (backend-developer), ServiceAccount (backend-sa)
+# =============================================================================
+
+apiVersion: rbac.authorization.k8s.io/v1  # API version for RBAC resources
+kind: RoleBinding                  # Resource type: binds role to subjects
+metadata:                          # Metadata section
+  name: backend-developer-binding  # RoleBinding name
+  namespace: devops                # Namespace: applies only to "devops" namespace
+  labels:                          # Labels for organization
+    binding-type: user-role        # Type: user/group role binding
+    team: backend                  # Team: backend team
+  annotations:                     # Annotations for documentation
+    description: "Grants backend-developer role to team and service account"  # Purpose
+subjects:                          # Subjects: who gets the permissions
+- kind: Group                      # Subject type: Group (from identity provider)
+  name: backend-developers@company.com  # Group name: OIDC/LDAP group
+  apiGroup: rbac.authorization.k8s.io   # API group for RBAC subjects
+- kind: ServiceAccount             # Subject type: ServiceAccount (for pods)
+  name: backend-sa                 # ServiceAccount name
+  namespace: devops                # Namespace where ServiceAccount exists
+roleRef:                           # Role reference: which role to grant
+  kind: Role                       # Role kind: namespace-scoped Role
+  name: backend-developer          # Role name to bind
+  apiGroup: rbac.authorization.k8s.io  # API group for RBAC roles
+
+---
+# =============================================================================
+# SERVICE - INTERNAL LOAD BALANCING
+# =============================================================================
+# RESOURCE: Service
+# PURPOSE: Provides stable network endpoint for backend pods with load balancing
+# CREATION ORDER: STEP 10 - Before Ingress (Ingress routes to Services)
+# DEPENDENCIES: Namespace (devops)
+# NOTE: Pods with labels app=backend, tier=backend will receive traffic
+# =============================================================================
+
+apiVersion: v1                     # API version for core Kubernetes resources
+kind: Service                      # Resource type: service (load balancer)
+metadata:                          # Metadata section
+  name: backend-service            # Service name: DNS name within cluster
+  namespace: devops                # Namespace: "devops"
+  labels:                          # Labels for organization
+    app: backend                   # Application: backend app
+    tier: backend                  # Tier: backend layer
+  annotations:                     # Annotations for integrations
+    description: "Internal service for backend pods"  # Purpose
+    prometheus.io/scrape: "true"   # Prometheus: enable metrics scraping
+    prometheus.io/port: "9090"     # Prometheus: scrape port
+    prometheus.io/path: "/metrics" # Prometheus: scrape path
+spec:                              # Service specification
+  type: ClusterIP                  # Type: ClusterIP (internal only, not exposed externally)
+  selector:                        # Selector: which pods receive traffic
+    app: backend                   # Match pods with label "app: backend"
+    tier: backend                  # Match pods with label "tier: backend"
+  ports:                           # Port mappings
+  - name: http                     # Port name: "http"
+    port: 8080                     # Service port: clients connect to this port
+    targetPort: 8080               # Target port: pod port (must match container port)
+    protocol: TCP                  # Protocol: TCP
+  - name: metrics                  # Port name: "metrics" (for Prometheus)
+    port: 9090                     # Service port: 9090
+    targetPort: 9090               # Target port: 9090 (pod metrics port)
+    protocol: TCP                  # Protocol: TCP
+  sessionAffinity: None            # Session affinity: None (random load balancing)
+
+---
+# =============================================================================
+# PODDISRUPTIONBUDGET - HIGH AVAILABILITY
+# =============================================================================
+# RESOURCE: PodDisruptionBudget
+# PURPOSE: Ensures minimum availability during voluntary disruptions (node drains, updates)
+# CREATION ORDER: STEP 11 - Before workloads (best practice)
+# DEPENDENCIES: Namespace (devops)
+# NOTE: Does NOT protect against involuntary disruptions (node failures)
+# =============================================================================
+
+apiVersion: policy/v1              # API version for policy resources
+kind: PodDisruptionBudget          # Resource type: disruption budget
+metadata:                          # Metadata section
+  name: backend-pdb                # PDB name
+  namespace: devops                # Namespace: "devops"
+  labels:                          # Labels for organization
+    app: backend                   # Application: backend app
+    tier: backend                  # Tier: backend layer
+  annotations:                     # Annotations for documentation
+    description: "Ensures high availability during voluntary disruptions"  # Purpose
+spec:                              # PDB specification
+  maxUnavailable: 1                # Max unavailable: at most 1 pod can be unavailable during disruption
+  selector:                        # Selector: which pods this PDB protects
+    matchLabels:                   # Match pods with these labels
+      app: backend                 # Match pods with label "app: backend"
+      tier: backend                # Match pods with label "tier: backend"
+
+---
+# =============================================================================
+# INGRESS - EXTERNAL ACCESS AND ROUTING
+# =============================================================================
+# RESOURCE: Ingress
+# PURPOSE: Exposes backend service to external traffic with TLS, rate limiting, and routing
+# CREATION ORDER: STEP 12 - After Service exists
+# DEPENDENCIES: Service (backend-service), IngressClass (nginx), cert-manager
+# REQUIREMENTS: 
+#   - NGINX Ingress Controller must be installed in cluster
+#   - cert-manager must be installed for TLS certificate automation
+#   - DNS records must point api.example.com and backend.example.com to ingress IP
+# =============================================================================
+
+apiVersion: networking.k8s.io/v1  # API version for networking resources
+kind: Ingress                      # Resource type: ingress (HTTP/HTTPS routing)
+metadata:                          # Metadata section
+  name: backend-ingress            # Ingress name
+  namespace: devops                # Namespace: "devops"
+  labels:                          # Labels for organization
+    app: backend                   # Application: backend app
+    tier: ingress                  # Tier: ingress layer
+  annotations:                     # Annotations for ingress controller configuration
+    # TLS/Certificate Management
+    cert-manager.io/cluster-issuer: letsencrypt-prod  # cert-manager: use Let's Encrypt production issuer
+    # Rate Limiting
+    nginx.ingress.kubernetes.io/limit-rps: "100"  # NGINX: limit to 100 requests per second per IP
+    nginx.ingress.kubernetes.io/limit-burst-multiplier: "5"  # NGINX: allow burst up to 5x rate limit
+    # Security
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"  # NGINX: force HTTPS redirect (HTTP -> HTTPS)
+    # Timeouts
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "60"  # NGINX: connection timeout (seconds)
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"     # NGINX: send timeout (seconds)
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"     # NGINX: read timeout (seconds)
+    # Request Size
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"  # NGINX: max request body size (10 megabytes)
+    # Documentation
+    description: "Exposes backend service externally with TLS, rate limiting, and timeouts"
+spec:                              # Ingress specification
+  ingressClassName: nginx          # Ingress class: use NGINX ingress controller
+  tls:                             # TLS configuration (HTTPS)
+  - hosts:                         # Hosts covered by this TLS certificate
+    - api.example.com              # Host 1: api.example.com
+    - backend.example.com          # Host 2: backend.example.com
+    secretName: backend-ingress-tls  # Secret name: where TLS certificate is stored (created by cert-manager)
+  rules:                           # Routing rules
+  # RULE 1: api.example.com routing
+  - host: api.example.com          # Host: api.example.com
+    http:                          # HTTP configuration
+      paths:                       # Path-based routing
+      - path: /                    # Path: root path (matches all paths starting with /)
+        pathType: Prefix           # Path type: Prefix matching (/ matches /anything)
+        backend:                   # Backend service to route to
+          service:                 # Service backend
+            name: backend-service  # Service name: backend-service
+            port:                  # Service port
+              number: 8080         # Port number: 8080
+  # RULE 2: backend.example.com routing
+  - host: backend.example.com      # Host: backend.example.com
+    http:                          # HTTP configuration
+      paths:                       # Path-based routing
+      # Path 1: API v1 endpoints
+      - path: /v1                  # Path: /v1 (API version 1)
+        pathType: Prefix           # Path type: Prefix matching (/v1 matches /v1/anything)
+        backend:                   # Backend service to route to
+          service:                 # Service backend
+            name: backend-service  # Service name: backend-service
+            port:                  # Service port
+              number: 8080         # Port number: 8080
+      # Path 2: Health check endpoint
+      - path: /health              # Path: /health (health check endpoint)
+        pathType: Prefix           # Path type: Prefix matching
+        backend:                   # Backend service to route to
+          service:                 # Service backend
+            name: backend-service  # Service name: backend-service
+            port:                  # Service port
+              number: 8080         # Port number: 8080
+
+# =============================================================================
+# END OF MANIFEST FILE
+# =============================================================================
+# 
+# POST-DEPLOYMENT VERIFICATION CHECKLIST:
+# ----------------------------------------
+# □ Namespace created: kubectl get namespace devops
+# □ PriorityClasses exist: kubectl get priorityclass high medium
+# □ ResourceQuotas active: kubectl describe resourcequota -n devops
+# □ LimitRange enforced: kubectl describe limitrange -n devops
+# □ NetworkPolicies applied: kubectl get networkpolicy -n devops
+# □ Default-deny working: Test pod creation and verify no connectivity
+# □ Service account created: kubectl get sa backend-sa -n devops
+# □ RBAC role created: kubectl get role backend-developer -n devops
+# □ RBAC binding created: kubectl get rolebinding backend-developer-binding -n devops
+# □ Service created: kubectl get svc backend-service -n devops
+# □ PDB created: kubectl get pdb backend-pdb -n devops
+# □ Ingress created: kubectl get ingress backend-ingress -n devops
+# □ TLS certificate issued: kubectl get certificate -n devops
+# □ DNS resolution working: nslookup api.example.com
+# □ HTTPS access working: curl https://api.example.com
+# □ Rate limiting working: Test >100 requests/sec
+# □ Quota enforcement working: Try exceeding limits
+# □ Network policies working: Test allowed/denied connections
+#
+# TROUBLESHOOTING COMMANDS:
+# -------------------------
+# View all resources: kubectl get all -n devops
+# Check events: kubectl get events -n devops --sort-by='.lastTimestamp'
+# Check quota usage: kubectl describe resourcequota compute-quota -n devops
+# Test network policy: kubectl run test --image=busybox -n devops -- sleep 3600
+# Check DNS: kubectl exec -n devops <pod-name> -- nslookup kubernetes.default
+# Check ingress: kubectl describe ingress backend-ingress -n devops
+# View logs: kubectl logs -n devops <pod-name>
+# Check certificates: kubectl describe certificate backend-ingress-tls -n devops
+#

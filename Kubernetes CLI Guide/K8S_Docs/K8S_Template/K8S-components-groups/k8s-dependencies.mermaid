@@ -1,0 +1,98 @@
+graph TB
+    %% Foundation Layer (Step 1)
+    subgraph Foundation["🏗️ STEP 1: Foundation (No Dependencies)"]
+        PC1[PriorityClass: high<br/>value: 1000]
+        PC2[PriorityClass: medium<br/>value: 500]
+        NS[Namespace: example-namespace<br/>🔒 Pod Security: restricted<br/>Labels: name=example]
+    end
+
+    %% Resource Controls Layer (Step 2)
+    subgraph ResourceControls["📊 STEP 2: Resource Controls"]
+        RQ[ResourceQuota: example-quota<br/>Max: 4 CPU, 8Gi RAM<br/>Max 30 pods, 5 PVCs<br/>🎯 Scoped to high/medium priority]
+        LR[LimitRange: example-limitrange<br/>Container: 100m-1 CPU<br/>Pod: max 2 CPU, 1Gi<br/>PVC: 1Gi-50Gi]
+    end
+
+    %% Security Layer (Step 3)
+    subgraph Security["🔒 STEP 3: Network Security"]
+        NP1[NetworkPolicy: default-deny-all<br/>❌ Denies ALL ingress/egress]
+        NP2[NetworkPolicy: backend-traffic-allowlist<br/>✅ Allows specific traffic<br/>- Frontend → Backend :8080<br/>- Ingress → Backend :8080<br/>- Backend → DNS :53<br/>- Backend → Database :5432<br/>- Backend → External HTTPS :443]
+    end
+
+    %% Identity & Access Layer (Step 4-5)
+    subgraph Identity["👤 STEP 4-5: Identity & Access Control"]
+        SA[ServiceAccount: backend-sa<br/>🔒 Auto-mount disabled]
+        ROLE[Role: backend-developer<br/>✅ Deployments, Jobs, Logs<br/>⚠️ Secrets, Pod exec<br/>❌ No delete services]
+        RB[RoleBinding: backend-developer-binding<br/>Binds: Group + ServiceAccount]
+    end
+
+    %% Application Layer (Step 6)
+    subgraph Application["🚀 STEP 6: Application Layer"]
+        SVC[Service: backend-service<br/>Type: ClusterIP<br/>Ports: 8080 HTTP, 9090 metrics<br/>📊 Prometheus annotations]
+        PDB[PodDisruptionBudget: backend-pdb<br/>minAvailable: 1<br/>Ensures HA during disruptions]
+        ING[Ingress: backend-ingress<br/>Hosts: api.example.com<br/>🔐 TLS via cert-manager<br/>🚦 Rate limit: 100 rps<br/>Routes: /, /v1, /health]
+    end
+
+    %% Pod Layer (Deployed by users)
+    subgraph Pods["📦 Deployed Workloads"]
+        POD[Pods with labels:<br/>app: backend<br/>tier: backend<br/>🎯 priorityClassName: high/medium]
+    end
+
+    %% Dependencies - Foundation
+    NS -.->|contains| RQ
+    NS -.->|contains| LR
+    NS -.->|contains| NP1
+    NS -.->|contains| NP2
+    NS -.->|contains| SA
+    NS -.->|contains| ROLE
+    NS -.->|contains| RB
+    NS -.->|contains| SVC
+    NS -.->|contains| PDB
+    NS -.->|contains| ING
+    
+    PC1 -.->|referenced by| RQ
+    PC2 -.->|referenced by| RQ
+
+    %% Dependencies - Security Layer
+    NP1 -->|must exist before| NP2
+
+    %% Dependencies - RBAC
+    SA -.->|subject in| RB
+    ROLE -.->|roleRef in| RB
+
+    %% Dependencies - Application
+    SVC -->|backend for| ING
+    SVC -.->|selects| POD
+    PDB -.->|protects| POD
+    NP2 -.->|allows traffic to| POD
+    
+    %% Pod Dependencies
+    SA -.->|identity for| POD
+    RQ -.->|limits| POD
+    LR -.->|enforces defaults on| POD
+    PC1 -.->|priority for| POD
+    PC2 -.->|priority for| POD
+    RB -.->|grants permissions to| POD
+
+    %% External Dependencies
+    ING -.->|requires| NGINX[nginx-ingress-controller<br/>External dependency]
+    ING -.->|requires| CERT[cert-manager<br/>External dependency]
+    NP2 -.->|allows from| FRONTEND[Frontend Pods<br/>tier: frontend]
+    NP2 -.->|allows to| DB[Database Namespace<br/>name: databases]
+    NP2 -.->|allows to| DNS_NS[kube-system Namespace<br/>CoreDNS]
+
+    %% Styling
+    classDef foundation fill:#e1f5ff,stroke:#01579b,stroke-width:2px
+    classDef resource fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    classDef security fill:#ffebee,stroke:#c62828,stroke-width:2px
+    classDef identity fill:#f3e5f5,stroke:#6a1b9a,stroke-width:2px
+    classDef app fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
+    classDef pods fill:#fce4ec,stroke:#880e4f,stroke-width:2px
+    classDef external fill:#eceff1,stroke:#455a64,stroke-width:2px
+
+    class PC1,PC2,NS foundation
+    class RQ,LR resource
+    class NP1,NP2 security
+    class SA,ROLE,RB identity
+    class SVC,PDB,ING app
+    class POD pods
+    class NGINX,CERT,FRONTEND,DB,DNS_NS external
